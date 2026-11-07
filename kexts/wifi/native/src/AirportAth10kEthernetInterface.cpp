@@ -5,11 +5,6 @@
 #include <net/ethernet.h>
 #include <net/if.h>
 
-// IONetworkInterface::setInterfaceSubType(uint32_t) is private SPI
-// (__PRIVATE_SPI__ in IONetworkingFamily); WCL requires the Wi-Fi sub-family
-// (IFRTYPE_SUBFAMILY_WIFI = 3) on the BSD interface. Bound by its mangled name.
-extern "C" bool airportSetInterfaceSubType(IONetworkInterface *,uint32_t) __asm__("__ZN19IONetworkInterface19setInterfaceSubTypeEj");
-
 #define super IOEthernetInterface
 OSDefineMetaClassAndStructors(AirportAth10kEthernetInterface, IOEthernetInterface)
 
@@ -31,7 +26,9 @@ IOReturn AirportAth10kEthernetInterface::prepareBSDGated(OSObject *,void *arg0,v
 IOReturn AirportAth10kEthernetInterface::attachToDataLinkLayer(IOOptionBits options,void *parameter)
 {
     char name[IFNAMSIZ];
-    if(!airportSetInterfaceSubType(this,3))return kIOReturnNotReady; // IFRTYPE_SUBFAMILY_WIFI
+    // AirportItlwm calls the private IONetworkInterface::setInterfaceSubType(3)
+    // here; macOS 26.7.2's IONetworkingFamily does not export it (kc-audit), and
+    // the Wi-Fi sub-family is applied by IO80211InfraInterface::prepareBSDInterface.
     IOReturn ret=super::attachToDataLinkLayer(options,parameter);
     if(ret!=kIOReturnSuccess || !interface)return ret;
     UInt8 builtIn=0;

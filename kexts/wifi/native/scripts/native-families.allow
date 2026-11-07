@@ -13,8 +13,6 @@ hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOBasicOutputQueue.h
 hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkData.h
 hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkStats.h
 sym com.apple.iokit.IONetworkingFamily _gIONetworkFilterGroup
-# Private SPI (__PRIVATE_SPI__ in IONetworkingFamily): marks the BSD interface as Wi-Fi for WCL.
-sym com.apple.iokit.IONetworkingFamily __ZN19IONetworkInterface19setInterfaceSubTypeEj
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211ControllerV2.h
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211SkywalkInterface.h
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211InfraInterface.h

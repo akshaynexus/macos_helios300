@@ -143,8 +143,15 @@ class IO80211Controller : public IOEthernetController {
     OSDeclareAbstractStructors(IO80211Controller)
 public:
     IOReturn postMessage(IO80211SkywalkInterface *, unsigned int, void *, unsigned long, bool);
-    virtual void _RESERVEDIONetworkController6() __asm__("__ZN19IONetworkController20allocatePacketNoWaitEj");
-    virtual void _RESERVEDIONetworkController7() __asm__("__ZN19IONetworkController18setHardwareAssistsEjj");
+    // Upstream (laobamac, built against MacKernelSDK) declared two asm aliases
+    // here for IONetworkController::allocatePacketNoWait/setHardwareAssists,
+    // which that SDK's IONetworkController.h lacked. The macOS 26.5 SDK used by
+    // this tree declares both (ReservedUsed 6 and 7), so the aliases added two
+    // extra slots and shifted every IO80211Controller virtual by +2: OpenCore
+    // then refused the kext ("Failed to patch symbol attachVirtualInterface",
+    // which landed on _RESERVEDIO80211Controller0). Verified against the
+    // macOS 26.7.2 (25G332) collection with tools/kc-audit.py: the order below
+    // matches IO80211Family 1200.13.1 slot for slot (394..462).
     virtual void free();
     virtual bool init(OSDictionary*);
     virtual IOReturn configureReport(IOReportChannelList*, unsigned int, void*, void*);

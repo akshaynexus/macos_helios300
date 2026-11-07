@@ -7,7 +7,9 @@
 # Output: kexts/wifi/build/native/. Uses tools/cross-build-kext.sh (clang
 # -mkernel + Apple ld64 + KPI audit). The front end's imports are audited
 # against the reconstructed IO80211/Skywalk/corecapture headers
-# (native/include/Airport) and the core's own header. Nothing is signed.
+# (native/include/Airport) and the core's own header. With HELIOS_REAL_KC set to
+# the target Mac's BootKernelExtensions.kc, tools/kc-audit.py also checks both
+# kexts' imports and vtable layouts against that collection. Nothing is signed.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 REPO="$(cd "$ROOT/../.." && pwd)"
@@ -54,6 +56,7 @@ cp native/NOTICE "$OUT/AirportAth10k-resources/NOTICE" 2>/dev/null || true
 	-I "$ROOT/native/include" -I "$ROOT/native/src" -I "$ROOT/src/kext" -I "$ROOT/build/gen/kext" "${DEFS[@]}" \
 	--cflags "$CFLAGS -Wno-unused-private-field -Wno-overloaded-virtual -Wno-invalid-offsetof" \
 	--allow "$ROOT/build/gen/native/families.allow" --resources "$OUT/AirportAth10k-resources" \
+	--kc-sibling "$OUT/Ath10kMac.kext/Contents/MacOS/Ath10kMac" \
 	native/src/AirportAth10k.cpp native/src/AirportAth10kInterface.cpp native/src/AirportAth10kEthernetInterface.cpp
 rm -rf "$OUT/AirportAth10k-resources"
 "$NM" -m "$OUT/AirportAth10k.kext/Contents/MacOS/AirportAth10k" > "$OUT/AirportAth10k.nm.txt"
