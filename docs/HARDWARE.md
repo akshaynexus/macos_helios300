@@ -10,7 +10,7 @@ Read from the owner's machine under Linux (CachyOS, 2026-11-07).
 | Audio | Realtek ALC255 (10ec:0255, sub 1025:118a) | AppleALC (layout to be found) |
 | Ethernet | RTL8111 10ec:8168 | RealtekRTL8111 |
 | Wi-Fi | Qualcomm Atheros QCA6174 168c:003e | `wifi/` (this repo) |
-| Bluetooth | Lite-On 04ca:3016 (QCA Rome) | `bluetooth/` (this repo) + BlueToolFixup |
+| Bluetooth | Lite-On 04ca:3016 (QCA Rome) | `kexts/bluetooth/` (this repo) + BlueToolFixup |
 | Card reader | RTL8411B 10ec:5287 | RealtekCardReader |
 | Touchpad | Synaptics SYNA7DB5 06CB:7DB7 (I2C HID) | VoodooI2C + VoodooI2CHID |
 | Keyboard | PS/2 | VoodooPS2Controller |
