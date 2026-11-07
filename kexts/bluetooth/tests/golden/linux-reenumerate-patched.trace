@@ -1,0 +1,90 @@
+# Golden trace: Linux btusb (kernel 7.3.1-1-cachyos) setting up the Helios 300
+# BT chip 04ca:3016 after its USB port was power-cycled (usb1-port7/disable
+# 1 -> 0) on 2026-11-08. The chip kept its rampatch (status 0xe0), so Linux
+# sends GET_TARGET_VERSION, CHECK_STATUS, GET_TARGET_VERSION and no download.
+# Captured with tools/linux/usbmon_pcap.c, reduced with tools/usbmon_reduce.py
+# (device 4 on bus 1). HCI events/ACL data are not included.
+# replay: allow-extra-final-status
+#   (our core adds one read-only CHECK_STATUS after Linux's sequence)
+# t=0.000 std ctrl 80 06 0100 0000 0012
+# t=0.000 std ctrl 80 06 0f00 0000 0005
+# t=0.000 std ctrl 80 06 0f00 0000 000c
+# t=0.000 std ctrl 80 06 0600 0000 000a
+# std/class ctrl 80 06 status=-32
+# t=0.001 std ctrl 80 06 0600 0000 000a
+# std/class ctrl 80 06 status=-32
+# t=0.001 std ctrl 80 06 0600 0000 000a
+# std/class ctrl 80 06 status=-32
+# t=0.001 std ctrl 80 06 0200 0000 0009
+# t=0.001 std ctrl 80 06 0200 0000 00b1
+# t=0.004 std ctrl 00 09 0001 0000 0000
+S ctrl c0 09 0000 0000 0014
+C ctrl c0 09 0000 0000 0014 len=20 data=02030000e8030000000000000700000000010000
+S ctrl c0 05 0000 0000 0001
+C ctrl c0 05 0000 0000 0001 len=1 data=e0
+S ctrl c0 09 0000 0000 0014
+C ctrl c0 09 0000 0000 0014 len=20 data=02030000e8030000000000000700000000010000
+# t=0.005 hci-cmd opcode=0x0c03 plen=0
+# t=0.061 hci-cmd opcode=0x1003 plen=0
+# t=0.063 hci-cmd opcode=0x1001 plen=0
+# t=0.064 hci-cmd opcode=0x1009 plen=0
+# t=0.065 hci-cmd opcode=0x1002 plen=0
+# t=0.070 hci-cmd opcode=0x0c52 plen=241
+# t=0.071 hci-cmd opcode=0x0c45 plen=1
+# t=0.072 hci-cmd opcode=0x0c58 plen=0
+# t=0.073 hci-cmd opcode=0x1004 plen=1
+# t=0.075 hci-cmd opcode=0x1005 plen=0
+# t=0.076 hci-cmd opcode=0x0c23 plen=0
+# t=0.077 hci-cmd opcode=0x0c14 plen=0
+# t=0.093 hci-cmd opcode=0x0c25 plen=0
+# t=0.094 hci-cmd opcode=0x0c38 plen=0
+# t=0.095 hci-cmd opcode=0x0c39 plen=0
+# t=0.096 hci-cmd opcode=0x0c16 plen=2
+# t=0.097 hci-cmd opcode=0x2003 plen=0
+# t=0.098 hci-cmd opcode=0x2002 plen=0
+# t=0.099 hci-cmd opcode=0x201c plen=0
+# t=0.100 hci-cmd opcode=0x0c01 plen=8
+# t=0.101 hci-cmd opcode=0x0c0d plen=7
+# t=0.102 hci-cmd opcode=0x080f plen=2
+# t=0.103 hci-cmd opcode=0x0c1b plen=0
+# t=0.104 hci-cmd opcode=0x0c46 plen=0
+# t=0.105 hci-cmd opcode=0x1004 plen=1
+# t=0.107 hci-cmd opcode=0x2001 plen=8
+# t=0.108 hci-cmd opcode=0x2007 plen=0
+# t=0.109 hci-cmd opcode=0x200f plen=0
+# t=0.110 hci-cmd opcode=0x2010 plen=0
+# t=0.111 hci-cmd opcode=0x202a plen=0
+# t=0.112 hci-cmd opcode=0x2029 plen=0
+# t=0.113 hci-cmd opcode=0x202e plen=2
+# t=0.114 hci-cmd opcode=0x202f plen=0
+# t=0.115 hci-cmd opcode=0x2023 plen=0
+# t=0.116 hci-cmd opcode=0x0c12 plen=7
+# t=0.117 hci-cmd opcode=0x100b plen=0
+# t=0.118 hci-cmd opcode=0x0c77 plen=0
+# t=0.119 hci-cmd opcode=0x2024 plen=4
+# t=0.122 hci-cmd opcode=0x0c56 plen=1
+# t=0.123 hci-cmd opcode=0x0c7a plen=1
+# t=0.124 hci-cmd opcode=0x0c6d plen=2
+# t=0.125 hci-cmd opcode=0x202d plen=1
+# t=0.126 hci-cmd opcode=0x0c13 plen=248
+# t=0.127 hci-cmd opcode=0x0c52 plen=241
+# t=0.133 hci-cmd opcode=0x0c13 plen=248
+# t=0.134 hci-cmd opcode=0x0c52 plen=241
+# t=0.135 hci-cmd opcode=0x0c24 plen=3
+# t=0.136 hci-cmd opcode=0x0c52 plen=241
+# t=0.137 hci-cmd opcode=0x0c52 plen=241
+# t=0.138 hci-cmd opcode=0x0c24 plen=3
+# t=0.139 hci-cmd opcode=0x0c52 plen=241
+# t=0.140 hci-cmd opcode=0x0c24 plen=3
+# t=0.141 hci-cmd opcode=0x0c52 plen=241
+# t=0.143 hci-cmd opcode=0x0c52 plen=241
+# t=0.144 hci-cmd opcode=0x0c24 plen=3
+# t=0.145 hci-cmd opcode=0x0c52 plen=241
+# t=0.146 hci-cmd opcode=0x0c24 plen=3
+# t=0.147 hci-cmd opcode=0x0c52 plen=241
+# t=0.148 hci-cmd opcode=0x0c52 plen=241
+# t=2.506 std ctrl 00 03 0001 0000 0000
+# other: xfer1 ep81 C x60
+# other: xfer1 ep81 S x60
+# other: xfer3 ep82 C x2
+# other: xfer3 ep82 S x2

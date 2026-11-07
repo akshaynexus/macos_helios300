@@ -1,0 +1,7 @@
+# Negative self-test: a recorded GET_TARGET_VERSION with the wrong wLength.
+# test_golden must FAIL on this file (make test checks that).
+# replay: probe-only
+S ctrl c0 09 0000 0000 0010
+C ctrl c0 09 0000 0000 0010 len=16 data=02030000e8030000000000000700000000010000
+S ctrl c0 05 0000 0000 0001
+C ctrl c0 05 0000 0000 0001 len=1 data=e0

@@ -57,6 +57,8 @@ struct FakeDevice {
     uint32_t patch = 0x0000;
     uint32_t patch_after_rampatch = 0x03e8;
     uint8_t status = 0x00;
+    uint16_t flag = 0x0000;        // qca_version.flag (board-id selector)
+    uint8_t chip_id = 0x44, platform_id = 0x01;
     bool apply_on_complete = true; // set status bits when body fully sent
 
     // Fault injection.
@@ -88,7 +90,8 @@ struct FakeDevice {
         w32(0, rom);
         w32(4, patch);
         w32(8, 0x00000302);
-        b[12] = 0x44; b[13] = 0x01; b[14] = 0x00; b[15] = 0x00;
+        b[12] = chip_id; b[13] = platform_id;
+        b[14] = uint8_t(flag); b[15] = uint8_t(flag >> 8);
     }
 
     static int ctrl_in(void *ctx, uint8_t req, void *buf, uint16_t len,
@@ -397,6 +400,35 @@ void test_unsupported_rom() {
     }
 }
 
+void test_board_id() {
+    std::puts("[board-specific NVM (flag>>8 == 0x80) refused before any write]");
+    Fixture f;
+    {
+        SizedDevice d; d.flag = 0x8000; d.chip_id = 0x0a; d.platform_id = 0x01;
+        qca_transport t = d.transport();
+        qca_result r;
+        CHECK_EQ(qca_rome_setup(&t, &f.rpf, &f.nvf, nullptr, &r), QCA_ERR_UNSUPPORTED_BOARD);
+        CHECK_EQ(r.actual_len, 0x0a01u);
+        CHECK_EQ(d.calls.size(), 1u);
+        CHECK(!qca_err_is_transient(QCA_ERR_UNSUPPORTED_BOARD));
+    }
+    {
+        // 0xffff is "invalid board id" in Linux -> generic NVM, allowed.
+        SizedDevice d; d.flag = 0x8000; d.chip_id = 0xff; d.platform_id = 0xff;
+        d.rp_size = f.rp.size(); d.nvm_size = f.nvm.size();
+        qca_transport t = d.transport();
+        qca_result r;
+        CHECK_EQ(qca_rome_setup(&t, &f.rpf, &f.nvf, nullptr, &r), QCA_OK);
+    }
+    {
+        // Other flag values (the Helios chip reports 0x0000) -> generic NVM.
+        qca_version v{}; v.flag = 0x0034; v.chip_id = 7;
+        CHECK_EQ(qca_board_id(&v), 0);
+        v.flag = 0x8034;
+        CHECK_EQ(qca_board_id(&v), 0x0700);
+    }
+}
+
 void test_rampatch_version_mismatch() {
     std::puts("[rampatch header version checks]");
     Fixture f;
@@ -690,6 +722,7 @@ int main() {
     test_only_nvm();
     test_only_rampatch();
     test_unsupported_rom();
+    test_board_id();
     test_rampatch_version_mismatch();
     test_short_writes_and_errors();
     test_final_status_mismatch();

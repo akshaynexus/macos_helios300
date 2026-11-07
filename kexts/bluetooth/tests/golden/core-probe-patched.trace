@@ -1,0 +1,9 @@
+# Golden trace: our core (tools/linux/qca_rome_usb.c `probe`, i.e. the code
+# the kext runs) against the real Helios 300 BT chip 04ca:3016 from Linux
+# userspace, btusb unbound, 2026-11-08 (warm reboot from a Linux session that
+# had patched the chip). Read-only probe: GET_TARGET_VERSION + CHECK_STATUS.
+# replay: probe-only
+S ctrl c0 09 0000 0000 0014
+C ctrl c0 09 0000 0000 0014 len=20 data=02030000e8030000000000000700000000010000
+S ctrl c0 05 0000 0000 0001
+C ctrl c0 05 0000 0000 0001 len=1 data=e0
