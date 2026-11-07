@@ -1,80 +1,95 @@
-# Native macOS Wi-Fi for the QCA6174: feasibility and plan
+# Native macOS Wi-Fi for the QCA6174: design, install and verification
 
-**Goal (owner):** the system Wi-Fi menu and Settings, standard joins with passwords
-stored in the Keychain, and Location and other system services seeing Wi-Fi.
+**Goal (owner):** the card appears in macOS exactly as a Wi-Fi card: the system Wi-Fi menu
+and Settings › Wi-Fi, network selection and joining by macOS, passwords in the Keychain, the
+interface shown as Wi-Fi in Network settings.
 
-**Today:** `kexts/wifi` is an Ethernet-style interface with its own menu-bar app.
+**State (2026-11-08):** implemented as `AirportAth10k.kext` over the `Ath10kMac.kext` core in
+`kexts/wifi/native/`, cross-built for macOS 26 and host-tested. **Never loaded on macOS.**
+Install and owner test steps: [`kexts/wifi/README.md`](../kexts/wifi/README.md).
 
-**Verdict:** possible on macOS 26 without OCLP root patches, but only by writing a new
-IO80211 "front end" against reverse-engineered Apple ABI. Expect weeks of work with the Mac
-in the loop. It is fragile across 26.x point releases. It is **not implemented in this
-repo yet**, and nothing in it could be verified from Linux.
+## How it is built
 
-Sources were read in July-November 2026 state. Paths are relative to each cloned repo:
-OpenIntelWireless/itlwm `53c51c2` (2024-06-09), laobamac/itlwm `7204c69` (2026-11-01),
-and dortania/OpenCore-Legacy-Patcher `a1c74ce` (2026-11-03).
+macOS 15.2+/26 moved Wi-Fi control into WCL (the Wi-Fi Core Layer in `IO80211Family`): the
+driver subclasses `IO80211Controller` and `IO80211InfraProtocol`, receives scan/join
+requests as `setWCL_SCAN_REQ`/`setWCL_ASSOCIATE` and reports back with `postMessage`
+events (scan result, association, first beacon, link status, connect complete, deauth,
+LQM). The only public driver doing this is laobamac/itlwm (Intel), whose structure and
+reconstructed class headers are reused here (used with the author's permission, see
+`kexts/wifi/native/NOTICE`).
 
-## How the working Intel driver does it
+```
+ airportd / WCL (IO80211Family 1.5.0, IOSkywalkFamily, corecapture)
+        │ setWCL_* / get*                        ▲ postMessage(ScanResult, AssocComplete, …)
+        ▼                                         │
+ AirportAth10k.kext      AirportAth10k : IO80211Controller
+                         AirportAth10kInterface : IO80211InfraProtocol
+                         AirportAth10kEthernetInterface : IOEthernetInterface   (BSD en<n>)
+                         AirportBridge::Session  — pure logic, host-tested:
+                           WCL request → control ABI, BSS cache → WCL beacons,
+                           join state machine, in-kernel WPA2 supplicant (PMK from WCL)
+        │ controlRequest() (Status/Info/Scan/BSS/Connect/EAPOL/InstallKeys/Authorize/…)
+        │ nativeAttachInterface(), output queue gated on the core's loop, inputPacket()
+        ▼
+ Ath10kMac.kext          Ath10kPCIDevice (ath10k core): firmware boot, WMI/HTT, MLME, keys, power
+        ▼
+ QCA6174 (168c:003e)
+```
 
-AirportItlwm, the Intel itlwm front end, changed shape at macOS 14:
+Decisions:
 
-| macOS | Apple family it links | Front-end classes | Who dispatches apple80211 commands | WPA handshake |
-|---|---|---|---|---|
-| ≤ 13 | `IO80211Family` (≤ 11) / `IO80211FamilyLegacy` (12-13) | `AirportItlwm : IO80211Controller`, `IO80211Interface` | driver, `apple80211Request` switch (`AirportItlwm/AirportSTAIOCTL.cpp:16-210`) | Apple's RSN supplicant: EAPOL passed up, keys come back via `setCIPHER_KEY` |
-| 14 | `IO80211Family` 1.5.0 + `IOSkywalkFamily` + `corecapture` (`AirportItlwm-Sonoma-Info.plist:56-76`) | `IO80211Controller` + `IO80211InfraProtocol` (Skywalk interface chain) (`AirportItlwmSkywalkInterface.hpp:14`) | Apple's family calls ~150 per-command virtual `getX`/`setX` methods | **driver** (net80211). PSK from `setASSOCIATE` (`AirportItlwmSkywalkInterface.cpp:141-148`) |
-| 15.2+ / 26 (laobamac fork, `AIRPORT_WCL`) | same stock families (`AirportItlwm/WCL/Info.plist:56-76`) | adds the `WCL` command path | `setWCL_SCAN_REQ`/`setWCL_ASSOCIATE`, events posted as messages (`AirportItlwm/WCL/WCL.cpp:208-540`) | driver |
+1. **The core is untouched as a protocol engine.** The native personality key
+   `Ath10kNativeFrontEnd` only stops it from attaching its own Ethernet interface; it publishes
+   `Ath10kNativeReady` when the firmware runtime is up and the front end matches on that.
+   The control ABI the menu-bar app used is now called in-kernel (`controlRequest` takes an
+   `OSObject` owner), extended with the BSS details WCL needs (capabilities, interval, rates,
+   HT/VHT elements) and the country code.
+2. **Polling, not callbacks.** The front end polls the core every 100 ms on the IO80211 work
+   queue, under the same gate as the WCL commands, so the session logic is single-threaded
+   and the core gained no new locks. EAPOL frames reach the kernel supplicant the same way the
+   app received them.
+3. **Supplicant in the kernel.** `src/shared/Ath10kSupplicant.hpp` is unchanged; it gets a
+   software crypto policy (`AirportAth10kCrypto.hpp`: SHA-1, HMAC-SHA1, AES-128 decrypt for
+   the RFC 3394 unwrap, `read_random` for nonces) because the kernel exports no single-block
+   AES outside `com.apple.kpi.unsupported`. WCL hands over the PMK for Personal networks, so
+   no PBKDF2 runs in the kernel.
+4. **Scan results are rebuilt from the core's BSS cache** (the core keeps parsed fields, not
+   raw beacons): SSID, rates, DS, HT/VHT, RSN, power constraint. Transition-mode RSN IEs are
+   rewritten to plain WPA2-PSK for WCL, as AirportItlwm does. `BEACON_INFO` polls get a
+   synthesized beacon with an advancing timestamp.
+5. **Sleep/wake** stays the core's: after wake it reports "restart required"; the session
+   posts driver-unavailable, asks for the guarded restart, and the rematched core brings a
+   fresh front end which WCL re-enumerates.
 
-Upstream itlwm has no Sequoia or Tahoe target. laobamac/itlwm is the only public native
-Tahoe front end; v2.4.0 is still alpha.
+## OpenCore
 
-- **Claimed working:** scan, join, network switching and private address on 26.x.
-- **Not working:** WPA3-only networks, required PMF, AWDL, MLO.
-- **ABI breaks between point releases.** Issue #47 on 26.2 fails to load with
-  `Failed to patch symbol __ZN17IO80211Controller27_RESERVEDIO80211Controller5Ev`. The
-  successful reports are on 26.7.1.
+Kernel › Add order: `Ath10kMac.kext`, then `AirportAth10k.kext`; `MinKernel` `25.0.0`,
+`MaxKernel` `25.99.99`. No Lilu, no AirportItlwm/itlwm/Brcm kexts for this card, no OCLP
+root patch. Boot-args: none required; `ath10k_cc=XX`, `ath10k_txpower=N` (see the README),
+`keepsyms=1 debug=0x100` for the first boots. AppleVTD: keep the current `DisableIoMapper`
+setting; the core supports both.
 
-OCLP's wireless root patches (`modern_wireless.py`, `legacy_wireless.py`) restore
-`IO80211FamilyLegacy` and 13.x userspace for **Broadcom** cards, and Atheros40 for
-legacy wireless. OCLP detects the card by `IOName`, so QCA6174 is not covered. It would
-need spoofing plus SIP `0x803`, AMFI off and SecureBootModel disabled, and OCLP 3.0 (the
-first with Tahoe support) is still a release candidate. **We should not build on that path.**
+## Verification
 
-## What a native front end for this driver needs
+Can be done from Linux (done):
 
-1. **IO80211 class declarations for macOS 26.x.** None exist in the SDK. The only public
-   reconstructions are zxystd/laobamac headers (`include/Airport/macOS26/*.h`), and they
-   are marked "All rights reserved". The repo itself is GPLv2-only, which cannot be
-   combined with this GPL-3.0 tree. So we need **our own declarations**, derived from the
-   real binary. dortania/KdkSupportPkg hosts macOS 26 Kernel Debug Kits (latest listed:
-   26.6.2, build 25G83). They contain `IO80211Family.kext` with symbols, from which the
-   vtables and exports can be dumped. This has to be redone for each 26.x the owner runs.
-2. **A front-end class pair**: `AirportAth10k : IO80211Controller` plus a Skywalk
-   `IO80211InfraProtocol` interface. It must implement the command set airportd uses:
-   SCAN_REQ and SCAN_RESULT, ASSOCIATE and DISASSOCIATE, SSID, BSSID, RSSI, CHANNEL, STATE,
-   RATE, OP_MODE and PHY_MODE, POWER, COUNTRY_CODE, CARD_CAPABILITIES, CIPHER_KEY and
-   RSN_IE, plus link, scan-done and assoc events.
-3. **The WPA2 supplicant in the kernel.** On 14+ the family hands the driver the PSK and
-   expects the driver to run the 4-way handshake. Ours runs in the app today
-   (`src/shared/Ath10kSupplicant.hpp`, header-only C++). It needs PBKDF2/HMAC-SHA1 and
-   AES key unwrap on libkern crypto. That is feasible, and it would also let the
-   Ethernet-mode kext rejoin after wake without the app.
-4. **Mapping onto our MLME** (`Ath10kConnection.hpp`). Our core already scans, selects a
-   BSS, associates and installs keys. The front end would translate airportd requests
-   into the existing `Connect`/`Scan`/`InstallKeys` operations instead of the app's.
-5. **A Mac-in-the-loop bring-up.** Expect early kernel panics from vtable mismatches.
-   That needs a USB EFI and `keepsyms=1 debug=0x100`, with panic logs sent back after
-   each iteration.
+- `kexts/wifi/tests/run-tests.sh`: the core suite plus `native/tests/test_native_crypto.cpp`
+  (FIPS-180/RFC 2202/FIPS-197 vectors, the supplicant over the kernel policy) and
+  `native/tests/test_native_bridge.cpp` (WCL request mapping, scan-result conversion, the
+  full WPA2 join with key install against a simulated core, link loss, leave, scan-first
+  join, rejection, timeout, abort, offline/restart, power).
+- `kexts/wifi/scripts/cross-build.sh`: both kexts link with ld64 and every import resolves
+  to xnu-12377 KPIs or to a class/method declared in the family headers (836 imports for the
+  front end). WCL request/event layouts are pinned by `static_assert`s in `AirportWCL.hpp`.
 
-## Plan
+Only macOS can verify (not done): that the macOS 26.x binaries match the reconstructed
+vtables (a mismatch panics at load or on the first command), that WCL accepts the capability
+bits and event sequence, DHCP over the Skywalk interface, sleep/wake, Settings details.
+laobamac's reports: loads on 26.7.1; a 26.2 report failed on a changed `IO80211Controller`
+reserved slot — expect the same sensitivity.
 
-| Step | Work | Can be done from Linux? |
-|---|---|---|
-| 0 | Fetch the 26.x KDK matching the owner's build, dump the `IO80211Family`/`IOSkywalkFamily` symbols and vtables, and write our own headers plus an import audit list | yes |
-| 1 | Move the supplicant into the kernel (both modes benefit) and host-test it against the existing crypto vectors | yes |
-| 2 | Front end: controller + infra interface + command handlers over the existing core, as a separate kext target `AirportAth10k`, with the Ethernet+app build kept as the default | compile and audit only |
-| 3 | First boots on the Helios 300 from USB EFI: panics, then scan, join and DHCP | **macOS only** |
-| 4 | Sleep/wake, roaming, power and Location | **macOS only** |
+## Not implemented
 
-**Honest timeline:** steps 0-2 are weeks of focused work. Step 3 is open-ended and depends on how
-fast the owner can run test builds and send panic logs back. The Ethernet+app driver in
-`kexts/wifi` is the usable path until then.
+WPA3-SAE / PMF, Enterprise, WEP, Private Wi-Fi Address (random MAC), AWDL/AirDrop/Continuity,
+P2P/hotspot, 6 GHz, 160 MHz, active/directed probing, roaming between BSSIDs of one SSID (WCL
+asks for a new join; the core disconnects and reconnects).

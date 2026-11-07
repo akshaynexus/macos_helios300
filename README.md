@@ -9,7 +9,7 @@ This repo holds the machine-specific drivers that do not exist elsewhere:
 | Path | What | Licence | Status |
 |---|---|---|---|
 | `kexts/nvidia-macos-driver` (submodule, branch `pascal-gp106`) | `PG106.kext` (GTX 1060 Mobile, nouveau-derived) and `PG106Accel.kext` (Metal accelerator) | GPL-2.0 / PolyForm-NC (per tree) | cross-built, not yet run on macOS |
-| `kexts/wifi/` | QCA6174 (`168c:003e`, Acer `11ad:0807`) Wi-Fi driver + menu-bar app ([docs/WIFI.md](docs/WIFI.md)) | GPL-3.0; firmware: Qualcomm licence | cross-built for macOS 26, host-tested, cross-checked against Linux ath10k; not yet run on macOS |
+| `kexts/wifi/` | QCA6174 (`168c:003e`, Acer `11ad:0807`) native Wi-Fi: `Ath10kMac.kext` core + `AirportAth10k.kext` IO80211 front end ([docs/WIFI.md](docs/WIFI.md), [docs/WIFI-NATIVE.md](docs/WIFI-NATIVE.md)) | GPL-3.0; imported Apple-ABI headers used with permission; firmware: Qualcomm licence | cross-built for macOS 26, host-tested, cross-checked against Linux ath10k; not yet run on macOS |
 | `kexts/bluetooth/` | QCA6174 Rome Bluetooth (`04ca:3016`) firmware uploader | see `kexts/bluetooth/LICENSE` | in progress |
 | `tools/` | cross-build helpers (Linux → macOS 26 kexts) | GPL-2.0-only | |
 | `docs/` | hardware inventory, kext list, OpenCore notes | CC-BY-4.0 | |

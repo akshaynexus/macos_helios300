@@ -29,3 +29,27 @@ Protocol details added or changed here cite the Linux ath10k driver (ISC licence
 
 Regulatory data (`regulatory/`) is upstream's: wireless-regdb (ISC) and Linux `ath/regd*.h`
 (ISC), with sources in `regulatory/SOURCE.md`.
+
+## Native front end (`native/`): laobamac/itlwm
+
+`kexts/wifi/native/` (AirportAth10k.kext) ports the macOS 26 (Tahoe, WCL) front end of
+**laobamac/itlwm** onto the ath10k core:
+
+| | |
+|---|---|
+| Upstream | https://github.com/laobamac/itlwm (fork of https://github.com/OpenIntelWireless/itlwm) |
+| Commit | `7204c69d1bfa7f5cc0f7864e08fb03e55d0ec29e` (2026-11-01, "Merge pull request #36 … wpa3-transition-and-amsdu") |
+| Authors | 钟先耀 / zxystd (AirportItlwm, Skywalk interface, reconstructed Apple headers), laobamac (macOS 15.2/26 WCL path and macOS 26 headers) |
+| Imported | 2026-11-08 |
+
+Imported verbatim (original notices kept): `include/Airport/**` → `native/include/Airport/`
+(macOS 15 variants dropped), `AirportItlwm/WCL/WCL.hpp` → `native/src/AirportWCL.hpp`.
+Rewritten over our core but following upstream's structure: `AirportItlwmV2.cpp`,
+`AirportItlwmSkywalkInterface.cpp`, `WCL/WCL.cpp`, `AirportItlwmEthernetInterface.cpp` →
+`native/src/AirportAth10k*.cpp`. Not imported: itlwm/itl80211 (Intel HAL, OpenBSD net80211),
+`MacKernelSDK`, the AWDL/legacy (≤ macOS 14) front ends.
+
+Licence: those files carry "All rights reserved" inside a GPL-2.0 repository. They are
+**used with the author's permission per the repository owner (2026-11-08)**, who
+collaborates with laobamac; see `native/NOTICE`. Everything written here is GPL-3.0.
+
