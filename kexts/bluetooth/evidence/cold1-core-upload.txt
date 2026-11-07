@@ -1,0 +1,78 @@
+# cold-1 (2026-11-08 00:26 IST): owner full poweroff 15 s + power on; btusb blacklisted for the boot.
+# Our core (tools/linux/qca_rome_usb.c) uploads to the unpatched chip, then Linux btusb takes over.
+# MACs and hostname redacted; HCI scan shows only a count.
+== boot
+ 00:26:54 up 1 min,  1 user,  load average: 0.14, 0.10, 0.04
+ -1 2832f2389e61403a98e4e8e139b19361 Sat 2026-11-07 23:55:57 IST Sun 2026-11-08 00:24:39 IST
+  0 f5ef3c004e2747aca0b8355a12a798f2 Sun 2026-11-08 00:25:10 IST Sun 2026-11-08 00:26:54 IST
+== hold file / btusb loaded?
+blacklist btusb
+0
+9ee2cff5bd51523b65c941b72ecf05a8b5e7b9e280c79fa08c70ade7205088a5  nvm_usb_00000302.bin
+f0d15f6d7c4ce17270c951287222699c0909bea9028ecb84d2e8be6fa364691e  rampatch_usb_00000302.bin
+== probe at cold boot (no driver ever touched the chip this boot)
+# device /dev/bus/usb/001/002
+S ctrl c0 09 0000 0000 0014
+C ctrl c0 09 0000 0000 0014 len=20 data=0203000011010000000000000700000000010000
+# rom 0x00000302 patch 0x00000111 ram 0x00000000
+S ctrl c0 05 0000 0000 0001
+C ctrl c0 05 0000 0000 0001 len=1 data=20
+# initial status 0x20
+# result OK stage=done err="ok" transport=0
+# rom=0x00000302 patch_before=0x111 patch_after=0x111 ram=0x00000000 chip=0x07 platform=0x00 flag=0x0000
+# status 0x20 -> 0x20 rampatch=0 nvm=0 bulk=0 in 0 ms
+devnum 2
+== capture while OUR core uploads rampatch + NVM
+usbmon-pcap: capturing /dev/usbmon1 for 25 s (dev 2)
+setup rc=0
+# device /dev/bus/usb/001/002
+# firmware ~/qca-bt/rampatch_usb_00000302.bin 68644 bytes sha256=f0d15f6d7c4ce17270c951287222699c0909bea9028ecb84d2e8be6fa364691e
+# firmware ~/qca-bt/nvm_usb_00000302.bin 1998 bytes sha256=9ee2cff5bd51523b65c941b72ecf05a8b5e7b9e280c79fa08c70ade7205088a5
+# rom 0x00000302 patch 0x00000111 ram 0x00000000
+# initial status 0x20
+# rampatch rome 0x302 build 0x3e8, controller patch 0x111
+# sleep 20 ms
+# rampatch sent (68644 bytes)
+# sleep 20 ms
+# NVM sent (1998 bytes)
+# result OK stage=done err="ok" transport=0
+# rom=0x00000302 patch_before=0x111 patch_after=0x3e8 ram=0x00000000 chip=0x07 platform=0x00 flag=0x0000
+# status 0x20 -> 0xe0 rampatch=1 nvm=1 bulk=18 in 384 ms
+== probe after our upload
+# rom 0x00000302 patch 0x000003e8 ram 0x00000000
+# result OK stage=done err="ok" transport=0
+# rom=0x00000302 patch_before=0x3e8 patch_after=0x3e8 ram=0x00000000 chip=0x07 platform=0x00 flag=0x0000
+# status 0xe0 -> 0xe0 rampatch=0 nvm=0 bulk=0 in 0 ms
+usbmon-pcap: 52 records, 0 with truncated data
+== hand over to Linux btusb (explicit modprobe; hold file stays)
+[  132.012181] Bluetooth: Core ver 2.22
+[  132.012204] NET: Registered PF_BLUETOOTH protocol family
+[  132.012205] Bluetooth: HCI device and connection manager initialized
+[  132.012209] Bluetooth: HCI socket layer initialized
+[  132.012210] Bluetooth: L2CAP socket layer initialized
+[  132.012213] Bluetooth: SCO socket layer initialized
+[  132.031599] usbcore: registered new interface driver btusb
+[  132.031919] Bluetooth: hci0: HCI Enhanced Setup Synchronous Connection command is advertised, but not supported.
+[  132.078885] Bluetooth: BNEP (Ethernet Emulation) ver 1.3
+[  132.078889] Bluetooth: BNEP filters: protocol multicast
+[  132.078892] Bluetooth: BNEP socket layer initialized
+[  132.258243] Bluetooth: MGMT ver 1.23
+[  132.280682] Bluetooth: RFCOMM TTY layer initialized
+[  132.280689] Bluetooth: RFCOMM socket layer initialized
+[  132.280692] Bluetooth: RFCOMM ver 1.11
+== controller
+Index list with 1 item
+hci0:	Primary controller
+	addr XX:XX:XX:XX:XX:XX version 8 manufacturer 29 class 0x6c010c
+	supported settings: powered connectable fast-connectable discoverable bondable link-security ssp br/edr le advertising secure-conn debug-keys privacy configuration static-addr phy-configuration wide-band-speech ll-privacy 
+	current settings: powered ssp br/edr le secure-conn wide-band-speech ll-privacy 
+hci0:	Configuration options
+	supported options: public-address 
+	missing options: 
+== LE+BR/EDR scan 10 s (count only)
+3
+
+# usbmon timing (from the capture):
+DFU header complete -> first body packet: 20.1 ms
+DFU header complete -> first body packet: 20.8 ms
+bulk body span 361.9 ms

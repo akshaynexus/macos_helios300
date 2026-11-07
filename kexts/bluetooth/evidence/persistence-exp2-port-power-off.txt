@@ -1,0 +1,49 @@
+== port attrs
+connect_type
+device
+disable
+early_stop
+firmware_node
+location
+over_current_count
+physical_location
+power
+quirks
+state
+uevent
+waiting_for_supplier
+/sys/bus/usb/devices/1-0:1.0/usb1-port7/connect_type:not used
+/sys/bus/usb/devices/1-0:1.0/usb1-port7/disable:0
+/sys/bus/usb/devices/1-0:1.0/usb1-port7/over_current_count:0
+/sys/bus/usb/devices/1-0:1.0/usb1-port7/quirks:00000000
+/sys/bus/usb/devices/1-0:1.0/usb1-port7/location:0x80000000
+crw------- 1 root root 510, 1 Nov  8 00:04 /dev/usbmon1
+== unbind + probe before
+# rom 0x00000302 patch 0x000003e8 ram 0x00000000
+# result OK stage=done err="ok" transport=0
+# rom=0x00000302 patch_before=0x3e8 patch_after=0x3e8 ram=0x00000000 chip=0x07 platform=0x00 flag=0x0000
+# status 0xe0 -> 0xe0 rampatch=0 nvm=0 bulk=0 in 0 ms
+== capture bus 1 for 40 s while port7 is power-cycled and btusb re-binds
+usbmon-pcap: capturing /dev/usbmon1 for 40 s (dev -1)
+disable=1 present=no
+after re-enable: 04ca:3016 devnum=4
+1-7:1.0 -> btusb
+1-7:1.1 -> btusb
+usbmon-pcap: 379 records, 0 with truncated data
+== dmesg
+[  512.921545] Bluetooth: hci0: urb 00000000b0db508b failed to resubmit (2)
+[  515.141090] usb 1-7: USB disconnect, device number 2
+[  519.508753] usb 1-7: new full-speed USB device number 4 using xhci_hcd
+[  519.633054] usb 1-7: New USB device found, idVendor=04ca, idProduct=3016, bcdDevice= 0.01
+[  519.633579] usb 1-7: New USB device strings: Mfr=0, Product=0, SerialNumber=0
+[  519.637009] Bluetooth: hci0: HCI Enhanced Setup Synchronous Connection command is advertised, but not supported.
+[  519.752623] Bluetooth: MGMT ver 1.23
+== probe after (unbind first)
+# rom 0x00000302 patch 0x000003e8 ram 0x00000000
+# result OK stage=done err="ok" transport=0
+# rom=0x00000302 patch_before=0x3e8 patch_after=0x3e8 ram=0x00000000 chip=0x07 platform=0x00 flag=0x0000
+# status 0xe0 -> 0xe0 rampatch=0 nvm=0 bulk=0 in 0 ms
+-rw-r--r-- 1 root root 34960 Nov  8 00:05 /tmp/qca-portcycle.pcap
+== cleanup: rebind btusb, power/control=auto
+1-7:1.0 -> btusb
+1-7:1.1 -> btusb

@@ -1,0 +1,14 @@
+# Firmware the Helios 300's Linux loads vs. what the kext embeds (2026-11-08)
+# Laptop: linux-firmware-atheros 1:20261019-1, files are zstd-compressed;
+# hashes below are of the decompressed files (zstd -dc).
+# Kext: scripts/gen_firmware_header.py pins linux-firmware
+#       d0039fd797d7776d89f00c22c45754914a96706e and checks these hashes.
+#
+# file                          bytes  sha256 (laptop, decompressed)                                     pinned
+qca/rampatch_usb_00000302.bin   68644  f0d15f6d7c4ce17270c951287222699c0909bea9028ecb84d2e8be6fa364691e  identical
+qca/nvm_usb_00000302.bin         1998  9ee2cff5bd51523b65c941b72ecf05a8b5e7b9e280c79fa08c70ade7205088a5  identical
+qca/nvm_usb_00000302_eu.bin      1998  a3f530ac97dffa187747780a84eaba7171edc66c6a7ccb5957cc2f456c1175ba  not used (Linux loads the generic NVM: version flag 0x0000)
+#
+# Linux log for this chip: "using rampatch file: qca/rampatch_usb_00000302.bin",
+# "QCA: patch rome 0x302 build 0x3e8, firmware rome 0x302 build 0x111",
+# "using NVM file: qca/nvm_usb_00000302.bin" (linux-dmesg.txt).

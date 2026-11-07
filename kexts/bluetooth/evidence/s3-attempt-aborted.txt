@@ -1,0 +1,66 @@
+9ee2cff5bd51523b65c941b72ecf05a8b5e7b9e280c79fa08c70ade7205088a5  nvm_usb_00000302.bin
+f0d15f6d7c4ce17270c951287222699c0909bea9028ecb84d2e8be6fa364691e  rampatch_usb_00000302.bin
+== pre-S3: unbind btusb (left unbound across S3 on purpose)
+1-7:1.0 -> 
+1-7:1.1 -> 
+# rom 0x00000302 patch 0x000003e8 ram 0x00000000
+# result OK stage=done err="ok" transport=0
+# rom=0x00000302 patch_before=0x3e8 patch_after=0x3e8 ram=0x00000000 chip=0x07 platform=0x00 flag=0x0000
+# status 0xe0 -> 0xe0 rampatch=0 nvm=0 bulk=0 in 0 ms
+dmesg position: [  615.336701]
+Sunday 08 November 2026 12:06:12 AM IST
+rtcwake launched
+
+== resumed? Sunday 08 November 2026 12:07:22 AM IST
+rtcwake: wakeup from "mem" using /dev/rtc0 at Sat Nov  7 18:36:38 2026
+rtcwake: write error
+ 00:07:22 up 11 min,  2 users,  load average: 0.08, 0.09, 0.04
+== PM dmesg
+[  616.613268] PM: suspend entry (deep)
+[  618.225380] PM: suspend exit
+== BT dmesg since suspend
+[  615.336701] Bluetooth: hci0: urb 0000000095b3a42c failed to resubmit (2)
+1-7:1.0 -> 
+1-7:1.1 -> 
+== probe after S3 (btusb was unbound across S3)
+# rom 0x00000302 patch 0x000003e8 ram 0x00000000
+# result OK stage=done err="ok" transport=0
+# rom=0x00000302 patch_before=0x3e8 patch_after=0x3e8 ram=0x00000000 chip=0x07 platform=0x00 flag=0x0000
+# status 0xe0 -> 0xe0 rampatch=0 nvm=0 bulk=0 in 0 ms
+
+# dmesg of the suspend window (MACs redacted)
+[  616.613268] PM: suspend entry (deep)
+[  616.613370] Filesystems sync: 0.000 seconds
+[  616.616227] rfkill: input handler enabled
+[  616.618075] Freezing user space processes
+[  616.619545] Freezing user space processes completed (elapsed 0.001 seconds)
+[  616.619548] OOM killer disabled.
+[  616.619549] Freezing remaining freezable tasks
+[  616.620521] Freezing remaining freezable tasks completed (elapsed 0.000 seconds)
+[  616.620586] printk: Suspending console(s) (use no_console_suspend to debug)
+[  616.646132] wlan0: deauthenticating from XX:XX:XX:XX:XX:XX by local choice (Reason: 3=DEAUTH_LEAVING)
+[  616.647508] sd 0:0:0:0: [sda] Synchronizing SCSI cache
+[  616.649393] ata1.00: Entering standby power mode
+[  616.675647] NVRM: GPU 0000:01:00.0: PreserveVideoMemoryAllocations module parameter is set. System Power Management attempted without driver procfs suspend interface. Please refer to the 'Configuring Power Management Support' section in the driver README.
+[  616.675650] nvidia 0000:01:00.0: PM: pci_pm_suspend(): nv_pmops_suspend [nvidia] returns -5
+[  616.676080] nvidia 0000:01:00.0: PM: dpm_run_callback(): pci_pm_suspend returns -5
+[  616.676083] nvidia 0000:01:00.0: PM: failed to suspend async: error -5
+[  616.721918] r8169 0000:03:00.1 enp3s0f1: Link is Down
+[  617.046926] PM: Some devices failed to suspend, or early wake event detected
+[  617.049116] i915 0000:00:02.0: vgaarb: VGA decodes changed: olddecodes=io,decodes=io:owns=io+mem
+[  617.212848] r8169 0000:03:00.1 enp3s0f1: Link is Down
+[  617.357776] ata3: SATA link down (SStatus 4 SControl 300)
+[  617.357794] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[  617.364283] sd 0:0:0:0: [sda] Starting disk
+[  617.369564] ata1.00: configured for UDMA/133
+[  617.369690] ata1.00: Entering active power mode
+[  617.433877] ahci 0000:00:17.0: port does not support device sleep
+[  618.133004] mei_hdcp 0000:00:16.0-b638ab7e-94e2-4ea2-a552-d1c54b627f04: bound 0000:00:02.0 (ops i915_hdcp_ops [i915])
+[  618.133233] OOM killer enabled.
+[  618.133235] Restarting tasks: Starting
+[  618.134255] Restarting tasks: Done
+[  618.134263] efivarfs: resyncing variable state
+[  618.224483] efivarfs: finished resyncing variable state
+[  618.224523] random: crng reseeded on system resumption
+[  618.225380] PM: suspend exit
+[  618.241949] rfkill: input handler disabled
