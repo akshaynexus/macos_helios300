@@ -114,7 +114,10 @@ COMMON=(
 	-Wall -Wno-unused-parameter -Wno-deprecated-declarations
 	-Wno-inconsistent-missing-override
 )
-fail=0 n=0
+# Translation units compile in parallel (JOBS, default nproc). Object names, and so the link order, are the
+# same as a serial build. Each compiler's output goes to its own log, printed in source order.
+JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
+fail=0 n=0 pids=() srcs=() logs=()
 for src in "${SRCS[@]}"; do
 	n=$((n + 1))
 	obj="$WORK/$n-$(basename "${src%.*}").o"
@@ -123,11 +126,18 @@ for src in "${SRCS[@]}"; do
 	*.c) lang=(-x c -std=gnu11) ;;
 	*) echo "FAIL $src: unknown source type"; fail=1; continue ;;
 	esac
-	if "$CLANG" "${COMMON[@]}" "${lang[@]}" "$src" -o "$obj"; then
-		echo "PASS compile $(basename "$src")"
+	while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n || true; done
+	"$CLANG" "${COMMON[@]}" "${lang[@]}" "$src" -o "$obj" >"$obj.log" 2>&1 &
+	pids+=("$!"); srcs+=("$src"); logs+=("$obj.log")
+done
+for i in "${!pids[@]}"; do
+	src="${srcs[$i]}"; log="${logs[$i]}"
+	if wait "${pids[$i]}"; then
+		cat "$log"; echo "PASS compile $(basename "$src")"
 	else
-		echo "FAIL compile $src"; fail=1
+		cat "$log"; echo "FAIL compile $src"; fail=1
 	fi
+	rm -f "$log"
 done
 [ "$fail" = 0 ] || die "compile failed"
 

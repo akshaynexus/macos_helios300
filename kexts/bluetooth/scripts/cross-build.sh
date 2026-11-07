@@ -3,13 +3,15 @@
 # Build QCARomePatchRAM.kext for macOS 26 x86_64 on Linux with the shared
 # tools/cross-build-kext.sh (clang + macOS 26.5 SDK + Apple ld64 + KPI audit).
 # Output: build/cross/QCARomePatchRAM.kext. Exit codes as cross-build-kext.sh.
+# QCA_FIRMWARE_CACHE: where the pinned linux-firmware files are kept (sha256-checked on every use);
+# release.sh points it at RELEASE_CACHE so a fresh export does not download them again.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 OUT="${1:-$HERE/build/cross}"
 GEN="$HERE/build/gen"
 [ -f "$GEN/qca_rome_firmware.h" ] ||
-	python3 -I "$HERE/scripts/gen_firmware_header.py" "$GEN/qca_rome_firmware.h" --cache "$HERE/build/firmware-cache"
+	python3 -I "$HERE/scripts/gen_firmware_header.py" "$GEN/qca_rome_firmware.h" --cache "${QCA_FIRMWARE_CACHE:-$HERE/build/firmware-cache}"
 RES="$OUT/.resources"; rm -rf "$RES"; mkdir -p "$RES"
 cp "$HERE/firmware/LICENSE.QualcommAtheros_ath10k" "$HERE/firmware/NOTICE.qca" "$HERE/LICENSE" "$RES/"
 "$REPO/tools/cross-build-kext.sh" \

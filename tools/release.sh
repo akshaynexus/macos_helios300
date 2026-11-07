@@ -79,7 +79,12 @@ echo "release.sh: v$VERSION from macos_helios300 ${SELF_COMMIT:0:12}, nvidia-mac
 
 MISSING=() SIGNED=() FAILED=0
 skipped() { [[ "$SKIP" == *",$1,"* ]]; }
-# step <key> <artifact names...> -- <command...>: runs the build, logs it, records missing artifacts on failure.
+# step <key> <artifact names...> -- <command...>: starts the build as a background job with its own log.
+# Steps are independent (own build dir, own staged names, own log), so they all run at once; collect_steps waits
+# for them in the order they were started and records results, so output and the manifest don't depend on timing.
+# A job also keeps errexit: a function called as `f || rc=$?` runs with errexit off for every command in it, so a
+# failing build step would be reported as ok. A job's own `set -e` still applies.
+STEP_KEYS=() STEP_PIDS=() STEP_NAMES=()
 step() {
 	local key="$1"; shift; local names=()
 	while [ "$1" != "--" ]; do names+=("$1"); shift; done; shift
@@ -87,18 +92,23 @@ step() {
 		for n in "${names[@]}"; do MISSING+=(--missing-why "$n=skipped (--skip $key)"); done
 		echo "  skip   $key"; return 0
 	fi
-	local log="$LOGS/$key.log" rc=0
-	# Run in a background job and wait: a function called as `f || rc=$?` runs with errexit off for every
-	# command in it, so a failing build step would be reported as ok. A job's own `set -e` still applies.
-	( set -e; "$@" ) >"$log" 2>&1 &
-	wait $! || rc=$?
-	if [ "$rc" = 0 ]; then
-		echo "  ok     $key  ($(tail -1 "$log" | cut -c1-110))"
-	else
-		echo "  FAIL   $key  rc=$rc ($(tail -1 "$log" | cut -c1-110)); log: $log"
-		for n in "${names[@]}"; do MISSING+=(--missing-why "$n=build failed (rc $rc, logs/$key.log)"); done
-		FAILED=1
-	fi
+	( set -e; "$@" ) >"$LOGS/$key.log" 2>&1 &
+	STEP_KEYS+=("$key"); STEP_PIDS+=("$!"); STEP_NAMES+=("${names[*]}")
+}
+collect_steps() {
+	local i key log rc n
+	for i in "${!STEP_PIDS[@]}"; do
+		key="${STEP_KEYS[$i]}" log="$LOGS/${STEP_KEYS[$i]}.log" rc=0
+		wait "${STEP_PIDS[$i]}" || rc=$?
+		if [ "$rc" = 0 ]; then
+			echo "  ok     $key  ($(tail -1 "$log" | cut -c1-110))"
+		else
+			echo "  FAIL   $key  rc=$rc ($(tail -1 "$log" | cut -c1-110)); log: $log"
+			for n in ${STEP_NAMES[$i]}; do MISSING+=(--missing-why "$n=build failed (rc $rc, logs/$key.log)"); done
+			FAILED=1
+		fi
+	done
+	echo "release.sh: ${#STEP_PIDS[@]} builds finished in $((SECONDS - BUILD_START)) s (run in parallel)"
 }
 put() { [ -e "$1" ] || { echo "release.sh: expected $1" >&2; return 1; }; rm -rf "$STAGE/$2"; cp -R "$1" "$STAGE/$2"; }
 
@@ -117,7 +127,8 @@ b_pg106fb() {
 }
 b_nmhda() { bash "$HERE/release/cross-nmhda.sh" "$DRV/kexts/NMHDA" "$WORK/b/nmhda" && put "$WORK/b/nmhda/NMHDA.kext" NMHDA.kext; }
 b_bluetooth() {
-	MACOS_SDK="$MACOS_SDK" LD64="$LD64" XNU_CONFIG="$XNU_CONFIG" bash "$SELF/kexts/bluetooth/scripts/cross-build.sh" "$WORK/b/bt"
+	QCA_FIRMWARE_CACHE="$RELEASE_CACHE/qca-firmware" MACOS_SDK="$MACOS_SDK" LD64="$LD64" XNU_CONFIG="$XNU_CONFIG" \
+		bash "$SELF/kexts/bluetooth/scripts/cross-build.sh" "$WORK/b/bt"
 	put "$WORK/b/bt/QCARomePatchRAM.kext" QCARomePatchRAM.kext
 }
 b_wifi() {
@@ -194,6 +205,7 @@ b_licences() {
 	echo "licences copied"
 }
 
+BUILD_START=$SECONDS
 step pg106 PG106.kext -- b_pg106
 step pg106fb PG106FB.kext -- b_pg106fb
 step nmhda NMHDA.kext -- b_nmhda
@@ -205,6 +217,7 @@ step plugin NVMTLDriver.bundle -- b_plugin
 step xlate libnvmtl_translate.dylib -- b_xlate
 step nvk NVK-Pascal -- b_nvk
 step licences NVIDIA-firmware-LICENCE.txt Mesa-license.rst -- b_licences
+collect_steps
 
 # Ad-hoc signatures (codesign -s - on a Mac). OpenCore injection needs none; kmutil (PG106Accel), dyld
 # (plugin, dylibs) accept ad-hoc ones.
