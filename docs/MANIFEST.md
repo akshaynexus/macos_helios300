@@ -125,6 +125,23 @@ Xcode verification build of each artifact on a Mac and compare it with the cross
 `build/build_xlate_release.sh`, and `nvk/pascal/scripts/build-nvk-macos.sh` are the Mac builds. Every release is
 `pre_release: true` until then.
 
+## Who builds what
+
+Only this repo builds. `tools/release.sh` produces every file an EFI for this laptop needs from this project, plus
+`manifest.json`, and those are what a GitHub (pre-)release carries. Consumers assemble; they never build:
+
+- **Prebuilt (the default).** 1401 downloads `manifest.json` from the release assets (the tag pinned in its
+  `p1401/helios300_release.json`, else the latest release, pre-releases included), downloads every listed file,
+  checks each SHA-256 (and `contents_sha256` inside bundles), and unpacks them into the EFI in the `opencore.order`.
+  It needs no SDK or toolchain. `--release-dir DIR` / `--manifest PATH` points it at a local copy (offline, or before
+  a release is published), and downloads are cached for offline rebuilds.
+- **Build from source (opt-in, `1401 build ... --build-from-source [--ref <tag|commit>]`).** 1401 clones this repo at
+  the ref, runs `git submodule update --init`, and runs *this* `tools/release.sh --version <tag version or
+  0.0.0-src.<commit>> --dist <dir>`. The resulting `dist/manifest.json` goes through the same checks and assembly as
+  a download. release.sh exits 77 when the cross toolchain is missing, and 1401 then points to the section above.
+  The PG106Accel audit needs the macOS 26 IOAcceleratorFamily2 reference binary, which cannot be in git: set
+  `HELIOS_IAF2=<file>` (release.sh reads it as `--iaf2`), or that required artifact fails and so does the build.
+
 ## Publishing (coordinator, after review)
 
 `tools/release.sh` stops at `dist/`. To publish: review `dist/manifest.json` and `dist/logs/`, then create release

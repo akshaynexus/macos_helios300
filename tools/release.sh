@@ -21,7 +21,7 @@
 # instead of stopping; 1401 refuses such a manifest unless it was pointed at it explicitly.
 #
 # Build keys for --skip: pg106 pg106fb nmhda bluetooth wifi ssdt pg106accel plugin xlate nvk licences
-# Environment: MACOS_SDK, LD64, XNU_CONFIG, HELIOS_CROSS (tools/cross-build-kext.sh defaults), RELEASE_CACHE
+# Environment: MACOS_SDK, LD64, XNU_CONFIG, HELIOS_CROSS (tools/cross-build-kext.sh defaults), HELIOS_IAF2 (= --iaf2), RELEASE_CACHE
 #   (downloads + the NVK Mesa tree, default ~/.cache/helios300-release), PG106_NATIVE_BIN (NVK's build-machine
 #   mesa_clc/vtn_bindgen2; built by build-nvk-linux.sh into the cache when unset).
 # Exit: 0 dist/ written, 1 failure, 77 toolchain missing.
@@ -34,7 +34,7 @@ export XNU_CONFIG="${XNU_CONFIG:-$CROSS/xnu-12377.1.9/config}"
 export RELEASE_CACHE="${RELEASE_CACHE:-$HOME/.cache/helios300-release}"
 RCODESIGN="${RCODESIGN:-$(command -v rcodesign || echo "$HOME/.cargo/bin/rcodesign")}"
 
-VERSION="" DRY=0 REV=HEAD DRIVER_REV="" DRIVER_REPO="" SKIP="," DIST="$ROOT/dist" IAF2=""
+VERSION="" DRY=0 REV=HEAD DRIVER_REV="" DRIVER_REPO="" SKIP="," DIST="$ROOT/dist" IAF2="${HELIOS_IAF2:-}"
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--version) VERSION="$2"; shift 2 ;;
