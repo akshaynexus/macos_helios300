@@ -68,7 +68,7 @@ void Ath10kPCIDevice::fillControlInfo(AthControl::Response &o){
  Ath10k::htcWriteLE32(o.data+24,_connection.securityGeneration);
  Ath10k::htcWriteLE32(o.data+28,(_systemSuspended?1u:0u)|(_dmaQuarantine?2u:0u)|(_power.needsRestart?4u:0u));
  o.data[32]=_connection.ssidLength;bcopy(_connection.ssid,o.data+33,_connection.ssidLength);
- strlcpy(reinterpret_cast<char *>(o.data+68),"0.0.98",16);o.length=112;
+ strlcpy(reinterpret_cast<char *>(o.data+68),ATH10K_VERSION,16);o.length=112;
  const auto &r=_connection.radio;
  Ath10k::htcWriteLE32(o.data+84,(r.requestedPS?1u:0u)|(r.appliedPS?2u:0u)|(r.step?4u:0u));
  Ath10k::htcWriteLE32(o.data+88,_connection.beaconMisses);Ath10k::htcWriteLE32(o.data+92,_connection.txPowerHalfDbm);

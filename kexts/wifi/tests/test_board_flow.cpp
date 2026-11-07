@@ -165,6 +165,9 @@ struct FakePCI {
         if (disableWorks && command != 0xffff) command &= ~4u;
     }
     UInt16 configRead16(UInt32 address) { assert(address == 4); return command; }
+    // Wake-recovery breadcrumbs (Ath10kPower.cpp publishPowerState) land on the provider.
+    unsigned recoveryWrites = 0;
+    template<class... T> void setProperty(T...) { ++recoveryWrites; }
 };
 #ifdef ATH10K_WMI_RUNTIME_TEST
 #include "wmi_worker_mocks.hpp"
@@ -472,6 +475,24 @@ int main()
     }
     { Ath10kPCIDevice d; d._subsystemId = 0x0311;
       assert(!d.runBMIBoardUploadTest() && d._regs.posts == 0); }
+    // Acer Predator Helios 300 G3-571 (Lite-On 11ad:0807): the Acer board-2.bin entry,
+    // the one Linux loads on that laptop (crc32 58f39f4d), lands at 0x401fc0 byte for byte.
+    { Ath10kPCIDevice d; d._subsystemVendorId = 0x11ad; d._subsystemId = 0x0807;
+      assert(d.payload().available && d.payload().kBoard == Ath10kPayload::kBoardAcer);
+      assert(!strcmp(d.payload().kBoardKey,
+          "bus=pci,vendor=168c,device=003e,subsystem-vendor=11ad,subsystem-device=0807"));
+      assert(d.runBMIBoardUploadTest() && d._bmiBoardBytesVerified == 8124);
+      for (UInt32 i = 0; i < 8124; ++i) assert(d.memory[0x401fc0 + i] == Ath10kPayload::kBoardAcer[i]);
+      assert(memcmp(Ath10kPayload::kBoardAcer, Ath10kPayload::kBoardDell, 8124) != 0);
+      assert(d.memory[0x400858] == 1); }
+    // Neighbouring Lite-On boards (11ad:0808/1807 have their own calibration) are refused.
+    for (UInt16 sub : {0x0808, 0x1807, 0x0806}) {
+      Ath10kPCIDevice d; d._subsystemVendorId = 0x11ad; d._subsystemId = sub;
+      assert(!d.payload().available && !d.runBMIBoardUploadTest() && d._regs.posts == 0); }
+    // Acer IDs on another silicon revision (e.g. hw3.0 chip rev 8) are refused too.
+    { Ath10kPCIDevice d; d._subsystemVendorId = 0x11ad; d._subsystemId = 0x0807;
+      d._selectedHw = Ath10k::findCandidate(0x003e, 8);
+      assert(!d.payload().available && !d.runBMIBoardUploadTest() && d._regs.posts == 0); }
     { Ath10kPCIDevice d; d._bmiBoardDataAddress += 4;
       assert(!d.runBMIBoardUploadTest() && d._regs.posts == 0); }
     { Ath10kPCIDevice d; d._bmiBoardPrereqSucceeded = false;

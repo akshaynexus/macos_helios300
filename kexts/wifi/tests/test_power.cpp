@@ -34,6 +34,7 @@ public:
  static IOReturn controlPowerState(OSObject *,void *,void *,void *,void *);
  static IOReturn powerNotification(void *,void *,UInt32,IOService *,void *,vm_size_t);
  template<class... T> void setProperty(T...){}
+ struct PCIMock{unsigned recoveryWrites=0;template<class... T> void setProperty(T...){++recoveryWrites;}} pciMock;PCIMock *_pci=&pciMock;
  void publishWMIRuntimeProperties(){++published;}
  void endWMIRuntime(const char *reason){
   assert(loop.inside && powerIOBlocked());

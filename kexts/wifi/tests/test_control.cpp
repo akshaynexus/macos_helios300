@@ -1,3 +1,4 @@
+#include "Ath10kVersion.hpp"
 #include <cassert>
 #include <cstring>
 #include <cstdint>

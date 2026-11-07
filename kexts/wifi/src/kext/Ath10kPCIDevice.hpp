@@ -17,6 +17,7 @@
 #include <IOKit/pwr_mgt/IOPM.h>
 #include "Ath10kHw.hpp"
 #include "Ath10kPayloadProfile.hpp"
+#include "Ath10kVersion.hpp"
 #include "Ath10kRegisterIO.hpp"
 #include "Ath10kTarget.hpp"
 #include "Ath10kRuntimePower.hpp"
@@ -224,6 +225,8 @@ private:
     void runDeferredProbe();
     void cancelDeferredProbe();
     thread_call_t _deferredProbeCall=nullptr;
+    // 0 queued, 1 running, 2 finished (see cancelDeferredProbe).
+    volatile UInt32 _deferredProbeState=0;
     bool wakeTarget(bool &assertedWake);
     void releaseTargetWake(bool assertedWake);
     bool coldResetTarget();

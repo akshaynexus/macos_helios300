@@ -7,7 +7,7 @@
 #define ATH10K_PAYLOAD_CACHE 1
 #endif
 using IOPhysicalAddress=UInt64;using IOReturn=int;
-constexpr int kernel_task=0,kIOReturnSuccess=0,kIOReturnNotReady=1;
+constexpr int kernel_task=0,kIOReturnSuccess=0,kIOReturnNotReady=1,kIOReturnBadArgument=2,kIOReturnNoMemory=3;
 constexpr UInt32 kIOMemoryPhysicallyContiguous=1,kIODirectionInOut=2,kIOMapInhibitCache=4,kIOMapCopybackCache=8;
 constexpr UInt32 kIODirectionOut=16,kIODirectionIn=32,kIODMACommandOutputHost64=1;
 static void OSSynchronizeIO(){}
@@ -31,7 +31,14 @@ struct IODMACommand {
         assert(bits==32 && mode==kMapped);last=new IODMACommand;return last;
     }
     int setMemoryDescriptor(IOBufferMemoryDescriptor *d){assert(d->prepared);descriptor=d;device=d->data;return 0;}
-    int gen64IOVMSegments(UInt64 *,Segment64 *s,UInt32 *n){assert(*n==1);*s={0x200000,descriptor->data.size()};return 0;}
+    // splitAt>0 returns the buffer as two segments (CE ring DMA fix, upstream 066af06);
+    // gap>0 makes the second segment non-contiguous.
+    inline static UInt64 splitAt=0,gap=0;
+    int gen64IOVMSegments(UInt64 *offset,Segment64 *s,UInt32 *n){
+        assert(*n==1);const UInt64 size=descriptor->data.size();
+        const UInt64 end=(splitAt && *offset<splitAt && splitAt<size)?splitAt:size;
+        *s={0x200000+*offset+(*offset?gap:0),end-*offset};*offset=end;return 0;
+    }
     int synchronize(UInt32 direction){
         if(failSync)return 1;
         if(direction==kIODirectionOut)device=descriptor->data;
@@ -54,6 +61,15 @@ int main(){
         b.release();assert(!IOBufferMemoryDescriptor::live && !b.allocated());
     }
     Ath10kDMABuffer invalid;assert(!invalid.allocate(0,128) && !invalid.allocate(100,3));
+    // A 64 KiB ring returned as two IOVM-contiguous segments is accepted;
+    // a hole between the segments is rejected and leaks nothing.
+    IODMACommand::splitAt=4096;
+    {Ath10kDMABuffer ring;assert(ring.allocate(65536,128,nullptr,Ath10kDMABuffer::Role::Ring));
+     assert(ring.dmaAddress()==0x200000);ring.release();}
+    IODMACommand::gap=4096;
+    {Ath10kDMABuffer ring;assert(!ring.allocate(65536,128,nullptr,Ath10kDMABuffer::Role::Ring) && !ring.allocated());}
+    IODMACommand::splitAt=0;IODMACommand::gap=0;
+    assert(!IOBufferMemoryDescriptor::live && !IODMACommand::last);
     IODMACommand::failSync=true;assert(!invalid.allocate(2048,128));
     assert(!IOBufferMemoryDescriptor::live && !IODMACommand::last);
 }

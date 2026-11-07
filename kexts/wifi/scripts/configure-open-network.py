@@ -25,7 +25,7 @@ def configure(path, ssid=None, bssid=None, power=10, disable=False):
     if obj.get('CFBundleIdentifier') != 'br.com.jonasw8.driver.ath10kmac':
         raise ValueError('Info.plist não pertence ao Ath10kMac')
     personalities = obj['IOKitPersonalities']
-    for name in ('QCA6174', 'QCA9377'):
+    for name in obj['IOKitPersonalities']:
         p = personalities[name]
         p['Ath10kOpenConnect'] = not disable
         for key in ('Ath10kConnectSSID', 'Ath10kConnectBSSID', 'Ath10kConnectPowerHalfDbm'):

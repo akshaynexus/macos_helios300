@@ -20,7 +20,7 @@
 		A10000C /* Ath10kCERing.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kCERing.hpp; sourceTree = "<group>"; };
 		A10000D /* Ath10kBMI.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kBMI.hpp; sourceTree = "<group>"; };
 		A100200 /* Ath10kMac.kext */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = build/out/Ath10kMac.kext; sourceTree = "<group>"; };
-		A10000E /* Ath10kPayload.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kPayload.hpp; sourceTree = "<group>"; };
+		A10000E /* Ath10kPayload.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = build/gen/kext/Ath10kPayload.hpp; sourceTree = "<group>"; };
         A100011 /* Ath10kNetwork.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = src/kext/Ath10kNetwork.cpp; sourceTree = "<group>"; };
         A100012 /* Ath10kConnection.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kConnection.hpp; sourceTree = "<group>"; };
         A100013 /* Ath10kRuntime.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = src/kext/Ath10kRuntime.cpp; sourceTree = "<group>"; };

@@ -33,4 +33,7 @@ struct Profile {
     }
 };
 const Profile &selectProfile(UInt16 vendor, UInt16 device, UInt16 subvendor, UInt16 subdevice, UInt8 chip);
+// True when some embedded profile exists for these PCI IDs (any chip revision).
+// probe() uses it so the driver never attaches to a card whose board data it lacks.
+bool subsystemListed(UInt16 vendor, UInt16 device, UInt16 subvendor, UInt16 subdevice);
 }

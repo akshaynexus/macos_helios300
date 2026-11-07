@@ -22,7 +22,7 @@ def configure(path, country='00', indoor=False, power=10, station_dfs=True, beac
     obj = plistlib.loads(path.read_bytes())
     if obj.get('CFBundleIdentifier') != 'br.com.jonasw8.driver.ath10kmac':
         raise ValueError('Info.plist não pertence ao Ath10kMac.')
-    for name in ('QCA6174', 'QCA9377'):
+    for name in obj['IOKitPersonalities']:
         p = obj['IOKitPersonalities'][name]
         p['Ath10kCountryCode'] = country
         p['Ath10kIndoor'] = indoor

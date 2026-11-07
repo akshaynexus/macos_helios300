@@ -66,6 +66,15 @@ IOService *Ath10kPCIDevice::probe(IOService *provider, SInt32 *score)
 
     if (!Ath10k::isSupportedDevice(vendor, device))
         return nullptr;
+    // Board calibration is per card: attach only where an exact board-2.bin
+    // profile is embedded (Info.plist also matches the subsystem, this is the
+    // second check). Linux would fall back to board.bin; we refuse instead.
+    const UInt16 subvendor = pci->configRead16(kIOPCIConfigSubSystemVendorID);
+    const UInt16 subdevice = pci->configRead16(kIOPCIConfigSubSystemID);
+    if (!Ath10kPayload::subsystemListed(vendor, device, subvendor, subdevice)) {
+        IOLog("Ath10kMac: no board profile for subsystem %04x:%04x; not attaching\n", subvendor, subdevice);
+        return nullptr;
+    }
 
     if (score)
         *score += 1000;
@@ -88,7 +97,7 @@ bool Ath10kPCIDevice::start(IOService *provider)
     if(auto *timeout=OSDynamicCast(OSNumber,getProperty("Ath10kBeaconTimeoutMs"))){
         const UInt32 value=timeout->unsigned32BitValue();_connection.beaconTimeoutMs=value>=10000 && value<=120000?value:30000;
     }
-    IOLog("Ath10kMac: start v0.0.98 (deferred device initialization)\n");
+    IOLog("Ath10kMac: start v" ATH10K_VERSION " (deferred device initialization)\n");
 
     if (!super::start(provider)) {
         IOLog("Ath10kMac: super::start failed\n");
@@ -139,8 +148,12 @@ bool Ath10kPCIDevice::start(IOService *provider)
     // macOS can finish booting while Wi-Fi initialization continues.
     ath10kSetRecoveryStatus(_pci, "probe-queued", "PCI setup complete; firmware probe is queued");
     registerService();
-    _deferredProbeCall = thread_call_allocate_with_priority(
-        deferredProbeCall, this, THREAD_CALL_PRIORITY_USER);
+    // thread_call_allocate_with_priority/thread_call_cancel_wait are
+    // com.apple.kpi.private on macOS 26 (xnu-12377 config/Private.exports), which
+    // third-party kexts cannot link; _with_options is in the Mach KPI.
+    _deferredProbeState = 0;
+    _deferredProbeCall = thread_call_allocate_with_options(
+        deferredProbeCall, this, THREAD_CALL_PRIORITY_USER, 0);
     if (_deferredProbeCall) {
         thread_call_enter(_deferredProbeCall);
         IOLog("Ath10kMac: deferred target probe queued; network becomes available after initialization\n");
@@ -155,8 +168,12 @@ bool Ath10kPCIDevice::start(IOService *provider)
 void Ath10kPCIDevice::deferredProbeCall(thread_call_param_t param0, thread_call_param_t)
 {
     auto *self = static_cast<Ath10kPCIDevice *>(param0);
-    if (self)
-        self->runDeferredProbe();
+    if (!self)
+        return;
+    OSCompareAndSwap(0, 1, &self->_deferredProbeState);
+    self->runDeferredProbe();
+    // Last access to self: cancelDeferredProbe() may release it right after.
+    OSCompareAndSwap(1, 2, &self->_deferredProbeState);
 }
 
 void Ath10kPCIDevice::runDeferredProbe()
@@ -233,7 +250,18 @@ void Ath10kPCIDevice::cancelDeferredProbe()
 {
     if (!_deferredProbeCall)
         return;
-    thread_call_cancel_wait(_deferredProbeCall);
+    // Public replacement for thread_call_cancel_wait(): a call still queued is
+    // dequeued; otherwise wait until deferredProbeCall() has stopped touching
+    // this object. thread_call_free() of a non-ONCE call whose handler is still
+    // returning is safe: the running execution holds its own reference
+    // (xnu-12377 osfmk/kern/thread_call.c thread_call_free).
+    if (!thread_call_cancel(_deferredProbeCall)) {
+        for (UInt32 waited = 0; _deferredProbeState != 2; waited += 10) {
+            if (waited && waited % 10000 == 0)
+                IOLog("Ath10kMac: still waiting for the deferred probe to finish (%u ms)\n", waited);
+            IOSleep(10);
+        }
+    }
     if (!thread_call_free(_deferredProbeCall))
         IOLog("Ath10kMac: deferred probe worker could not be released\n");
     _deferredProbeCall = nullptr;
@@ -7129,7 +7157,7 @@ void Ath10kPCIDevice::publishDiagnosticProperties()
     setProperty("Ath10kOTPMilestoneSucceeded", _otpDownloadSucceeded && _otpExecuteSucceeded &&
                 _otpResultAccepted && (_bmiQuiesceSucceeded || _runtimeActive) && !_dmaQuarantine);
     setProperty("Ath10kBMIDoneSent", _boot.doneSent);
-    setProperty("Ath10kDriverVersion", "0.0.98");
+    setProperty("Ath10kDriverVersion", ATH10K_VERSION);
     setProperty("Ath10kHTCAttempted", _htcAttempted);
     setProperty("Ath10kWMIInitStatus",_wmiInit.status);
     setProperty("Ath10kWMIInitSubmitted",_wmiInit.submitted);

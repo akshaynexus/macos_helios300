@@ -17,7 +17,7 @@ class RegulatoryConfigTests(unittest.TestCase):
             p.write_bytes((root / 'Ath10kMac.kext/Contents/Info.plist').read_bytes())
             config.configure(p, 'BR', True, 7)
             obj = plistlib.loads(p.read_bytes())
-            for name in ('QCA6174', 'QCA9377'):
+            for name in obj['IOKitPersonalities']:
                 board = obj['IOKitPersonalities'][name]
                 self.assertEqual((board['Ath10kCountryCode'], board['Ath10kIndoor'], board['Ath10kTxPowerDbm']), ('BR', True, 7))
                 self.assertFalse(board['Ath10kOpenConnect'])

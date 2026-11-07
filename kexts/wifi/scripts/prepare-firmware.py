@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
-"""Validate ath10k containers; select per-device board/firmware profiles.
+"""Validate ath10k containers and generate the kext's embedded payload header.
 
-Formats: Linux v6.12 ath10k/hw.h and core.c. No network or device access.
+Inputs are the pinned linux-firmware files fetched by scripts/fetch-firmware.sh
+(no network or device access here). Formats: Linux ath10k hw.h and core.c
+(ath10k_core_fetch_board_data_api_n, ath10k_core_fetch_firmware_api_n).
+
+  prepare-firmware.py --set kext   QCA6174 only: what the kext embeds
+  prepare-firmware.py --set test   QCA6174 + QCA9377: for the host unit tests
+
+Output: <out>/Ath10kPayload.hpp and <out>/manifest.json.
 """
 import argparse
 import hashlib
@@ -12,6 +19,11 @@ import sys
 
 BOARD_MAGIC = b"QCA-ATH10K-BOARD\0"
 FW_MAGIC = b"QCA-ATH10K\0"
+# Acer Predator Helios 300 G3-571: Lite-On QCA6174 module, subsystem 11ad:0807.
+# This is the exact name Linux ath10k builds on that laptop and matches in
+# QCA6174/hw3.0/board-2.bin (kexts/wifi/evidence/linux-ath10k-load-trace.txt).
+ACER_BOARD_KEY = "bus=pci,vendor=168c,device=003e,subsystem-vendor=11ad,subsystem-device=0807"
+# Upstream Ath10kMac's tested Dell profile (kept; same firmware, 8 KB of board data).
 BOARD_KEY = "bus=pci,vendor=168c,device=003e,subsystem-vendor=1028,subsystem-device=0310"
 BOARD_SIZE = 8124
 QCA9377_BOARD_KEY = "bus=pci,vendor=168c,device=0042,subsystem-vendor=1028,subsystem-device=1810"
@@ -149,131 +161,178 @@ def parse_segments(image):
     raise ValueError("SGMT DONE marker missing")
 
 
-def prepare_profile(root, folder, namespace, board_key, profile, identity, allow_fallback=False):
-    board_container = (folder / "board-2.bin").read_bytes()
-    fw_container = (folder / "firmware-6.bin").read_bytes()
-    selection = "board-api2-exact"
-    try:
-        board = select_board(board_container, board_key)
-    except BoardNotFound:
-        if not allow_fallback:
-            raise
-        board = (folder / "board.bin").read_bytes()
-        if len(board) != BOARD_SIZE:
-            raise ValueError("invalid API1 fallback board size")
-        selection = "board-api1-fallback"
+def linux_crc32(data):
+    """crc32_le(0, data, len) as ath10k prints it (no pre/post inversion)."""
+    import zlib
+    return (~zlib.crc32(data, 0xffffffff)) & 0xffffffff
 
+
+# Pinned inputs: linux-firmware a2dcb924 (tag 20261019). The board SHA-256 is the
+# selected 8124-byte entry; linux_crc32 is what Linux debugfs fw_checksums
+# reports as "board" for the same entry on the owner's laptop.
+QCA6174 = {
+    "namespace": "Ath10kPayload", "dir": "ath10k/QCA6174/hw3.0", "profile": "QCA6174/hw3.2",
+    "device": 0x003e, "chip": 10, "target": 0x05030000,
+    "firmware_container_sha256": "04d3bad5efa3f9fbe3ba53fd3e25fa9b0585ed227eea8111303b4e08861f979d",
+    "board_container_sha256": "66e83dde1c9af535df1fcd17c72971a96a263357300e921b358d35a353227d60",
+    "allow_fallback": False,
+    "boards": [
+        {"name": "Acer", "subvendor": 0x11ad, "subdevice": 0x0807, "key": ACER_BOARD_KEY,
+         "sha256": "4c9b92a20a3f11f025a2ea60b605de1344d9b24e575ad5195ab10fdcdf44bf3c",
+         "linux_crc32": 0x58f39f4d},
+        {"name": "Dell", "subvendor": 0x1028, "subdevice": 0x0310, "key": BOARD_KEY,
+         "sha256": "7b01edabe0fc9071abe4d20c7f336fc5e4dc6e2ed4803df54487eef155b16862"},
+    ],
+}
+QCA9377 = {
+    "namespace": "Ath10kPayload9377", "dir": "ath10k/QCA9377/hw1.0", "profile": "QCA9377/hw1.1",
+    "device": 0x0042, "chip": 1, "target": 0x05020001,
+    "firmware_container_sha256": "8f8b002fccfe81d42238f27dd1f56d189604f180bd4772c7c8e75ae1fef16f01",
+    "board_container_sha256": "0fdcc7838f478da81704de88f7b33e28862110c6d5decf7818543f8e37e6cd98",
+    "allow_fallback": True,
+    "fallback_board_sha256": "127d35d82edb46278f30c448cbca664d755ff0d5fed57b649959cdbc4208c768",
+    "boards": [
+        {"name": "Dell", "subvendor": 0x1028, "subdevice": 0x1810, "key": QCA9377_BOARD_KEY,
+         "sha256": "b2713b77c725b0ff81af75c85c3aeba97885d0f40174f715b1e39d5a9d50f4e7"},
+    ],
+}
+SETS = {"kext": (QCA6174,), "test": (QCA6174, QCA9377)}
+
+
+def c_bytes(name, data):
+    lines = [f"static constexpr UInt8 {name}[] = {{"]
+    for pos in range(0, len(data), 16):
+        lines.append("    " + ", ".join(f"0x{x:02x}" for x in data[pos:pos + 16]) + ",")
+    return lines + ["};"]
+
+
+def prepare_group(fwroot, group, verify_pins=True):
+    """Validate one firmware directory and its boards; return (header lines, profile lines, manifest)."""
+    folder = Path(fwroot) / group["dir"]
+    fw_container = (folder / "firmware-6.bin").read_bytes()
+    board_container = (folder / "board-2.bin").read_bytes()
+    if verify_pins:
+        for what, data in (("firmware", fw_container), ("board", board_container)):
+            if sha(data) != group[f"{what}_container_sha256"]:
+                raise ValueError(f"{group['profile']} {what} container does not match the pinned SHA-256")
     parts, version = parse_firmware(fw_container)
-    if allow_fallback:
-        if sha(fw_container) != "8f8b002fccfe81d42238f27dd1f56d189604f180bd4772c7c8e75ae1fef16f01":
-            raise ValueError("QCA9377 firmware does not match the reviewed profile")
-        if selection == "board-api1-fallback" and sha(board) != "127d35d82edb46278f30c448cbca664d755ff0d5fed57b649959cdbc4208c768":
-            raise ValueError("QCA9377 fallback board does not match the reviewed profile")
     segments, entry = parse_segments(parts[3])
-    manifest = {
-        "profile": profile, "board_key": board_key, "board_selection": selection,
-        "board_bytes": len(board), "board_sha256": sha(board),
-        "board_container_sha256": sha(board_container),
-        "firmware_container_sha256": sha(fw_container),
-        "firmware_version": version, "firmware_bytes": len(parts[3]),
-        "firmware_sha256": sha(parts[3]), "otp_bytes": len(parts[4]),
-        "otp_sha256": sha(parts[4]), "wmi_op": 4, "htt_op": 3,
-        "otp_ignore_result_feature": ignore_otp_result(parts),
-        "supports_skip_clock_init_feature": supports_skip_clock_init(parts),
-        "firmware_segments": segments, "firmware_entry_address": entry,
-        "firmware_segment_data_bytes": sum(s['length'] for s in segments),
-        "runtime_policy": "Host Interest + board + OTP + WLAN readback + BMI_DONE + HTC READY + WMI/HTT runtime; verified reset on failure",
-    }
-    header = ["// Generated by scripts/prepare-firmware.py. Do not edit.",
-              "#pragma once", "#include <IOKit/IOTypes.h>", f"namespace {namespace} {{",
-              f"static constexpr char kBoardKey[] = {json.dumps(board_key)};",
-              f"static constexpr char kBoardSHA256[] = {json.dumps(sha(board))};",
+    ns = group["namespace"]
+    header = [f"namespace {ns} {{",
               f"static constexpr char kFirmwareVersion[] = {json.dumps(version)};",
               f"static constexpr UInt32 kFirmwareSize = {len(parts[3])};",
               f"static constexpr char kFirmwareSHA256[] = {json.dumps(sha(parts[3]))};",
               f"static constexpr UInt32 kOTPSize = {len(parts[4])};",
               f"static constexpr char kOTPSHA256[] = {json.dumps(sha(parts[4]))};",
               f"static constexpr bool kOTPIgnoreResult = {str(ignore_otp_result(parts)).lower()};",
-              f"static constexpr bool kSupportsSkipClockInit = {str(supports_skip_clock_init(parts)).lower()};",
-              f"static constexpr char kBoardSelection[] = {json.dumps(selection)};",
-              "static constexpr UInt8 kBoard[] = {"]
-    for pos in range(0, len(board), 16):
-        header.append("    " + ", ".join(f"0x{x:02x}" for x in board[pos:pos + 16]) + ",")
-    header += ["};", "static_assert(sizeof(kBoard) == 8124, \"QCA6174 board size\");",
-               "static constexpr UInt8 kOTP[] = {"]
-    for pos in range(0, len(parts[4]), 16):
-        header.append("    " + ", ".join(f"0x{x:02x}" for x in parts[4][pos:pos + 16]) + ",")
-    header += ["};", "static_assert(sizeof(kOTP) == kOTPSize, \"OTP payload size\");",
-               "static constexpr UInt8 kFirmware[] = {"]
-    for pos in range(0, len(parts[3]), 16):
-        header.append("    " + ", ".join(f"0x{x:02x}" for x in parts[3][pos:pos + 16]) + ",")
-    header += ["};", "static_assert(sizeof(kFirmware) == kFirmwareSize, \"WLAN payload size\");",
-               "// FirmwareSegment is defined by Ath10kPayloadProfile.hpp.",
+              f"static constexpr bool kSupportsSkipClockInit = {str(supports_skip_clock_init(parts)).lower()};"]
+    header += c_bytes("kOTP", parts[4])
+    header += ["static_assert(sizeof(kOTP) == kOTPSize, \"OTP payload size\");"]
+    header += c_bytes("kFirmware", parts[3])
+    header += ["static_assert(sizeof(kFirmware) == kFirmwareSize, \"WLAN payload size\");",
                "static constexpr Ath10kPayload::FirmwareSegment kFirmwareSegments[] = {"]
-    for s in segments:
-        header.append(f"    {{0x{s['address']:08x}u, {s['offset']}u, {s['length']}u}},")
+    header += [f"    {{0x{s['address']:08x}u, {s['offset']}u, {s['length']}u}}," for s in segments]
     header += ["};", f"static constexpr UInt32 kFirmwareSegmentCount = {len(segments)};",
                f"static constexpr UInt32 kFirmwareSegmentDataBytes = {sum(s['length'] for s in segments)};",
-               f"static constexpr UInt32 kFirmwareEntryAddress = 0x{entry:08x}u;", "}", ""]
-    outdir = root / "firmware/prepared" / ("QCA9377" if allow_fallback else "")
-    outputs = {
-        outdir / "board.bin": board,
-        outdir / "otp.bin": parts[4],
-        outdir / "firmware-image.bin": parts[3],
-        outdir / "manifest.json": (json.dumps(manifest, indent=2) + "\n").encode(),
-    }
-    dev, subvendor, subdevice, chip, target = identity
-    profile_line = (f"    {{{dev}, {subvendor}, {subdevice}, {chip}, {target}, "
-        f"true, {namespace}::kBoardKey, {namespace}::kBoardSelection, "
-        f"{namespace}::kBoardSHA256, {namespace}::kBoard, sizeof({namespace}::kBoard), "
-        f"{namespace}::kFirmwareVersion, {namespace}::kFirmwareSize, {namespace}::kFirmwareSHA256, "
-        f"{namespace}::kFirmware, {namespace}::kOTPSize, {namespace}::kOTPSHA256, {namespace}::kOTP, "
-        f"{namespace}::kOTPIgnoreResult, {namespace}::kSupportsSkipClockInit, "
-        f"{namespace}::kFirmwareSegments, {namespace}::kFirmwareSegmentCount, "
-        f"{namespace}::kFirmwareSegmentDataBytes, {namespace}::kFirmwareEntryAddress}},")
-    print(f"Prepared {profile}: {selection} ({len(board)} bytes); firmware {version}; OTP {len(parts[4])} bytes")
-    return outputs, header, profile_line
+               f"static constexpr UInt32 kFirmwareEntryAddress = 0x{entry:08x}u;"]
+    manifest = {"profile": group["profile"], "firmware_version": version,
+                "firmware_container_sha256": sha(fw_container),
+                "board_container_sha256": sha(board_container),
+                "firmware_bytes": len(parts[3]), "firmware_sha256": sha(parts[3]),
+                "firmware_linux_crc32": f"{linux_crc32(parts[3]):08x}",
+                "otp_bytes": len(parts[4]), "otp_sha256": sha(parts[4]),
+                "otp_linux_crc32": f"{linux_crc32(parts[4]):08x}",
+                "otp_ignore_result_feature": ignore_otp_result(parts),
+                "supports_skip_clock_init_feature": supports_skip_clock_init(parts),
+                "firmware_segments": segments, "firmware_entry_address": entry,
+                "firmware_segment_data_bytes": sum(s['length'] for s in segments),
+                "boards": []}
+    profiles = []
+    for b in group["boards"]:
+        selection = "board-api2-exact"
+        try:
+            board = select_board(board_container, b["key"])
+        except BoardNotFound:
+            if not group["allow_fallback"]:
+                raise
+            board = (folder / "board.bin").read_bytes()
+            if len(board) != BOARD_SIZE:
+                raise ValueError("invalid API1 fallback board size")
+            if verify_pins and sha(board) != group["fallback_board_sha256"]:
+                raise ValueError(f"{group['profile']} fallback board does not match the pinned SHA-256")
+            selection = "board-api1-fallback"
+        if verify_pins and selection == "board-api2-exact" and sha(board) != b["sha256"]:
+            raise ValueError(f"{b['key']}: board data does not match the pinned SHA-256")
+        if verify_pins and "linux_crc32" in b and linux_crc32(board) != b["linux_crc32"]:
+            raise ValueError(f"{b['key']}: board crc32 differs from what Linux loads on this card")
+        bn = f"kBoard{b['name']}"
+        header += [f"static constexpr char {bn}Key[] = {json.dumps(b['key'])};",
+                   f"static constexpr char {bn}SHA256[] = {json.dumps(sha(board))};",
+                   f"static constexpr char {bn}Selection[] = {json.dumps(selection)};"]
+        header += c_bytes(bn, board)
+        header += [f"static_assert(sizeof({bn}) == {BOARD_SIZE}, \"board size\");"]
+        profiles.append(
+            f"    {{0x{group['device']:04x}, 0x{b['subvendor']:04x}, 0x{b['subdevice']:04x}, {group['chip']}, "
+            f"0x{group['target']:08x}u, true, {ns}::{bn}Key, {ns}::{bn}Selection, {ns}::{bn}SHA256, "
+            f"{ns}::{bn}, sizeof({ns}::{bn}), {ns}::kFirmwareVersion, {ns}::kFirmwareSize, "
+            f"{ns}::kFirmwareSHA256, {ns}::kFirmware, {ns}::kOTPSize, {ns}::kOTPSHA256, {ns}::kOTP, "
+            f"{ns}::kOTPIgnoreResult, {ns}::kSupportsSkipClockInit, {ns}::kFirmwareSegments, "
+            f"{ns}::kFirmwareSegmentCount, {ns}::kFirmwareSegmentDataBytes, {ns}::kFirmwareEntryAddress}},")
+        manifest["boards"].append({"key": b["key"], "selection": selection, "bytes": len(board),
+                                   "sha256": sha(board), "linux_crc32": f"{linux_crc32(board):08x}"})
+        print(f"Prepared {group['profile']} {b['name']}: {selection}; firmware {version}; OTP {len(parts[4])} bytes")
+    # The first board of the QCA6174 group is this repo's target (Acer); tests use
+    # these aliases for "the default profile".
+    first = f"kBoard{group['boards'][0]['name']}"
+    header += [f"static constexpr const UInt8 *kBoard = {first};",
+               f"static constexpr const char *kBoardKey = {first}Key;", "}", ""]
+    return header, profiles, manifest
 
 
-def prepare(root):
-    outputs = {}
-    header = ['// Generated by scripts/prepare-firmware.py. Do not edit.',
-              '#pragma once', '#include "Ath10kPayloadProfile.hpp"']
-    entries = []
-    profiles = [
-        (root / 'firmware', 'Ath10kPayload', BOARD_KEY, 'QCA6174/hw3.2',
-         ('0x003e', '0x1028', '0x0310', '10', '0x05030000u'), False),
-        (root / 'firmware/QCA9377/hw1.0', 'Ath10kPayload9377', QCA9377_BOARD_KEY, 'QCA9377/hw1.1',
-         ('0x0042', '0x1028', '0x1810', '1', '0x05020001u'), True),
-    ]
-    for args in profiles:
-        files, lines, entry = prepare_profile(root, *args)
-        outputs.update(files)
-        header.extend(lines)
-        entries.append(entry)
-    header += ['namespace Ath10kPayload {', 'static constexpr Profile kProfiles[] = {', *entries, '};',
-               'static constexpr Profile kUnavailable = {};',
-               'const Profile &selectProfile(UInt16 vendor, UInt16 device, UInt16 subvendor, UInt16 subdevice, UInt8 chip) {',
-               '    if (vendor == 0x168c) for (const auto &p : kProfiles)',
-               '        if (p.device == device && p.subvendor == subvendor && p.subdevice == subdevice && p.chip == chip) return p;',
-               '    return kUnavailable;', '}', '}']
-    outputs[root / 'src/kext/Ath10kPayload.hpp'] = ('\n'.join(header) + '\n').encode()
-    # All profiles validated before any output is written; build aborts on failure.
-    for path, content in outputs.items():
-        path.parent.mkdir(parents=True, exist_ok=True)
+def prepare(fwroot, out, which="kext", verify_pins=True):
+    header = ["// Generated by scripts/prepare-firmware.py from pinned linux-firmware files. Do not edit.",
+              "// The firmware bytes below are Qualcomm's (firmware/LICENSE.QualcommAtheros_ath10k).",
+              "#pragma once", '#include "Ath10kPayloadProfile.hpp"']
+    entries, manifests = [], []
+    for group in SETS[which]:
+        lines, profiles, manifest = prepare_group(fwroot, group, verify_pins)
+        header += lines
+        entries += profiles
+        manifests.append(manifest)
+    header += ["namespace Ath10kPayload {", "static constexpr Profile kProfiles[] = {", *entries, "};",
+               "static constexpr Profile kUnavailable = {};",
+               "// Exact allowlist: PCI vendor/device, subsystem vendor/device and chip revision.",
+               "const Profile &selectProfile(UInt16 vendor, UInt16 device, UInt16 subvendor, UInt16 subdevice, UInt8 chip) {",
+               "    if (vendor == 0x168c) for (const auto &p : kProfiles)",
+               "        if (p.device == device && p.subvendor == subvendor && p.subdevice == subdevice && p.chip == chip) return p;",
+               "    return kUnavailable;", "}",
+               "bool subsystemListed(UInt16 vendor, UInt16 device, UInt16 subvendor, UInt16 subdevice) {",
+               "    if (vendor == 0x168c) for (const auto &p : kProfiles)",
+               "        if (p.device == device && p.subvendor == subvendor && p.subdevice == subdevice) return true;",
+               "    return false;", "}", "}", ""]
+    out = Path(out)
+    files = {out / "Ath10kPayload.hpp": "\n".join(header).encode(),
+             out / "manifest.json": (json.dumps({"set": which, "groups": manifests}, indent=2) + "\n").encode()}
+    out.mkdir(parents=True, exist_ok=True)
+    for path, content in files.items():
         if path.exists() and path.read_bytes() == content:
             continue
-        tmp = path.with_name(path.name + '.tmp')
+        tmp = path.with_name(path.name + ".tmp")
         tmp.write_bytes(content)
         tmp.replace(path)
+    return files
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    root = Path(__file__).resolve().parents[1]
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--firmware", type=Path, default=root / "build/firmware",
+                        help="directory filled by scripts/fetch-firmware.sh")
+    parser.add_argument("--set", choices=sorted(SETS), default="kext")
+    parser.add_argument("--out", type=Path)
     args = parser.parse_args()
     try:
-        prepare(args.root)
+        prepare(args.firmware, args.out or root / "build/gen" / args.set, args.set)
     except (OSError, ValueError) as error:
         print(f"Payload preparation FAILED: {error}", file=sys.stderr)
         sys.exit(1)

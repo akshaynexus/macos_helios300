@@ -1,3 +1,4 @@
+#include "Ath10kVersion.hpp"
 #include <cassert>
 #include <cstring>
 #include "Ath10kWMI.hpp"
@@ -15,7 +16,7 @@ class Ath10kPCIDevice {
 public:
  Ath10k::PowerState _power{};
  bool _systemSuspended=false,_reprobeRequested=false,_dmaQuarantine=false,inactive=false;
- void *_pci=this;bool terminateOK=true,resetQuarantines=false;unsigned resets=0,terminations=0,options=0,refs=1;
+ struct PCIMock{const char *phase=nullptr;void setProperty(const char *k,const char *v){if(!strcmp(k,"Ath10kRecoveryPhase"))phase=v;}} pciMock;PCIMock *_pci=&pciMock;bool terminateOK=true,resetQuarantines=false;unsigned resets=0,terminations=0,options=0,refs=1;
  Gate gate;Gate *_wmiWorkLoop=&gate;
  struct {bool active=true;} _wmiLive;
  Ath10k::WMIScanState _wmiScan{};Ath10k::ConnectionState _connection{};
@@ -46,7 +47,7 @@ int main(){
  good._wmiScan.generation=10;good.fillControlInfo(response);
  assert(response.length==112 && response.data[32]==3 && !memcmp(response.data+33,"abc",3));
  assert(Ath10k::wmiReadLE32(response.data+4)==10 && int32_t(Ath10k::wmiReadLE32(response.data+12))==-50);
- assert(!strcmp(reinterpret_cast<char *>(response.data+68),"0.0.98"));
+ assert(!strcmp(reinterpret_cast<char *>(response.data+68),ATH10K_VERSION));
  assert(Ath10k::wmiReadLE32(response.data)&512);
  good._wmiScan.completed=true;good._wmiScan.failed=true;good._wmiScan.cancelRequested=true;good._wmiScan.started=true;
  good.fillControlInfo(response);assert(Ath10k::wmiReadLE32(response.data+108)==15);

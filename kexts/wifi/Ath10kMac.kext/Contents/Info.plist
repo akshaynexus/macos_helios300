@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>Ath10kMac</string>
+	<key>CFBundleIdentifier</key>
+	<string>br.com.jonasw8.driver.ath10kmac</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Ath10kMac</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>0.1.0</string>
+	<key>OSBundleCompatibleVersion</key>
+	<string>0.1.0</string>
+	<key>OSBundleRequired</key>
+	<string>Network-Root</string>
+	<key>OSBundleLibraries</key>
+	<dict>
+		<key>com.apple.iokit.IOPCIFamily</key>
+		<string>2.9</string>
+		<key>com.apple.kpi.iokit</key>
+		<string>20.0.0</string>
+		<key>com.apple.kpi.libkern</key>
+		<string>20.0.0</string>
+		<key>com.apple.kpi.mach</key>
+		<string>20.0.0</string>
+		<key>com.apple.iokit.IONetworkingFamily</key>
+		<string>3.0</string>
+		<key>com.apple.kpi.bsd</key>
+		<string>20.0.0</string>
+	</dict>
+	<key>IOKitPersonalities</key>
+	<dict>
+		<key>QCA6174-Acer-11ad-0807</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>br.com.jonasw8.driver.ath10kmac</string>
+			<key>IOClass</key>
+			<string>Ath10kPCIDevice</string>
+			<key>IOProbeScore</key>
+			<integer>5000</integer>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>Ath10kFamily</key>
+			<string>QCA6174</string>
+			<key>Ath10kOpenConnect</key>
+			<false/>
+			<key>Ath10kStationDFS</key>
+			<true/>
+			<key>Ath10kBeaconTimeoutMs</key>
+			<integer>30000</integer>
+			<key>IOPCIPrimaryMatch</key>
+			<string>0x003E168C</string>
+			<key>IOPCISecondaryMatch</key>
+			<string>0x080711AD</string>
+		</dict>
+	</dict>
+	<key>NSHumanReadableCopyright</key>
+	<string>Ath10kMac (GPL-3.0): Jonas Wander, Kunal Thakur; Helios 300 port. Qualcomm firmware under its own licence (Resources).</string>
+</dict>
+</plist>
