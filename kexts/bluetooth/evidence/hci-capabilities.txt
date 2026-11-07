@@ -1,0 +1,86 @@
+# HCI capabilities of the patched controller (patch 0x3e8), from btmon during
+# btmgmt power off/on on the Helios (Linux, 2026-11-08). Decoded by btmon; no addresses.
+# Note: Enhanced Setup Synchronous Connection (Octet 29 Bit 3) IS advertised; Linux btusb sets
+# HCI_QUIRK_BROKEN_ENHANCED_SETUP_SYNC_CONN for Rome so it is never used (HFP/mSBC risk on macOS).
+--- Read Local Version Information (0x04|0x0001)
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.2 (0x08) - Revision 0 (0x0000)
+        LMP version: Bluetooth 4.2 (0x08) - Subversion 602 (0x025a)
+        Manufacturer: Qualcomm (29)
+--- Read Local Supported Features (0x04|0x0003)
+        Status: Success (0x00)
+        Features[0/0][8]:
+        ff fe 8f fe d8 3f 5b 87                          .....?[.        
+          3 slot packets
+          5 slot packets
+          Encryption
+          Slot offset
+          Timing accuracy
+          Role switch
+          Hold mode
+          Sniff mode
+          Power control requests
+          Channel quality driven data rate (CQDDR)
+          SCO link
+          HV2 packets
+          HV3 packets
+          u-law log synchronous data
+          A-law log synchronous data
+          CVSD synchronous data
+          Paging parameter negotiation
+          Power control
+          Transparent synchronous data
+          Broadcast Encryption
+          Enhanced Data Rate ACL 2 Mbps mode
+          Enhanced Data Rate ACL 3 Mbps mode
+          Enhanced inquiry scan
+          Interlaced inquiry scan
+          Interlaced page scan
+          RSSI with inquiry results
+          Extended SCO link (EV3 packets)
+          AFH capable peripheral
+          AFH classification peripheral
+          LE Supported (Controller)
+          3-slot Enhanced Data Rate ACL packets
+          5-slot Enhanced Data Rate ACL packets
+          Sniff subrating
+          Pause encryption
+          AFH capable central
+          AFH classification central
+--- LE Read Local Supported Features (0x08|0x0003)
+        Status: Success (0x00)
+        Features[0/0][8]:
+        ff 00 00 00 00 00 00 00                          ........        
+          LE Encryption
+          Connection Parameter Request Procedure
+          Extended Reject Indication
+          Peripheral-initiated Features Exchange
+          LE Ping
+          LE Data Packet Length Extension
+          LL Privacy
+          Extended Scanner Filter Policies
+--- Read Buffer Size (0x04|0x0005)
+        Status: Success (0x00)
+        ACL MTU: 1024 ACL max packet: 8
+        SCO MTU: 50   SCO max packet: 8
+--- LE Read Buffer Size (0x08|0x0002)
+        Status: Success (0x00)
+        Data packet length: 123
+        Num data packets: 16
+--- supported commands (Enhanced/Synchronous lines)
+        Status: Success (0x00)
+        Commands: 202 entries
+          Setup Synchronous Connection (Octet 16 - Bit 3)
+          Accept Synchronous Connection Request (Octet 16 - Bit 4)
+          Reject Synchronous Connection Request (Octet 16 - Bit 5)
+          Enhanced Flush (Octet 19 - Bit 6)
+          Read Enhanced Transmit Power Level (Octet 24 - Bit 0)
+          Enhanced Setup Synchronous Connection (Octet 29 - Bit 3)
+          Enhanced Accept Synchronous Connection Request (Octet 29 - Bit 4)
+          Read Local Supported Codecs (Octet 29 - Bit 5)
+          Read Secure Connections Host Support (Octet 32 - Bit 2)
+          Write Secure Connections Host Support (Octet 32 - Bit 3)
+          Write Secure Connections Test Mode (Octet 32 - Bit 7)
+          LE Set Data Length (Octet 33 - Bit 6)
+          LE Read Suggested Default Data Length (Octet 33 - Bit 7)
+          LE Write Suggested Default Data Length (Octet 34 - Bit 0)

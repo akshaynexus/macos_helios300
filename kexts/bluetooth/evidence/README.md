@@ -10,6 +10,7 @@ EP 0x02 payload hashes, HCI command opcodes and counts).
 | File | What it shows |
 |---|---|
 | `lsusb-v-04ca-3016.txt` | full descriptors (root): class E0/01/01, bcdUSB 2.01, Full Speed, 1 configuration; interface 0: EP 0x81 interrupt IN (16), 0x82 bulk IN (64), **0x02 bulk OUT (64)**; interface 1: isochronous 0x83/0x03, alt settings 0–5; remote wakeup; LPM; no strings (iProduct 0) |
+| `hci-capabilities.txt` | patched controller over HCI: Bluetooth 4.2, LMP subversion 0x025a, manufacturer Qualcomm (29); BR/EDR + LE, EDR 2/3 Mbps, eSCO EV3, LE privacy and data length extension; ACL MTU 1024×8, SCO MTU 50×8; advertises Enhanced Setup Synchronous Connection, which Linux treats as broken |
 | `firmware-hashes.txt` | the laptop's `/usr/lib/firmware/qca/{rampatch,nvm}_usb_00000302.bin` are byte-identical to what the kext embeds |
 | `linux-dmesg.txt` | Linux's own view: `QCA: patch rome 0x302 build 0x3e8, firmware rome 0x302 build 0x111`, `using NVM file: qca/nvm_usb_00000302.bin`; download at a boot after power-off, none after a warm reboot; two firmware crashes (`Opcode 0x0c24 failed: -112`), each needing a re-download |
 | `persistence-exp1-reset-deauthorize.txt` | our core's probe: patch kept across a USB port reset (`USBDEVFS_RESET`) and `authorized` 0→1 (status `0xe0`, patch `0x3e8` each time) |
