@@ -1,0 +1,201 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-only
+# release.sh — build every macos_helios300 release artifact from source on Linux and write dist/ + manifest.json.
+#
+#   tools/release.sh --version 0.1.0 [--dry-run] [--rev REV] [--driver-rev REV] [--driver-repo DIR]
+#                    [--skip a,b] [--dist DIR] [--iaf2 FILE]
+#
+# What it does (docs/MANIFEST.md is the contract):
+#   1. Exports this repo at REV (default HEAD) and nvidia-macos-driver at the submodule commit REV records
+#      (or --driver-rev) with `git archive` into a fresh work dir. Uncommitted changes in either checkout are
+#      never part of a release, and nothing is built inside a working tree.
+#   2. Cross-builds each artifact in tools/release/spec.json with the Linux toolchain the repos already use
+#      (clang + macOS 26.5 SDK + Apple ld64 from cctools-port or ld64.lld + xnu-12377 exports + rustup's
+#      x86_64-apple-darwin target), each with its own checks (KPI audit, Mach-O checks, macho-check.py).
+#   3. Ad-hoc signs bundles, apps and dylibs with rcodesign (apple-codesign), as `codesign -s -` does on a Mac.
+#   4. tools/release/make_manifest.py zips each bundle deterministically, hashes everything, checks the result
+#      against tools/release/manifest.schema.json and writes dist/manifest.json + dist/SHA256SUMS.txt.
+#
+# It publishes nothing. A GitHub Actions runner has no macOS SDK, so this runs on the owner's Linux machine.
+# --dry-run: a required artifact that fails to build is listed in the manifest (release.missing, dry_run=true)
+# instead of stopping; 1401 refuses such a manifest unless it was pointed at it explicitly.
+#
+# Build keys for --skip: pg106 pg106fb nmhda bluetooth wifi ssdt pg106accel plugin xlate nvk licences
+# Environment: MACOS_SDK, LD64, XNU_CONFIG, HELIOS_CROSS (tools/cross-build-kext.sh defaults), RELEASE_CACHE
+#   (downloads + the NVK Mesa tree, default ~/.cache/helios300-release), PG106_NATIVE_BIN (NVK's build-machine
+#   mesa_clc/vtn_bindgen2; built by build-nvk-linux.sh into the cache when unset).
+# Exit: 0 dist/ written, 1 failure, 77 toolchain missing.
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$HERE/.." && pwd)"
+CROSS="${HELIOS_CROSS:-$HOME/.local/share/helios300-cross}"
+export MACOS_SDK="${MACOS_SDK:-$HOME/.config/swiftpm/swift-sdks/darwin.artifactbundle/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk}"
+export LD64="${LD64:-$CROSS/cctools/bin/x86_64-apple-darwin17-ld}"
+export XNU_CONFIG="${XNU_CONFIG:-$CROSS/xnu-12377.1.9/config}"
+export RELEASE_CACHE="${RELEASE_CACHE:-$HOME/.cache/helios300-release}"
+RCODESIGN="${RCODESIGN:-$(command -v rcodesign || echo "$HOME/.cargo/bin/rcodesign")}"
+
+VERSION="" DRY=0 REV=HEAD DRIVER_REV="" DRIVER_REPO="" SKIP="," DIST="$ROOT/dist" IAF2=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--version) VERSION="$2"; shift 2 ;;
+	--dry-run) DRY=1; shift ;;
+	--rev) REV="$2"; shift 2 ;;
+	--driver-rev) DRIVER_REV="$2"; shift 2 ;;
+	--driver-repo) DRIVER_REPO="$2"; shift 2 ;;
+	--skip) SKIP=",$2,"; shift 2 ;;
+	--dist) DIST="$2"; shift 2 ;;
+	--iaf2) IAF2="$2"; shift 2 ;;
+	-h|--help) sed -n '2,28p' "$0"; exit 0 ;;
+	*) echo "release.sh: unknown argument $1" >&2; exit 1 ;;
+	esac
+done
+die() { echo "release.sh: FAIL — $*" >&2; exit 1; }
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || die "--version X.Y.Z is required"
+[ -f "$MACOS_SDK/usr/lib/libkmod.a" ] || { echo "release.sh: SKIP — no macOS SDK at $MACOS_SDK"; exit 77; }
+[ -x "$LD64" ] || { echo "release.sh: SKIP — no Apple ld64 at $LD64"; exit 77; }
+[ -d "$XNU_CONFIG" ] || { echo "release.sh: SKIP — no xnu config at $XNU_CONFIG"; exit 77; }
+for t in clang llvm-nm llvm-objdump ld64.lld iasl git python3; do command -v "$t" >/dev/null || { echo "release.sh: SKIP — $t missing"; exit 77; }; done
+
+SELF_COMMIT="$(git -C "$ROOT" rev-parse --verify "$REV^{commit}")" || die "no commit $REV"
+SUB_COMMIT="$(git -C "$ROOT" ls-tree "$SELF_COMMIT" kexts/nvidia-macos-driver | awk '{print $3}')"
+DRIVER_REPO="${DRIVER_REPO:-$ROOT/kexts/nvidia-macos-driver}"
+DRIVER_COMMIT="$(git -C "$DRIVER_REPO" rev-parse --verify "${DRIVER_REV:-$SUB_COMMIT}^{commit}")" ||
+	die "driver commit ${DRIVER_REV:-$SUB_COMMIT} not in $DRIVER_REPO (fetch it there, or pass --driver-repo)"
+if [ -n "$DRIVER_REV" ] && [ "$DRIVER_COMMIT" != "$SUB_COMMIT" ]; then
+	echo "release.sh: NOTE driver $DRIVER_COMMIT is not the submodule commit $SUB_COMMIT recorded at ${SELF_COMMIT:0:12}"
+	[ "$DRY" = 1 ] || die "a real release builds the driver at the submodule commit; bump the submodule first (or use --dry-run)"
+fi
+[ -z "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ] ||
+	echo "release.sh: NOTE this checkout has uncommitted changes; they are NOT in the release (built from ${SELF_COMMIT:0:12})"
+
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/helios300-release.XXXXXX")"
+trap 'rm -rf "$WORK"' EXIT
+SELF="$WORK/self"; DRV="$WORK/driver"; STAGE="$WORK/stage"; LOGS="$DIST/logs"
+mkdir -p "$SELF" "$DRV" "$STAGE"
+git -C "$ROOT" archive "$SELF_COMMIT" | tar -x -C "$SELF"
+git -C "$DRIVER_REPO" archive "$DRIVER_COMMIT" | tar -x -C "$DRV"
+rm -rf "$DIST"; mkdir -p "$DIST" "$LOGS"
+echo "release.sh: v$VERSION from macos_helios300 ${SELF_COMMIT:0:12}, nvidia-macos-driver ${DRIVER_COMMIT:0:12}$([ "$DRY" = 1 ] && echo ' (DRY RUN)')"
+
+MISSING=() SIGNED=() FAILED=0
+skipped() { [[ "$SKIP" == *",$1,"* ]]; }
+# step <key> <artifact names...> -- <command...>: runs the build, logs it, records missing artifacts on failure.
+step() {
+	local key="$1"; shift; local names=()
+	while [ "$1" != "--" ]; do names+=("$1"); shift; done; shift
+	if skipped "$key"; then
+		for n in "${names[@]}"; do MISSING+=(--missing-why "$n=skipped (--skip $key)"); done
+		echo "  skip   $key"; return 0
+	fi
+	local log="$LOGS/$key.log" rc=0
+	"$@" >"$log" 2>&1 || rc=$?
+	if [ "$rc" = 0 ]; then
+		echo "  ok     $key  ($(tail -1 "$log" | cut -c1-110))"
+	else
+		echo "  FAIL   $key  rc=$rc ($(tail -1 "$log" | cut -c1-110)); log: $log"
+		for n in "${names[@]}"; do MISSING+=(--missing-why "$n=build failed (rc $rc, logs/$key.log)"); done
+		FAILED=1
+	fi
+}
+put() { [ -e "$1" ] || { echo "release.sh: expected $1" >&2; return 1; }; rm -rf "$STAGE/$2"; cp -R "$1" "$STAGE/$2"; }
+
+b_pg106() {
+	BUILD_DIR="$WORK/b/pg106" PG106_MACOS_SDK="$MACOS_SDK" PG106_LD64="$LD64" PG106_XNU_CONFIG="$XNU_CONFIG" \
+		bash "$DRV/pascal/kext/scripts/cross-build-macos.sh" | tee "$WORK/pg106.out"
+	grep -q "stage-firmware: 14 staged, 0 missing" "$WORK/pg106.out" || { echo "PG106 firmware not fully staged"; return 1; }
+	put "$WORK/b/pg106/PG106.kext" PG106.kext
+}
+b_pg106fb() {
+	[ -f "$DRV/pascal/fb/scripts/cross-build-macos.sh" ] || { echo "pascal/fb is not in driver ${DRIVER_COMMIT:0:12}"; return 1; }
+	BUILD_DIR="$WORK/b/pg106fb" PG106_MACOS_SDK="$MACOS_SDK" PG106_LD64="$LD64" PG106_XNU_CONFIG="$XNU_CONFIG" \
+		bash "$DRV/pascal/fb/scripts/cross-build-macos.sh"
+	put "$WORK/b/pg106fb/PG106FB.kext" PG106FB.kext
+}
+b_nmhda() { bash "$HERE/release/cross-nmhda.sh" "$DRV/kexts/NMHDA" "$WORK/b/nmhda" && put "$WORK/b/nmhda/NMHDA.kext" NMHDA.kext; }
+b_bluetooth() {
+	MACOS_SDK="$MACOS_SDK" LD64="$LD64" XNU_CONFIG="$XNU_CONFIG" bash "$SELF/kexts/bluetooth/scripts/cross-build.sh" "$WORK/b/bt"
+	put "$WORK/b/bt/QCARomePatchRAM.kext" QCARomePatchRAM.kext
+}
+b_wifi() {
+	( cd "$SELF/kexts/wifi" && MACOS_SDK="$MACOS_SDK" LD64="$LD64" XNU_CONFIG="$XNU_CONFIG" bash scripts/cross-build.sh )
+	local out found=0
+	for out in "$SELF/kexts/wifi/build/native" "$SELF/kexts/wifi/build/release"; do
+		[ -d "$out/Ath10kMac.kext" ] || continue
+		put "$out/Ath10kMac.kext" Ath10kMac.kext; found=1
+		[ ! -d "$out/AirportAth10k.kext" ] || put "$out/AirportAth10k.kext" AirportAth10k.kext
+		break
+	done
+	[ "$found" = 1 ] || { echo "the wifi build produced no Ath10kMac.kext"; return 1; }
+	if [ ! -d "$SELF/kexts/wifi/build/release/Ath10k Connectivity.app" ] && [ -f "$SELF/kexts/wifi/scripts/cross-build-app.sh" ]; then
+		( cd "$SELF/kexts/wifi" && bash scripts/cross-build-app.sh "$SELF/kexts/wifi/build/release" ) || echo "wifi app: not built"
+	fi
+	[ ! -d "$SELF/kexts/wifi/build/release/Ath10k Connectivity.app" ] || put "$SELF/kexts/wifi/build/release/Ath10k Connectivity.app" "Ath10k Connectivity.app"
+	echo "wifi: $(ls "$STAGE" | grep -E 'Ath10k|AirportAth10k' | tr '\n' ' ')"
+}
+b_ssdt() {
+	mkdir -p "$WORK/b/ssdt"; cp "$DRV/pascal/fb/acpi/SSDT-PG106-HDAU.dsl" "$WORK/b/ssdt/"
+	( cd "$WORK/b/ssdt" && iasl -vs -ve SSDT-PG106-HDAU.dsl )
+	put "$WORK/b/ssdt/SSDT-PG106-HDAU.aml" SSDT-PG106-HDAU.aml
+	echo "SSDT-PG106-HDAU.aml $(sha256sum "$STAGE/SSDT-PG106-HDAU.aml" | cut -c1-16) (iasl $(iasl -v 2>/dev/null | grep -o 'version [0-9]*' | head -1))"
+}
+b_pg106accel() {
+	local iaf2="${IAF2:-$DRIVER_REPO/research/prior-art/meteor-lake-xe/research/IOAcceleratorFamily2-recovery-reference.macho}"
+	[ -f "$iaf2" ] || { echo "no macOS 26 IOAcceleratorFamily2 reference binary (not in git; pass --iaf2)"; return 1; }
+	BUILD_DIR="$WORK/b/accel" PGA_MACOS_SDK="$MACOS_SDK" PGA_LD64="$LD64" PGA_XNU_CONFIG="$XNU_CONFIG" PGA_IAF2="$iaf2" \
+		bash "$DRV/kexts/PG106Accel/cross-build.sh" | tee "$WORK/accel.out"
+	local k; k="$(sed -n 's/^cross-build: OK — \(.*\)$/\1/p' "$WORK/accel.out" | tail -1)"
+	put "$k" PG106Accel.kext
+}
+b_plugin() { MACHO_CHECK="$DRV/nvk/pascal/scripts/macho-check.py" bash "$HERE/release/cross-plugin.sh" "$DRV/plugin" "$WORK/b/plugin" "$VERSION" && put "$WORK/b/plugin/NVMTLDriver.bundle" NVMTLDriver.bundle; }
+b_xlate() { MACHO_CHECK="$DRV/nvk/pascal/scripts/macho-check.py" bash "$HERE/release/cross-xlate.sh" "$DRV/translator" "$WORK/b/xlate" && put "$WORK/b/xlate/libnvmtl_translate.dylib" libnvmtl_translate.dylib; }
+b_nvk() {
+	# The Mesa tree is prepared per driver commit (prepare-mesa.sh applies that commit's patches).
+	local w="$RELEASE_CACHE/nvk-${DRIVER_COMMIT:0:12}"
+	if [ -z "${PG106_NATIVE_BIN:-}" ] && [ ! -x "$w/native/bin/mesa_clc" ]; then
+		sh "$DRV/nvk/pascal/scripts/build-nvk-linux.sh" "$w"
+	fi
+	PG106_MACOS_SDK="$MACOS_SDK" PG106_CCTOOLS="$(dirname "$LD64")" sh "$DRV/nvk/pascal/scripts/cross-build-nvk-macos.sh" "$w"
+	mkdir -p "$STAGE/NVK-Pascal"
+	cp "$w/out/libvulkan_nouveau.dylib" "$w/out/nvk_icd.json" "$STAGE/NVK-Pascal/"
+	echo "NVK-Pascal: $(sha256sum "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" | cut -c1-16)"
+}
+b_licences() {
+	cp "$DRV/licenses/NVIDIA-firmware-LICENCE.txt" "$STAGE/NVIDIA-firmware-LICENCE.txt"
+	cp "$DRV/licenses/Mesa-license.rst" "$STAGE/Mesa-license.rst"
+	echo "licences copied"
+}
+
+step pg106 PG106.kext -- b_pg106
+step pg106fb PG106FB.kext -- b_pg106fb
+step nmhda NMHDA.kext -- b_nmhda
+step bluetooth QCARomePatchRAM.kext -- b_bluetooth
+step wifi Ath10kMac.kext AirportAth10k.kext "Ath10k Connectivity.app" -- b_wifi
+step ssdt SSDT-PG106-HDAU.aml -- b_ssdt
+step pg106accel PG106Accel.kext -- b_pg106accel
+step plugin NVMTLDriver.bundle -- b_plugin
+step xlate libnvmtl_translate.dylib -- b_xlate
+step nvk NVK-Pascal -- b_nvk
+step licences NVIDIA-firmware-LICENCE.txt Mesa-license.rst -- b_licences
+
+# Ad-hoc signatures (codesign -s - on a Mac). OpenCore injection needs none; kmutil (PG106Accel), dyld
+# (plugin, dylibs) and Gatekeeper-free local apps accept ad-hoc ones.
+if [ -x "$RCODESIGN" ]; then
+	for n in PG106Accel.kext NVMTLDriver.bundle libnvmtl_translate.dylib "Ath10k Connectivity.app"; do
+		[ -e "$STAGE/$n" ] || continue
+		if "$RCODESIGN" sign "$STAGE/$n" >"$LOGS/sign-${n// /-}.log" 2>&1; then SIGNED+=(--signed "$n"); echo "  signed $n (ad-hoc, rcodesign)"
+		else echo "  UNSIGNED $n (rcodesign failed: $(tail -1 "$LOGS/sign-${n// /-}.log"))"; fi
+	done
+	if [ -f "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" ] &&
+		"$RCODESIGN" sign --binary-identifier libvulkan_nouveau "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" >"$LOGS/sign-nvk.log" 2>&1; then
+		SIGNED+=(--signed NVK-Pascal); echo "  signed NVK-Pascal (ad-hoc, rcodesign)"
+	fi
+else
+	echo "  rcodesign not found: bundles stay unsigned (cargo install apple-codesign)"
+fi
+
+DRY_ARG=(); [ "$DRY" = 1 ] && DRY_ARG=(--dry-run)
+python3 -I "$HERE/release/make_manifest.py" --spec "$SELF/tools/release/spec.json" --schema "$SELF/tools/release/manifest.schema.json" \
+	--stage "$STAGE" --dist "$DIST" --version "$VERSION" --self-commit "$SELF_COMMIT" --driver-commit "$DRIVER_COMMIT" \
+	"${DRY_ARG[@]}" "${SIGNED[@]}" "${MISSING[@]}" || exit 1
+[ "$FAILED" = 0 ] || echo "release.sh: some builds failed (see $LOGS); the manifest lists them under release.missing"
+echo "release.sh: dist/ ready: $DIST (nothing was published)"
