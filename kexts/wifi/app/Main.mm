@@ -34,6 +34,7 @@ static uint32_t readLE32(const uint8_t *p){return uint32_t(p[0])|(uint32_t(p[1])
  NSTimeInterval _scanStartedAt;
  NSTimeInterval _wakeNextCheckAt,_wakeDeadline;
  NSUInteger _iconFrame,_wakeRestartAttempts;
+ BOOL _powerSaveSynced; // station power save requested for the current association
  BOOL _disconnecting,_rekeyKeysReady,_rekeyResponsePending;
  BOOL _session,_secure,_keysSubmitted,_m4Sent,_authorized,_failed,_scanInProgress,_waitingForDriver,_waitingForInitialScan,_autoConnectAttempted,_didSaveCredentials,_menuShowsConnected,_wakeRecoveryPending,_wakeRestartIssued;
 }
@@ -322,6 +323,8 @@ static uint32_t readLE32(const uint8_t *p){return uint32_t(p[0])|(uint32_t(p[1])
  [menu addItem:NSMenuItem.separatorItem];
  NSMenuItem *disconnect=[[NSMenuItem alloc] initWithTitle:@"Disconnect" action:@selector(disconnect:) keyEquivalent:@""];disconnect.target=self;disconnect.enabled=_session&&!_disconnecting;[menu addItem:disconnect];
  NSMenuItem *open=[[NSMenuItem alloc] initWithTitle:@"Open Ath10k Connectivity…" action:@selector(showWindow:) keyEquivalent:@""];open.target=self;[menu addItem:open];
+ NSMenuItem *powerSave=[[NSMenuItem alloc] initWithTitle:@"Power Saving" action:@selector(togglePowerSave:) keyEquivalent:@""];
+ powerSave.target=self;powerSave.state=[self powerSaveEnabled]?NSControlStateValueOn:NSControlStateValueOff;[menu addItem:powerSave];
  NSMenuItem *launch=nil;
  if(@available(macOS 13.0,*)){launch=[[NSMenuItem alloc] initWithTitle:@"Launch at Login" action:@selector(toggleLaunchAtLogin:) keyEquivalent:@""];launch.target=self;launch.state=[SMAppService.mainAppService status]==SMAppServiceStatusEnabled?NSControlStateValueOn:NSControlStateValueOff;}
  else{launch=[[NSMenuItem alloc] initWithTitle:@"Launch at Login (macOS 13+)" action:nil keyEquivalent:@""];launch.enabled=NO;}
@@ -527,6 +530,27 @@ static uint32_t readLE32(const uint8_t *p){return uint32_t(p[0])|(uint32_t(p[1])
  _statusHeading.stringValue=@"Disconnecting";_status.stringValue=@"Waiting for the device to confirm disconnection…";
  [self updateMenuProgress:_status.stringValue];[self rebuildStatusMenu];
 }
+// Station power save. Linux ath10k enables it on every association (WMI
+// STA_POWERSAVE_MODE); the kext applies it only while associated, authorized
+// and with a TIM-advertising AP (Ath10kNetwork.cpp serviceRadioMaintenance).
+// Default on; "Power Saving" in the menu turns it off (stored per user).
+-(BOOL)powerSaveEnabled {
+ id v=[NSUserDefaults.standardUserDefaults objectForKey:@"StationPowerSave"];
+ return v?[v boolValue]:YES;
+}
+-(void)syncPowerSave:(const AthControl::Response &)status {
+ if(!(status.flags&4u)||_disconnecting){_powerSaveSynced=NO;return;}
+ if(_powerSaveSynced)return;
+ AthControl::Response info{};if([self call:AthControl::Info request:nullptr response:&info])return;
+ if(!(readLE32(info.data)&64u)){_powerSaveSynced=YES;return;} // kext without RadioOptions
+ const BOOL want=[self powerSaveEnabled],have=(readLE32(info.data+84)&1u)!=0;
+ if(want!=have){AthControl::Request r{};r.index=want?1:0;if([self call:AthControl::RadioOptions request:&r response:nullptr])return;}
+ _powerSaveSynced=YES;
+}
+-(void)togglePowerSave:(NSMenuItem *)sender {
+ (void)sender;[NSUserDefaults.standardUserDefaults setBool:![self powerSaveEnabled] forKey:@"StationPowerSave"];
+ _powerSaveSynced=NO;[self rebuildStatusMenu];
+}
 -(void)tick:(NSTimer *)timer {
  (void)timer;if(_wakeRecoveryPending){[self recoverAfterWake];[self updateStatusIcon];return;}
  if(!_driver||_failed){[self updateStatusIcon];return;}
@@ -544,6 +568,7 @@ static uint32_t readLE32(const uint8_t *p){return uint32_t(p[0])|(uint32_t(p[1])
   [self beginRecoveryWithHeading:@"Wi-Fi adapter inactive" message:@"The kext is loaded, but the adapter service is inactive. Attempting a safe recovery…"];
   return;
  }
+ [self syncPowerSave:status];
  if(_scanInProgress){
   if(status.flags&2){_scanInProgress=NO;[self loadNetworks];return;}
   if(NSProcessInfo.processInfo.systemUptime-_scanStartedAt>60){_scanInProgress=NO;_refresh.enabled=YES;_refresh.title=@"Scan again";_statusHeading.stringValue=@"Scan timed out";_status.stringValue=@"No scan result arrived within a minute. Try scanning again.";[self updateMenuProgress:_status.stringValue];[self rebuildStatusMenu];}
