@@ -99,6 +99,7 @@ case "$BVER" in *[!0-9.]*) die "CFBundleVersion '$BVER' must be numeric (kmod/kx
 WORK="$(dirname "$OUT")/.$(basename "$OUT" .kext).obj"
 rm -rf "$OUT" "$WORK"; mkdir -p "$WORK" "$OUT/Contents/MacOS"
 
+# xnu-cross-compat.h fixes the SDK's fortify-trap asm for upstream clang.
 # Upstream LLVM lowers llvm.global_dtors to __cxa_atexit on Mach-O; the kernel
 # exports no __cxa_atexit, so keep destructors in __mod_term_func (run by
 # libkmod's _stop) with --disable-atexit-based-global-dtor-lowering.
@@ -109,6 +110,7 @@ COMMON=(
 	-DKERNEL -DKERNEL_PRIVATE -DDRIVER_PRIVATE -DAPPLE -DNeXT
 	"${EXTRA[@]}"
 	-I "$KF"
+	-include "$HERE/xnu-cross-compat.h"
 	-Wall -Wno-unused-parameter -Wno-deprecated-declarations
 	-Wno-inconsistent-missing-override
 )

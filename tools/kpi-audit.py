@@ -19,6 +19,10 @@ Allowlist file format (one entry per line, '#' comments):
                                        'class/struct/namespace C' declared there; 'C::m(...)'
                                        also needs an 'm(' declaration in the
                                        same header; a C function 'f' needs 'f('.
+                                       Constructors/destructors from
+                                       OSDeclare*Structors(C) and C::_RESERVEDC<N>
+                                       from OSMetaClassDeclareReserved*(C, N)
+                                       are accepted when those macros are there.
 The header check matches names, not full signatures.
 
 Exit 0 = every import resolved; 1 = at least one unresolved (listed).
@@ -91,6 +95,18 @@ def parse_demangled(d):
 def header_has(text, cls, mem):
     if cls and not re.search(r"\b(?:class|struct|namespace)\s+(?:\w+\s+)*" + re.escape(cls) + r"\s*(?::|\{|\n\s*[:{])", text):
         return False
+    if cls and mem:
+        # Members the SDK declares only through libkern macros:
+        # OSDeclare{Default,Abstract,Final}Structors(C) -> C::C(), C::~C();
+        # OSMetaClassDeclareReserved{Unused,Used}(C, N) -> C::_RESERVEDC<N>().
+        c = re.escape(cls)
+        if mem in (cls, "~" + cls) and re.search(
+                r"\bOSDeclare(?:Default|Abstract|Final)?Structors\w*\s*\(\s*" + c + r"\s*[,)]", text):
+            return True
+        m = re.fullmatch("_RESERVED" + c + r"(\d+)", mem)
+        if m and re.search(r"\bOSMetaClassDeclareReserved(?:Unused|Used)\w*\s*\(\s*" + c +
+                           r"\s*,\s*" + m.group(1) + r"\s*\)", text):
+            return True
     if mem:
         name = mem.lstrip("~")
         if not re.search(r"[\s~*&]" + re.escape(name) + r"\s*\(", text):
