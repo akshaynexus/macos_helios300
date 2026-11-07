@@ -312,7 +312,7 @@ struct WMIScanChannelsState {
 static constexpr UInt32 kWMIRadioFrameBytes=28;
 inline bool buildWMIRadio(UInt8 *f, UInt32 capacity, UInt8 endpoint, UInt32 param, UInt32 mask) {
     if (!f || capacity<kWMIRadioFrameBytes || !endpoint || endpoint==255 ||
-        (param<1 || param>4) || ((param<=2)?(mask!=1 && mask!=3 && mask!=7):(!mask || mask>20))) return false;
+        (param<1 || param>4) || ((param<=2)?(mask!=1 && mask!=3 && mask!=7):(!mask || mask>kRegulatoryMaxHalfDbm))) return false;
     htcZero(f,kWMIRadioFrameBytes);
     f[0]=endpoint;f[1]=1;f[5]=static_cast<UInt8>(param+5);
     htcWriteLE16(f+2,20);htcWriteLE32(f+8,0x4003);

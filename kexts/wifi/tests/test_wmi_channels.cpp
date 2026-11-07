@@ -23,9 +23,10 @@ public:
                 assert(Ath10k::htcReadLE16(ch)==24 && Ath10k::htcReadLE16(ch+2)==80);
                 assert(Ath10k::wmiReadLE32(ch+4)==expectedScanFrequencies[i] && Ath10k::wmiReadLE32(ch+8)==expectedScanFrequencies[i]);
                 assert(!Ath10k::wmiReadLE32(ch+12) && Ath10k::wmiReadLE32(ch+16)==(i<13?0x81u:((i>=17 && i<=32)?0x480u:0x80u)));
-                assert(Ath10k::wmiReadLE32(ch+20)==0x00141400 && Ath10k::wmiReadLE32(ch+24)==0x00001400);
-                assert(ch[20]==0 && ch[21]==20 && ch[22]==20 && ch[23]==0);
-                assert(ch[24]==0 && ch[25]==20 && ch[26]==0 && ch[27]==0);
+                // World ("00") regdb: 20 dBm = 40 half-dBm on every scan channel (no host cap by default).
+                assert(Ath10k::wmiReadLE32(ch+20)==0x00282800 && Ath10k::wmiReadLE32(ch+24)==0x00002800);
+                assert(ch[20]==0 && ch[21]==40 && ch[22]==40 && ch[23]==0);
+                assert(ch[24]==0 && ch[25]==40 && ch[26]==0 && ch[27]==0);
             }
             auto *ring=static_cast<Ath10k::CEDescriptor32 *>(_ceSrcRings[3].virtualAddress());
             assert(ring[_wmiScanChannels.txSlot].nbytes==1088 && ring[_wmiScanChannels.txSlot].flags==8);

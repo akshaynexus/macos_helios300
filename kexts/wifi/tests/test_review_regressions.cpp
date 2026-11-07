@@ -28,6 +28,7 @@ int main(){
  }
  {ReviewDriver d;auto &s=d._connection;d.echoHeld=true;
   s.regulatory.country=Ath10k::regulatoryCountry("US");s.radio.requestedPS=true;
+  s.regulatory.ceilingHalfDbm=20; // the old 10 dBm host cap; this case is about the AP constraint barrier
   for(unsigned t=2000;t<2250;t+=10)d.tick(t);
   assert(s.radio.step==8 && s.radio.targetPower==20);
   s.powerConstraintDb=25;

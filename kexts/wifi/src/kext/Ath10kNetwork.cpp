@@ -104,7 +104,7 @@ bool Ath10kPCIDevice::prepareNetwork()
         auto *bssid=OSDynamicCast(OSData,getProperty("Ath10kConnectBSSID"));
         auto *power=OSDynamicCast(OSNumber,getProperty("Ath10kConnectPowerHalfDbm"));
         if(!ssid || !ssid->getLength() || ssid->getLength()>32 || !bssid || bssid->getLength()!=6 ||
-           !power || !power->unsigned32BitValue() || power->unsigned32BitValue()>20){
+           !power || !power->unsigned32BitValue() || power->unsigned32BitValue()>Ath10k::kRegulatoryMaxHalfDbm){
             _connection.error="invalid-connection-config";_connection.stage=Ath10k::LinkStage::Failed;
         }else{
             _connection.ssidLength=static_cast<UInt8>(ssid->getLength());

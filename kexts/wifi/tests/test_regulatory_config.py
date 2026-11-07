@@ -22,7 +22,7 @@ class RegulatoryConfigTests(unittest.TestCase):
                 self.assertEqual((board['Ath10kCountryCode'], board['Ath10kIndoor'], board['Ath10kTxPowerDbm']), ('BR', True, 7))
                 self.assertFalse(board['Ath10kOpenConnect'])
             before = p.read_bytes()
-            for country, power in [('br', 7), ('ZZ', 7), ('BR', 0), ('BR', 11)]:
+            for country, power in [('br', 7), ('ZZ', 7), ('BR', 0), ('BR', 31)]:
                 with self.assertRaises(ValueError):
                     config.configure(p, country, True, power)
                 self.assertEqual(p.read_bytes(), before)

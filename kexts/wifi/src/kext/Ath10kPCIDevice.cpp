@@ -1,6 +1,7 @@
 #include "Ath10kPCIDevice.hpp"
 #include "Ath10kPayload.hpp"
 #include <IOKit/IOLib.h>
+#include <pexpert/pexpert.h>
 #include <string.h>
 #include <libkern/c++/OSString.h>
 #include <libkern/c++/OSBoolean.h>
@@ -88,10 +89,23 @@ bool Ath10kPCIDevice::start(IOService *provider)
         const char *value=country->getCStringNoCopy();
         _regulatory.country=Ath10k::regulatoryCountry(value);
     }
+    {
+        // ath10k_cc=US selects the regdb country without editing Info.plist
+        // (the boot-arg wins over Ath10kCountryCode; unknown codes are ignored).
+        char cc[4]{};
+        if(PE_parse_boot_argn("ath10k_cc",cc,sizeof(cc)) && cc[0] && cc[1] && !cc[2]){
+            if(const auto *c=Ath10k::regulatoryCountry(cc))_regulatory.country=c;
+            else IOLog("Ath10kMac: ath10k_cc=%s is not a wireless-regdb country; ignored\n",cc);
+        }
+    }
     if(auto *indoor=OSDynamicCast(OSBoolean,getProperty("Ath10kIndoor")))_regulatory.indoor=indoor->isTrue();
-    if(auto *power=OSDynamicCast(OSNumber,getProperty("Ath10kTxPowerDbm"))){
-        const UInt32 value=power->unsigned32BitValue();
-        _regulatory.ceilingHalfDbm=static_cast<UInt8>(value>=1 && value<=10?2*value:0);
+    {
+        UInt32 bootDbm=0,propertyDbm=0;
+        if(!PE_parse_boot_argn("ath10k_txpower",&bootDbm,sizeof(bootDbm)))bootDbm=0;
+        if(auto *power=OSDynamicCast(OSNumber,getProperty("Ath10kTxPowerDbm")))propertyDbm=power->unsigned32BitValue();
+        _regulatory.ceilingHalfDbm=Ath10k::regulatoryCeilingHalfDbm(bootDbm,propertyDbm);
+        IOLog("Ath10kMac: TX power ceiling %u half-dBm (boot-arg %u dBm, plist %u dBm; regdb per channel below it)\n",
+              _regulatory.ceilingHalfDbm,bootDbm,propertyDbm);
     }
     if(auto *dfs=OSDynamicCast(OSBoolean,getProperty("Ath10kStationDFS")))_regulatory.stationDFS=dfs->isTrue();
     if(auto *timeout=OSDynamicCast(OSNumber,getProperty("Ath10kBeaconTimeoutMs"))){

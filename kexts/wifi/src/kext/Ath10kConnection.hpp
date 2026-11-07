@@ -205,7 +205,7 @@ struct ConnectionState {
     RegulatoryPolicy regulatory{};
     WMIBSS ap{};
     UInt8 local[6]{},ssid[32]{},bssid[6]{},ssidLength=0;
-    UInt8 wmiSequence=10,httSequence=3,txPowerHalfDbm=20;
+    UInt8 wmiSequence=10,httSequence=3,txPowerHalfDbm=kRegulatoryMaxHalfDbm; // clamped to stationPowerLimit at BSS selection
     UInt32 operatingChannel=0;
     UInt32 peerIDs[64]{};UInt32 peerCount=0;
     // A key-disable response can follow PEER_UNMAP on CE1. Keep the identities

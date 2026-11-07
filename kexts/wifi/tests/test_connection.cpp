@@ -770,7 +770,8 @@ static void htTests(){
     Ath10k::receiveStationManagement(htOnly,expanded.data()+60,Ath10k::connLE32(expanded.data()+32),0);
     assert(htOnly.assocReply && !htOnly.vhtEnabled);
     vht.releaseWMIRuntime();
-    Ath10k::ConnectionState s{};caps(s.ap,true);s.operatingChannel=36;
+    Ath10k::ConnectionState s{};s.txPowerHalfDbm=20;caps(s.ap,true); // clamped as at BSS selection
+   s.operatingChannel=36;
     Ath10k::negotiateHighThroughput(s);assert(s.htEnabled && s.vhtEnabled && s.width==20 && s.vhtMap==0xfffe && Ath10k::peerRateSet(s,1,20).rx==0xfffd);
     s.ap.vhtOp[3]=0;s.ap.vhtOp[4]=0;Ath10k::negotiateHighThroughput(s);
     assert(s.htEnabled && s.vhtEnabled && s.width==20 && s.vhtMap==0xfffe && Ath10k::peerRateSet(s,1,20).rx==0xfffd);
@@ -803,7 +804,7 @@ static void htTests(){
     assert(Ath10k::connLE32(wire+104)==(8|0x1800));
     assert(wire[108]==0 && wire[109]==20 && wire[110]==20 && wire[111]==0);
     assert(wire[112]==0 && wire[113]==20 && wire[114]==0 && wire[115]==0);
-    s.txPowerHalfDbm=21;assert(!Ath10k::buildConnectionWMI(wire,sizeof(wire),2,s));
+    s.txPowerHalfDbm=Ath10k::stationPowerLimit(s)+1;assert(!Ath10k::buildConnectionWMI(wire,sizeof(wire),2,s));
     s.txPowerHalfDbm=0;assert(!Ath10k::buildConnectionWMI(wire,sizeof(wire),2,s));
     s.txPowerHalfDbm=20;
 

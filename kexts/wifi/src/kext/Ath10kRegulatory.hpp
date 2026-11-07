@@ -1,6 +1,15 @@
 #pragma once
 #include "Ath10kRegulatoryData.hpp"
 namespace Ath10k {
+static constexpr UInt8 kRegulatoryMaxHalfDbm=60;
+// Host cap in dBm from the boot-arg and the personality key: 0 = no request,
+// out-of-range values are ignored; the lower valid one wins.
+inline UInt8 regulatoryCeilingHalfDbm(UInt32 bootArgDbm,UInt32 propertyDbm){
+    UInt32 limit=kRegulatoryMaxHalfDbm;
+    if(bootArgDbm>=1 && bootArgDbm<=30 && 2*bootArgDbm<limit)limit=2*bootArgDbm;
+    if(propertyDbm>=1 && propertyDbm<=30 && 2*propertyDbm<limit)limit=2*propertyDbm;
+    return static_cast<UInt8>(limit);
+}
 inline const RegulatoryCountry *regulatoryCountry(const char *name){
     if(!name || !name[0] || !name[1] || name[2])return nullptr;
     for(const auto &c:kRegulatoryCountries)if(c.alpha2[0]==name[0] && c.alpha2[1]==name[1])return &c;
@@ -13,13 +22,17 @@ inline const RegulatoryPair *regulatoryPair(UInt32 rd){
 struct RegulatoryPolicy {
     const RegulatoryCountry *country=regulatoryCountry("00"),*boardCountry=nullptr;
     UInt32 eepromRD=0,domain=0x64,low2=2300,high2=3000,low5=4800,high5=5925;
-    UInt8 ceilingHalfDbm=20;UInt16 ctl2=0xff,ctl5=0xff;
+    // Host ceiling in half-dBm. Default 60 (30 dBm) is the highest wireless-regdb
+    // value, so the per-channel country rule decides, as on Linux; the firmware
+    // still clamps to the board calibration. Lower it with ath10k_txpower=<dBm>
+    // or the Ath10kTxPowerDbm personality key (1-30).
+    UInt8 ceilingHalfDbm=kRegulatoryMaxHalfDbm;UInt16 ctl2=0xff,ctl5=0xff;
     bool indoor=false,firmwareCapsValid=false,stationDFS=false;
     const char *status="world-default";
 };
 inline const char *configureRegulatory(RegulatoryPolicy &p,UInt32 eeprom,
     UInt32 low2,UInt32 high2,UInt32 low5,UInt32 high5){
-    if(!p.country || !p.ceilingHalfDbm || p.ceilingHalfDbm>20)return "regulatory-options-invalid";
+    if(!p.country || !p.ceilingHalfDbm || p.ceilingHalfDbm>kRegulatoryMaxHalfDbm)return "regulatory-options-invalid";
     if(!low2 && !high2){low2=2300;high2=3000;}
     if(!low5 && !high5){low5=4800;high5=5925;}
     if(low2<2300 || high2>3000 || high2<low2 || low5<4800 || high5>6200 || high5<low5)

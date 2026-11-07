@@ -6,7 +6,8 @@
 #include "Ath10kWMI.hpp"
 using namespace Ath10k;
 static ConnectionState connected(){
-    ConnectionState s;s.stage=LinkStage::Connected;s.peerId=7;s.peerCount=1;s.peerIDs[0]=1u<<7;s.portAuthorized=true;
+    // txPowerHalfDbm as selectOpenBSS would have clamped it (fixtures predate the regdb default).
+    ConnectionState s;s.txPowerHalfDbm=20;s.stage=LinkStage::Connected;s.peerId=7;s.peerCount=1;s.peerIDs[0]=1u<<7;s.portAuthorized=true;
     const UInt8 local[]={2,1,2,3,4,5},ap[]={2,6,7,8,9,10};
     memcpy(s.local,local,6);memcpy(s.bssid,ap,6);return s;
 }

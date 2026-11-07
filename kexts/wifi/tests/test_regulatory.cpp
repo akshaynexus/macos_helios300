@@ -16,7 +16,7 @@ struct RegulatoryDriver:ScanDriver {
                 for(unsigned j=0;j<3;++j)assert(Ath10k::wmiReadLE32(f+20+j*4)==0x64);
                 assert(Ath10k::wmiReadLE32(f+32)==0xff && Ath10k::wmiReadLE32(f+36)==0xff);
             }else {assert(cmd==0x4003 && Ath10k::htcReadLE16(f+2)==20 && f[14]==82);
-                assert(Ath10k::wmiReadLE32(f+20)==(i<2?i+1:i));assert(Ath10k::wmiReadLE32(f+24)==(i<2?3:20));}
+                assert(Ath10k::wmiReadLE32(f+20)==(i<2?i+1:i));assert(Ath10k::wmiReadLE32(f+24)==(i<2?3:Ath10k::kRegulatoryMaxHalfDbm));}
             if(i!=hold)deliver(1,{0,2,8,0,8,0,0,0,1,4,0,0,2,1,0,0});
         };
     }
@@ -26,6 +26,15 @@ static void rules(){
     assert(regulatoryCountry("BR") && !regulatoryCountry("ZZ") && !regulatoryCountry("br") && !regulatoryCountry("BRA"));
     p.country=regulatoryCountry("BR");assert(!configureRegulatory(p,0x64,2412,2472,5180,5825));
     assert(p.firmwareCapsValid && p.domain!=0x64 && p.ctl2!=0xff);
+    // Default host ceiling is the regdb maximum: the per-channel rule decides (BR 27/30 dBm).
+    assert(p.ceilingHalfDbm==kRegulatoryMaxHalfDbm);
+    {RegulatoryPolicy d=p;d.indoor=true;assert(regulatoryPower(d,36,42,80)==54 && regulatoryPower(d,149,155,80)==60 && regulatoryPower(d,13,13,20)==60);}
+    {RegulatoryPolicy us;us.country=regulatoryCountry("US");assert(!configureRegulatory(us,0x8000|840,2412,2472,5180,5825));
+     // evidence/linux-ath10k-load-trace.txt: Linux maxpower 46 (23 dBm) on 5180-5240, 48 on DFS, 60 on 2.4 GHz.
+     assert(regulatoryPower(us,44,44,20)==46 && regulatoryPower(us,36,42,80)==46 && regulatoryPower(us,6,6,20)==60);}
+    assert(regulatoryCeilingHalfDbm(0,0)==60 && regulatoryCeilingHalfDbm(15,0)==30 && regulatoryCeilingHalfDbm(0,10)==20);
+    assert(regulatoryCeilingHalfDbm(12,8)==16 && regulatoryCeilingHalfDbm(31,0)==60 && regulatoryCeilingHalfDbm(0,99)==60);
+    p.ceilingHalfDbm=20; // The checks below predate the regdb default; keep their 10 dBm cap.
     assert(!regulatoryPower(p,36,42,80));p.indoor=true;assert(regulatoryPower(p,36,42,80)==20);
     assert(!regulatoryPower(p,52,58,80) && regulatoryPower(p,52,52,20,false)==20);
     assert(regulatoryPower(p,149,155,80)==20 && regulatoryPower(p,13,13,20)==20);

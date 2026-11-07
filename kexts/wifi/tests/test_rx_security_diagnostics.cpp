@@ -3,7 +3,8 @@
 #include "Ath10kRX.hpp"
 using namespace Ath10k;
 static ConnectionState connected(){
-    ConnectionState s;s.stage=LinkStage::Connected;s.secure=s.portAuthorized=true;
+    // txPowerHalfDbm as selectOpenBSS would have clamped it (fixtures predate the regdb default).
+    ConnectionState s;s.txPowerHalfDbm=20;s.stage=LinkStage::Connected;s.secure=s.portAuthorized=true;
     s.securityPhase=5;s.peerId=7;s.peerCount=1;s.peerIDs[0]=1u<<7;
     s.local[0]=s.bssid[0]=2;s.local[5]=1;s.bssid[5]=2;return s;
 }
