@@ -20,7 +20,8 @@ python3 scripts/prepare-firmware.py --set kext
 
 DEFS=(-D ATH10K_PAYLOAD_CACHE=1 -D ATH10K_RUNTIME_IRQ=1 -D ATH10K_RX_BATCH=1 -D ATH10K_RX_RESERVE=1
       -D ATH10K_MAX_WIDTH=80 -D ATH10K_MAX_NSS=2 -D ATH10K_AMPDU_LIMIT=64 -D ATH10K_AMSDU_LIMIT=3
-      -D ATH10K_HT_VHT=1 -D ATH10K_DATA_TX_SLOTS=64)
+      -D ATH10K_HT_VHT=1 -D ATH10K_DATA_TX_SLOTS=64
+      -D AIRPORT_ATH10K_WPASEC="${WPASEC:-0}") # WPASEC=1 enables the paused security work (docs/WIFI-SECURITY.md)
 CFLAGS="-fno-stack-check -Wframe-larger-than=4096 -Werror=frame-larger-than -Wno-nullability-completeness"
 RES="$ROOT/build/kext-resources"
 rm -rf "$RES"; mkdir -p "$RES"
