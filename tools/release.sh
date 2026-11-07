@@ -169,6 +169,13 @@ b_nvk() {
 	fi
 	rmdir "$DRV/third_party/open-gpu-kernel-modules" 2>/dev/null || true
 	ln -sfn "$og_dir" "$DRV/third_party/open-gpu-kernel-modules"
+	# prepare-mesa.sh links pascal/bridge and pascal/core into the cached tree; those links point into the
+	# work dir of the run that prepared it, which is gone by now (or was killed). Re-point them at this run's export.
+	local pg="$w/mesa/src/nouveau/vulkan/nvkmd/pg106"
+	if [ -d "$pg" ]; then
+		ln -sfn "$DRV/pascal/bridge" "$pg/bridge"
+		ln -sfn "$DRV/pascal/core" "$pg/core"
+	fi
 	local nvrm="$w/mesa/src/nouveau/vulkan/nvkmd/nvrm"
 	[ ! -d "$nvrm" ] || ln -sfn "$og_dir" "$nvrm/open-gpu-kernel-modules"
 	echo "open-gpu-kernel-modules ${og:0:12} -> $og_dir"
