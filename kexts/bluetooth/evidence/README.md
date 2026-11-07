@@ -18,7 +18,7 @@ EP 0x02 payload hashes, HCI command opcodes and counts).
 | `s3-attempt-aborted.txt` | the one approved `rtcwake -m mem` attempt; the NVIDIA proprietary driver failed `pci_pm_suspend` (-5), so no S3 happened: **S3 behaviour not measured** |
 | `cold1-core-upload.txt` | **real-hardware run of our core** after a cold boot with btusb held off: chip at ROM (patch `0x111`, status `0x20`) → our upload (18 bulk packets, 384 ms, 20.1/20.8 ms DFU delays) → patch `0x3e8`, status `0xe0`; Linux btusb then bound without downloading, hci0 powered, scan found devices |
 | `cold1-core-upload.usbmon.trace` | the same run recorded independently by usbmon (identical to the tool's own trace; also `tests/golden/core-cold-download.trace`) |
-| `cold2-linux-download.*` | Linux btusb's own download after a second cold boot, captured with usbmon, and the diff against our core (present once cold-2 was run) |
+| `cold2-linux-download.txt`, `.usbmon.trace` | **Linux btusb's own download** after a second cold boot, captured with usbmon (`patch rome 0x302 build 0x3e8, firmware ... build 0x111`; DFU delays 20.9/20.6 ms; body 355 ms), and the diff against our core's cold-1 capture: **all 23 Linux requests identical** (setup fields, lengths, SHA-256 of the header and of all 18 bulk packets). The only difference is our core's extra read-only final CHECK_STATUS. Afterwards the hold file was removed, the btusb alias resolves again, hci0 powered, a scan found devices. Also `tests/golden/linux-cold-download.trace` |
 
 Measured patch persistence (chip status `0xe0` = patched, `0x20` = ROM only):
 

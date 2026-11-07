@@ -16,7 +16,7 @@ resident, to survive sleep and unplug, and to be tested against the real chip.
 | What | Where verified | Result |
 |---|---|---|
 | Our core uploads rampatch + NVM to the real chip | Helios, Linux userspace, chip unpatched after a cold boot (`tools/linux/qca_rome_usb.c` = same core as the kext) | **works**: patch `0x111`→`0x3e8`, status `0x20`→`0xe0`, 18 bulk packets, 384 ms. Linux btusb then saw a patched controller (no re-download), hci0 powered, a scan found devices (`evidence/cold1-core-upload.txt`) |
-| Our transfers vs Linux btusb's | source review (`btusb_main.c` 3566–3972) + golden replay of usbmon captures from this laptop | identical setup fields, lengths, payload SHA-256 and 20 ms DFU delay. Linux's own *download* capture: `evidence/cold2-*` (see Evidence) |
+| Our transfers vs Linux btusb's | source review (`btusb_main.c` 3566–3972) + golden replay of usbmon captures from this laptop | **identical**: Linux's own cold-boot download (usbmon) and our core's are the same 23 requests: setup fields, lengths, SHA-256 of the header and all 18 bulk packets, and a ~20 ms DFU delay. Our core adds one read-only final status read (`evidence/cold2-linux-download.txt`; `tests/golden/linux-cold-download.trace`) |
 | Which events lose the patch | Helios, Linux | kept: warm reboot, USB port reset, deauthorize/authorize, USB port power-off. Lost: cold boot (power-off), firmware crash. Suspend-to-RAM: not measured (Linux S3 was blocked by the NVIDIA driver) |
 | Firmware = what Linux loads | Helios `/usr/lib/firmware/qca/` | byte-identical (`evidence/firmware-hashes.txt`) |
 | Lifecycle (start, retries, sleep/wake, unplug) | host tests with a simulated chip | pass (ASan/UBSan, gcc + clang) |

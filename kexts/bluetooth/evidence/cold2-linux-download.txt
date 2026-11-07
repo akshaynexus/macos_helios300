@@ -1,0 +1,86 @@
+# cold-2 (2026-11-08 00:34 IST): owner full poweroff + power on; btusb blacklisted for the boot.
+# Linux btusb's own download captured with usbmon; then the hold file was removed and BT verified.
+# MACs and hostname redacted; scan shows only a count.
+== boot
+ 00:34:56 up 0 min,  1 user,  load average: 0.84, 0.32, 0.11
+ -1 f5ef3c004e2747aca0b8355a12a798f2 Sun 2026-11-08 00:25:10 IST Sun 2026-11-08 00:33:22 IST
+  0 a4d445a76ff942f89c0cd7a60136c61e Sun 2026-11-08 00:33:59 IST Sun 2026-11-08 00:34:56 IST
+== hold file / btusb loaded?
+blacklist btusb
+0
+9ee2cff5bd51523b65c941b72ecf05a8b5e7b9e280c79fa08c70ade7205088a5  nvm_usb_00000302.bin
+f0d15f6d7c4ce17270c951287222699c0909bea9028ecb84d2e8be6fa364691e  rampatch_usb_00000302.bin
+== probe at cold boot (no driver ever touched the chip this boot)
+# device /dev/bus/usb/001/002
+S ctrl c0 09 0000 0000 0014
+C ctrl c0 09 0000 0000 0014 len=20 data=0203000011010000000000000700000000010000
+# rom 0x00000302 patch 0x00000111 ram 0x00000000
+S ctrl c0 05 0000 0000 0001
+C ctrl c0 05 0000 0000 0001 len=1 data=20
+# initial status 0x20
+# result OK stage=done err="ok" transport=0
+# rom=0x00000302 patch_before=0x111 patch_after=0x111 ram=0x00000000 chip=0x07 platform=0x00 flag=0x0000
+# status 0x20 -> 0x20 rampatch=0 nvm=0 bulk=0 in 0 ms
+devnum 2
+== capture while LINUX btusb uploads (modprobe btusb)
+usbmon-pcap: capturing /dev/usbmon1 for 20 s (dev 2)
+usbmon-pcap: 290 records, 0 with truncated data
+[   61.208544] Bluetooth: Core ver 2.22
+[   61.208565] NET: Registered PF_BLUETOOTH protocol family
+[   61.208566] Bluetooth: HCI device and connection manager initialized
+[   61.208587] Bluetooth: HCI socket layer initialized
+[   61.208589] Bluetooth: L2CAP socket layer initialized
+[   61.208591] Bluetooth: SCO socket layer initialized
+[   61.227883] usbcore: registered new interface driver btusb
+[   61.228713] Bluetooth: hci0: using rampatch file: qca/rampatch_usb_00000302.bin
+[   61.228717] Bluetooth: hci0: QCA: patch rome 0x302 build 0x3e8, firmware rome 0x302 build 0x111
+[   61.278929] Bluetooth: BNEP (Ethernet Emulation) ver 1.3
+[   61.278932] Bluetooth: BNEP filters: protocol multicast
+[   61.278935] Bluetooth: BNEP socket layer initialized
+[   61.584447] Bluetooth: hci0: using NVM file: qca/nvm_usb_00000302.bin
+[   61.607306] Bluetooth: hci0: HCI Enhanced Setup Synchronous Connection command is advertised, but not supported.
+[   61.858391] Bluetooth: MGMT ver 1.23
+[   61.885199] Bluetooth: RFCOMM TTY layer initialized
+[   61.885205] Bluetooth: RFCOMM socket layer initialized
+[   61.885208] Bluetooth: RFCOMM ver 1.11
+== controller
+Index list with 1 item
+hci0:	Primary controller
+	addr XX:XX:XX:XX:XX:XX version 8 manufacturer 29 class 0x6c010c
+	supported settings: powered connectable fast-connectable discoverable bondable link-security ssp br/edr le advertising secure-conn debug-keys privacy configuration static-addr phy-configuration wide-band-speech ll-privacy 
+	current settings: powered ssp br/edr le secure-conn wide-band-speech ll-privacy 
+hci0:	Configuration options
+	supported options: public-address 
+	missing options: 
+== scan 10 s (count only)
+2
+== remove hold file
+== modprobe -n -v btusb
+== rfkill
+1: acer-bluetooth: Bluetooth
+	Soft blocked: no
+	Hard blocked: no
+3: hci0: Bluetooth
+	Soft blocked: no
+	Hard blocked: no
+== bluetoothctl show
+Controller <addr redacted>
+	Powered: yes
+	Discoverable: no
+	DiscoverableTimeout: 0x000000b4 (180)
+	Pairable: no
+	UUID: Audio Sink                (0000110b-0000-1000-8000-00805f9b34fb)
+	UUID: Audio Source              (0000110a-0000-1000-8000-00805f9b34fb)
+
+# after removing the hold file:
+# modprobe -R usb:v04CAp3016...  -> btusb (alias resolves again); 'blacklist btusb' entries: 0; btusb loaded
+
+# usbmon timing (from the capture):
+DFU header complete -> first body packet: 20.9 ms
+DFU header complete -> first body packet: 20.6 ms
+bulk body span 355.2 ms
+
+# diff: our core (tests/golden/core-cold-download.trace) vs this capture (S/C lines):
+47,48d46
+< S ctrl c0 05 0000 0000 0001
+< C ctrl c0 05 0000 0000 0001 len=1 data=e0

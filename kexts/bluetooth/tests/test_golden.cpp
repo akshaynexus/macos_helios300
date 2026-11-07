@@ -10,9 +10,11 @@
 //
 // Directives in the trace header:
 //   # replay: probe-only                 run with probe_only = 1
-//   # replay: allow-extra-final-status   the core may append one read-only
-//                                        CHECK_STATUS after the recording
-//                                        (Linux does not re-check status)
+//   # replay: allow-extra-final-status[=XX]  the core may append one
+//                                        read-only CHECK_STATUS after the
+//                                        recording (Linux does not re-check
+//                                        status); it is answered with XX, or
+//                                        with the last recorded status
 //
 // Usage: test_golden FILE.trace...   (exit 0 = all match)
 #include "qca_rome.h"
@@ -72,6 +74,7 @@ struct Replay {
     std::vector<std::string> lines; // S/C lines only
     size_t pos = 0;
     bool allow_extra_status = false;
+    int extra_status = -1; // -1: answer with the last recorded status
     uint8_t last_status = 0;
     int extra_used = 0;
     std::vector<std::string> errors;
@@ -87,7 +90,7 @@ struct Replay {
                 extra_used = 1;
                 char c[96];
                 std::snprintf(c, sizeof(c), "C ctrl c0 05 0000 0000 0001 len=1 data=%02x",
-                              last_status);
+                              extra_status >= 0 ? extra_status : last_status);
                 return c;
             }
             errors.push_back("extra request beyond recording: " + s);
@@ -188,8 +191,15 @@ int run(const char *path)
         if (line.rfind("# replay:", 0) == 0) {
             if (line.find("probe-only") != std::string::npos)
                 probe_only = true;
-            if (line.find("allow-extra-final-status") != std::string::npos)
+            size_t k = line.find("allow-extra-final-status");
+            if (k != std::string::npos) {
                 rp.allow_extra_status = true;
+                // Optional "=XX": the status the chip returns at that point
+                // (Linux never reads it, so the recording cannot tell).
+                k += std::strlen("allow-extra-final-status");
+                if (k < line.size() && line[k] == '=')
+                    rp.extra_status = uint8_t(std::stoul(line.substr(k + 1, 2), nullptr, 16));
+            }
             continue;
         }
         if (line.empty() || line[0] == '#')
