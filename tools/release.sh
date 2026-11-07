@@ -88,7 +88,10 @@ step() {
 		echo "  skip   $key"; return 0
 	fi
 	local log="$LOGS/$key.log" rc=0
-	"$@" >"$log" 2>&1 || rc=$?
+	# Run in a background job and wait: a function called as `f || rc=$?` runs with errexit off for every
+	# command in it, so a failing build step would be reported as ok. A job's own `set -e` still applies.
+	( set -e; "$@" ) >"$log" 2>&1 &
+	wait $! || rc=$?
 	if [ "$rc" = 0 ]; then
 		echo "  ok     $key  ($(tail -1 "$log" | cut -c1-110))"
 	else
@@ -102,7 +105,8 @@ put() { [ -e "$1" ] || { echo "release.sh: expected $1" >&2; return 1; }; rm -rf
 b_pg106() {
 	BUILD_DIR="$WORK/b/pg106" PG106_MACOS_SDK="$MACOS_SDK" PG106_LD64="$LD64" PG106_XNU_CONFIG="$XNU_CONFIG" \
 		bash "$DRV/pascal/kext/scripts/cross-build-macos.sh" | tee "$WORK/pg106.out"
-	grep -q "stage-firmware: 14 staged, 0 missing" "$WORK/pg106.out" || { echo "PG106 firmware not fully staged"; return 1; }
+	# every firmware file devboot.c names must be in the bundle (17 at bbdbca6: ACR, SEC2, GR + sw_ctx/bundle/method)
+	grep -qE "stage-firmware: [1-9][0-9]* staged, 0 missing" "$WORK/pg106.out" || { echo "PG106 firmware not fully staged"; return 1; }
 	put "$WORK/b/pg106/PG106.kext" PG106.kext
 }
 b_pg106fb() {
@@ -117,26 +121,22 @@ b_bluetooth() {
 	put "$WORK/b/bt/QCARomePatchRAM.kext" QCARomePatchRAM.kext
 }
 b_wifi() {
+	# The native pair only (kexts/wifi README): Ath10kMac (core) then AirportAth10k (IO80211/Skywalk front end).
+	# The Ethernet-style core + Connectivity app (cross-build.sh --ethernet-debug) is developer-only and not shipped.
 	( cd "$SELF/kexts/wifi" && MACOS_SDK="$MACOS_SDK" LD64="$LD64" XNU_CONFIG="$XNU_CONFIG" bash scripts/cross-build.sh )
-	local out found=0
-	for out in "$SELF/kexts/wifi/build/native" "$SELF/kexts/wifi/build/release"; do
-		[ -d "$out/Ath10kMac.kext" ] || continue
-		put "$out/Ath10kMac.kext" Ath10kMac.kext; found=1
-		[ ! -d "$out/AirportAth10k.kext" ] || put "$out/AirportAth10k.kext" AirportAth10k.kext
-		break
-	done
-	[ "$found" = 1 ] || { echo "the wifi build produced no Ath10kMac.kext"; return 1; }
-	if [ ! -d "$SELF/kexts/wifi/build/release/Ath10k Connectivity.app" ] && [ -f "$SELF/kexts/wifi/scripts/cross-build-app.sh" ]; then
-		( cd "$SELF/kexts/wifi" && bash scripts/cross-build-app.sh "$SELF/kexts/wifi/build/release" ) || echo "wifi app: not built"
-	fi
-	[ ! -d "$SELF/kexts/wifi/build/release/Ath10k Connectivity.app" ] || put "$SELF/kexts/wifi/build/release/Ath10k Connectivity.app" "Ath10k Connectivity.app"
-	echo "wifi: $(ls "$STAGE" | grep -E 'Ath10k|AirportAth10k' | tr '\n' ' ')"
+	local out="$SELF/kexts/wifi/build/native"
+	put "$out/Ath10kMac.kext" Ath10kMac.kext
+	put "$out/AirportAth10k.kext" AirportAth10k.kext
+	echo "wifi: Ath10kMac.kext + AirportAth10k.kext (native)"
 }
 b_ssdt() {
 	mkdir -p "$WORK/b/ssdt"; cp "$DRV/pascal/fb/acpi/SSDT-PG106-HDAU.dsl" "$WORK/b/ssdt/"
 	( cd "$WORK/b/ssdt" && iasl -vs -ve SSDT-PG106-HDAU.dsl )
 	put "$WORK/b/ssdt/SSDT-PG106-HDAU.aml" SSDT-PG106-HDAU.aml
-	echo "SSDT-PG106-HDAU.aml $(sha256sum "$STAGE/SSDT-PG106-HDAU.aml" | cut -c1-16) (iasl $(iasl -v 2>/dev/null | grep -o 'version [0-9]*' | head -1))"
+	cp "$SELF/kexts/bluetooth/acpi/SSDT-HS07-UPC.dsl" "$WORK/b/ssdt/"
+	( cd "$WORK/b/ssdt" && iasl -vs -ve SSDT-HS07-UPC.dsl )
+	put "$WORK/b/ssdt/SSDT-HS07-UPC.aml" SSDT-HS07-UPC.aml
+	echo "SSDTs: PG106-HDAU $(sha256sum "$STAGE/SSDT-PG106-HDAU.aml" | cut -c1-16), HS07-UPC $(sha256sum "$STAGE/SSDT-HS07-UPC.aml" | cut -c1-16) (iasl $(iasl -v 2>/dev/null | grep -o 'version [0-9]*' | head -1))"
 }
 b_pg106accel() {
 	local iaf2="${IAF2:-$DRIVER_REPO/research/prior-art/meteor-lake-xe/research/IOAcceleratorFamily2-recovery-reference.macho}"
@@ -151,10 +151,32 @@ b_xlate() { MACHO_CHECK="$DRV/nvk/pascal/scripts/macho-check.py" bash "$HERE/rel
 b_nvk() {
 	# The Mesa tree is prepared per driver commit (prepare-mesa.sh applies that commit's patches).
 	local w="$RELEASE_CACHE/nvk-${DRIVER_COMMIT:0:12}"
+	# The NVRM backend compiled into the same library needs NVIDIA's open-gpu-kernel-modules headers, a submodule
+	# of the driver repo (git archive leaves submodules out). Use the commit the driver tree pins.
+	local og og_dir
+	og="$(git -C "$DRIVER_REPO" ls-tree "$DRIVER_COMMIT" third_party/open-gpu-kernel-modules | awk '{print $3}')"
+	[ -n "$og" ] || { echo "driver ${DRIVER_COMMIT:0:12} pins no third_party/open-gpu-kernel-modules"; return 1; }
+	og_dir="$RELEASE_CACHE/open-gpu-kernel-modules-$og"
+	if [ ! -d "$og_dir/src/common/sdk/nvidia/inc" ]; then
+		rm -rf "$og_dir.part"; mkdir -p "$og_dir.part"
+		if git -C "$DRIVER_REPO/third_party/open-gpu-kernel-modules" cat-file -e "$og^{commit}" 2>/dev/null; then
+			git -C "$DRIVER_REPO/third_party/open-gpu-kernel-modules" archive "$og" | tar -x -C "$og_dir.part"
+		else
+			git init -q "$og_dir.part/.g" && git -C "$og_dir.part/.g" fetch -q --depth 1 https://github.com/NVIDIA/open-gpu-kernel-modules "$og" &&
+				git -C "$og_dir.part/.g" archive FETCH_HEAD | tar -x -C "$og_dir.part" && rm -rf "$og_dir.part/.g"
+		fi
+		mv "$og_dir.part" "$og_dir"
+	fi
+	rmdir "$DRV/third_party/open-gpu-kernel-modules" 2>/dev/null || true
+	ln -sfn "$og_dir" "$DRV/third_party/open-gpu-kernel-modules"
+	local nvrm="$w/mesa/src/nouveau/vulkan/nvkmd/nvrm"
+	[ ! -d "$nvrm" ] || ln -sfn "$og_dir" "$nvrm/open-gpu-kernel-modules"
+	echo "open-gpu-kernel-modules ${og:0:12} -> $og_dir"
 	if [ -z "${PG106_NATIVE_BIN:-}" ] && [ ! -x "$w/native/bin/mesa_clc" ]; then
 		sh "$DRV/nvk/pascal/scripts/build-nvk-linux.sh" "$w"
 	fi
 	PG106_MACOS_SDK="$MACOS_SDK" PG106_CCTOOLS="$(dirname "$LD64")" sh "$DRV/nvk/pascal/scripts/cross-build-nvk-macos.sh" "$w"
+	[ -f "$w/out/libvulkan_nouveau.dylib" ] || { echo "NVK cross build produced no libvulkan_nouveau.dylib"; return 1; }
 	mkdir -p "$STAGE/NVK-Pascal"
 	cp "$w/out/libvulkan_nouveau.dylib" "$w/out/nvk_icd.json" "$STAGE/NVK-Pascal/"
 	echo "NVK-Pascal: $(sha256sum "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" | cut -c1-16)"
@@ -169,8 +191,8 @@ step pg106 PG106.kext -- b_pg106
 step pg106fb PG106FB.kext -- b_pg106fb
 step nmhda NMHDA.kext -- b_nmhda
 step bluetooth QCARomePatchRAM.kext -- b_bluetooth
-step wifi Ath10kMac.kext AirportAth10k.kext "Ath10k Connectivity.app" -- b_wifi
-step ssdt SSDT-PG106-HDAU.aml -- b_ssdt
+step wifi Ath10kMac.kext AirportAth10k.kext -- b_wifi
+step ssdt SSDT-PG106-HDAU.aml SSDT-HS07-UPC.aml -- b_ssdt
 step pg106accel PG106Accel.kext -- b_pg106accel
 step plugin NVMTLDriver.bundle -- b_plugin
 step xlate libnvmtl_translate.dylib -- b_xlate
@@ -178,9 +200,9 @@ step nvk NVK-Pascal -- b_nvk
 step licences NVIDIA-firmware-LICENCE.txt Mesa-license.rst -- b_licences
 
 # Ad-hoc signatures (codesign -s - on a Mac). OpenCore injection needs none; kmutil (PG106Accel), dyld
-# (plugin, dylibs) and Gatekeeper-free local apps accept ad-hoc ones.
+# (plugin, dylibs) accept ad-hoc ones.
 if [ -x "$RCODESIGN" ]; then
-	for n in PG106Accel.kext NVMTLDriver.bundle libnvmtl_translate.dylib "Ath10k Connectivity.app"; do
+	for n in PG106Accel.kext NVMTLDriver.bundle libnvmtl_translate.dylib; do
 		[ -e "$STAGE/$n" ] || continue
 		if "$RCODESIGN" sign "$STAGE/$n" >"$LOGS/sign-${n// /-}.log" 2>&1; then SIGNED+=(--signed "$n"); echo "  signed $n (ad-hoc, rcodesign)"
 		else echo "  UNSIGNED $n (rcodesign failed: $(tail -1 "$LOGS/sign-${n// /-}.log"))"; fi

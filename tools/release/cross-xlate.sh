@@ -25,7 +25,11 @@ command -v ld64.lld >/dev/null || skip "ld64.lld not found"
 command -v llvm-strip >/dev/null || skip "llvm-strip not found"
 [ -f "$SDK/usr/lib/libSystem.tbd" ] || skip "macOS SDK not found at $SDK"
 
-WORK="$OUT/.xlate-work"; rm -rf "$WORK"; mkdir -p "$WORK/bin"
+# cargo hashes the source path into symbol names, so the same commit built under another path gives a
+# different binary. Build from a fixed copy (build_xlate_release.sh keeps its R fixed for the same reason).
+CACHE="${RELEASE_CACHE:-$HOME/.cache/helios300-release}"
+FIXED="$CACHE/xlate-build"; rm -rf "$FIXED"; mkdir -p "$FIXED"; cp -R "$SRC" "$FIXED/src"; SRC="$FIXED/src"
+WORK="$FIXED/work"; mkdir -p "$WORK/bin"
 cat >"$WORK/bin/cc" <<EOF
 #!/bin/sh
 exec clang -target x86_64-apple-macos$MIN -isysroot "$SDK" -fuse-ld=lld -Qunused-arguments "\$@"
@@ -49,6 +53,6 @@ llvm-objdump --macho --dylib-id "$D" | grep -q '@rpath/libnvmtl_translate.dylib'
 left=$(strings -a "$D" | grep -cE "$HOME|/home/|/Users/" || true)
 [ "$left" = 0 ] || { strings -a "$D" | grep -E "$HOME|/home/|/Users/" | sort -u | head -5; die "$left build-machine path(s) left in the dylib"; }
 python3 "$MACHO_CHECK" "$D" "$SDK" >"$OUT/libnvmtl_translate.macho-check.txt" 2>&1 || { tail -20 "$OUT/libnvmtl_translate.macho-check.txt"; die "macho-check"; }
-rm -rf "$WORK"
+rm -rf "$FIXED"
 echo "PASS Mach-O x86_64 MH_DYLIB, @rpath install name, no build paths, $(tail -1 "$OUT/libnvmtl_translate.macho-check.txt")"
 echo "cross-xlate: OK — $D ($(sha256sum "$D" | cut -c1-16)…)"

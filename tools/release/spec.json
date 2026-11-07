@@ -124,6 +124,16 @@
       "hardware": [{"bus": "pci", "vendor": "10de", "device": "1c20", "subsystem_vendor": "1025", "subsystem_device": "118b"}]
     },
     {
+      "name": "SSDT-HS07-UPC.aml", "kind": "ssdt",
+      "source": {"tree": "self", "path": "kexts/bluetooth/acpi/SSDT-HS07-UPC.dsl"},
+      "built_by": "iasl", "licence": "GPL-2.0-only",
+      "status": "pre-release: marks USB 2 port 7 (internal Bluetooth 04ca:3016) connectable + internal (_UPC type 0xFF); the DSDT has no _UPC there",
+      "install": "opencore",
+      "acpi": {"order": 110, "Path": "SSDT-HS07-UPC.aml", "Enabled": true, "Comment": "HS07 internal Bluetooth port (_UPC 0xFF)"},
+      "requires": [],
+      "hardware": [{"bus": "usb", "vendor": "04ca", "device": "3016"}]
+    },
+    {
       "name": "PG106Accel.kext", "kind": "kext", "bundle_id": "com.nullmoth.PG106Accel",
       "source": {"tree": "driver", "path": "kexts/PG106Accel"},
       "built_by": "cross", "licence": "PolyForm-Noncommercial-1.0.0",
@@ -166,15 +176,6 @@
       "optional": true
     },
     {
-      "name": "Ath10k Connectivity.app", "kind": "app",
-      "source": {"tree": "self", "path": "kexts/wifi/app"},
-      "built_by": "cross", "licence": "GPL-3.0-only",
-      "status": "pre-release: menu-bar app for Ath10kMac (join networks); no root, installs nothing system-wide",
-      "install": "applications", "install_path": "/Applications/Ath10k Connectivity.app",
-      "requires": ["Ath10kMac.kext"],
-      "optional": true
-    },
-    {
       "name": "NVIDIA-firmware-LICENCE.txt", "kind": "firmware-licence",
       "source": {"tree": "driver", "path": "licenses/NVIDIA-firmware-LICENCE.txt"},
       "built_by": "copy", "licence": "NVIDIA firmware licence (linux-firmware LICENCE.nvidia)",
@@ -210,7 +211,7 @@
       "PciRoot(0x0)/Pci(0x1,0x0)/Pci(0x0,0x1)": {"hda-gfx": {"string": "onboard-2"}}
     },
     "usb_ports": [
-      {"controller": "8086:a12f", "port": "HS07", "type": 255, "what": "internal Bluetooth (04ca:3016); without it macOS treats the controller as an external dongle"}
+      {"controller": "8086:a12f", "port": "HS07", "type": 255, "what": "internal Bluetooth (04ca:3016); without it macOS treats the controller as an external dongle. Provided by SSDT-HS07-UPC.aml (macOS reads the type from ACPI with UTBDefault); a full UTBMap needs a USBToolBox mapping run"}
     ],
     "forbidden": {
       "kexts": ["NVRM.kext", "NVRMFB.kext", "NVAccel.kext", "NVRMAGDC.kext", "BrcmPatchRAM3.kext", "BrcmBluetoothInjector.kext",
@@ -222,7 +223,6 @@
   },
   "post_install": [
     {"step": "pg106accel", "what": "Copy PG106Accel.kext to /Library/Extensions (root:wheel), kmutil load, approve, restart", "artifacts": ["PG106Accel.kext"]},
-    {"step": "gpu-bundles", "what": "Copy NVMTLDriver.bundle and nvmtl/ (NVK, translator) to /Library/GPUBundles", "artifacts": ["NVMTLDriver.bundle", "libnvmtl_translate.dylib", "NVK-Pascal"]},
-    {"step": "wifi-app", "what": "Copy Ath10k Connectivity.app to /Applications, xattr -dr com.apple.quarantine", "artifacts": ["Ath10k Connectivity.app"]}
+    {"step": "gpu-bundles", "what": "Copy NVMTLDriver.bundle and nvmtl/ (NVK, translator) to /Library/GPUBundles", "artifacts": ["NVMTLDriver.bundle", "libnvmtl_translate.dylib", "NVK-Pascal"]}
   ]
 }

@@ -30,6 +30,7 @@ import sys
 import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.dont_write_bytecode = True   # no __pycache__ in the tree
 sys.path.insert(0, HERE)
 import schema_check  # noqa: E402
 
