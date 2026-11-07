@@ -30,6 +30,8 @@
 #   --allow      kpi-audit allowlist for non-xnu families (repeatable,
 #                format in tools/kpi-audit.py).
 #   --resources  directory copied to Contents/Resources.
+#   --kc-sibling binary of a kext built alongside whose exports resolve this
+#                kext's imports in the real-collection check (repeatable).
 #
 # Environment:
 #   MACOS_SDK   MacOSX26.x.sdk with Kernel.framework + usr/lib/libkmod.a
@@ -37,6 +39,10 @@
 #   MACOS_MIN   deployment target (default 26.0)
 #   XNU_CONFIG  xnu config/ directory with *.exports (default xnu-12377.1.9)
 #   CLANG, NM   (default clang, llvm-nm)
+#   HELIOS_REAL_KC  BootKernelExtensions.kc of the Mac that will run the kext.
+#               When set, tools/kc-audit.py checks every import against the
+#               collection's exports and every vtable against the real parent
+#               layout (what kxld/OpenCore patch at injection). Unset: skipped.
 #
 # Exit: 0 built + audit passed; 1 failure; 77 tools missing.
 set -euo pipefail
@@ -55,7 +61,7 @@ skip() { echo "cross-build-kext: SKIP — $*"; exit 77; }
 die() { echo "cross-build-kext: FAIL — $*"; exit 1; }
 
 PLIST="" OUT="" EXEC="" RES="" AUDIT=1
-EXTRA=() CXXEXTRA=() ALLOW=() SRCS=()
+EXTRA=() CXXEXTRA=() ALLOW=() SRCS=() KCSIBLING=()
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--plist) PLIST="$2"; shift 2 ;;
@@ -66,6 +72,7 @@ while [ $# -gt 0 ]; do
 	--cflags) read -r -a f <<<"$2"; EXTRA+=("${f[@]}"); shift 2 ;;
 	--cxxflags) read -r -a f <<<"$2"; CXXEXTRA+=("${f[@]}"); shift 2 ;;
 	--no-audit) AUDIT=0; shift ;;
+	--kc-sibling) KCSIBLING+=(--sibling "$2"); shift 2 ;;
 	-I) EXTRA+=(-I "$2"); shift 2 ;;
 	-I*) EXTRA+=("$1"); shift ;;
 	-D) EXTRA+=(-D "$2"); shift 2 ;;
@@ -183,5 +190,12 @@ if [ "$AUDIT" = 1 ]; then
 	python3 -I "$HERE/kpi-audit.py" --xnu-config "$XNU_CONFIG" --sdk-headers "$KF" \
 		--plist "$OUT/Contents/Info.plist" --imports "$OUT.imports.txt" "${ALLOW[@]}" ||
 		die "KPI audit"
+fi
+if [ -n "${HELIOS_REAL_KC:-}" ]; then
+	[ -f "$HELIOS_REAL_KC" ] || die "HELIOS_REAL_KC=$HELIOS_REAL_KC not found"
+	python3 -I "$HERE/kc-audit.py" --kc "$HELIOS_REAL_KC" --kext "$BIN" --plist "$OUT/Contents/Info.plist" ${KCSIBLING[@]+"${KCSIBLING[@]}"} ||
+		die "real-collection audit (kc-audit.py)"
+else
+	echo "note: HELIOS_REAL_KC unset — imports/vtables not checked against a real kernel collection"
 fi
 echo "cross-build-kext: OK — $OUT ($(sha256sum "$BIN" | cut -c1-16)…)"
