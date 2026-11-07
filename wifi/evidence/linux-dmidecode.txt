@@ -1,0 +1,18 @@
+# dmidecode 3.7
+Getting SMBIOS data from sysfs.
+SMBIOS 3.0.0 present.
+
+Handle 0x001D, DMI type 248, 11 bytes
+OEM-specific Type
+	Header and Data:
+		F8 0B 1D 00 00 01 53 55 00 00 00
+
+== dmi
+	Manufacturer: Acer
+	Product Name: Predator G3-571
+	Version: V1.22
+	SKU Number: 0000000000000000
+	Family: Predator Helios 300
+	Vendor: Insyde Corp.
+	Version: V1.22
+	Release Date: 03/15/2019

@@ -1,0 +1,40 @@
+--- BSS 1
+	freq: 5220.0
+	DS Parameter set: channel 44
+		 * STA channel width: any
+		 * channel width: 1 (80 MHz)
+	RSN:	 * Version: 1
+		 * Group cipher: CCMP
+		 * Pairwise ciphers: CCMP
+		 * Authentication suites: PSK FT/PSK
+		 * Capabilities: 1-PTKSA-RC 1-GTKSA-RC (0x0000)
+--- BSS 2 (associated)
+	freq: 5220.0
+	DS Parameter set: channel 44
+		 * STA channel width: any
+		 * channel width: 1 (80 MHz)
+	RSN:	 * Version: 1
+		 * Group cipher: CCMP
+		 * Pairwise ciphers: CCMP
+		 * Authentication suites: PSK FT/PSK
+		 * Capabilities: 1-PTKSA-RC 1-GTKSA-RC (0x0000)
+--- BSS 3
+	freq: 5220.0
+	DS Parameter set: channel 44
+		 * STA channel width: any
+		 * channel width: 1 (80 MHz)
+	RSN:	 * Version: 1
+		 * Group cipher: CCMP
+		 * Pairwise ciphers: CCMP
+		 * Authentication suites: PSK
+		 * Capabilities: 1-PTKSA-RC 1-GTKSA-RC (0x0000)
+--- BSS 4
+	freq: 5220.0
+	DS Parameter set: channel 44
+		 * STA channel width: any
+		 * channel width: 1 (80 MHz)
+	RSN:	 * Version: 1
+		 * Group cipher: CCMP
+		 * Pairwise ciphers: CCMP
+		 * Authentication suites: PSK
+		 * Capabilities: 1-PTKSA-RC 1-GTKSA-RC (0x0000)

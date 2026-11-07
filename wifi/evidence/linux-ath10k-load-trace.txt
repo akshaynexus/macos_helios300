@@ -1,0 +1,2212 @@
+ +0.000000 log_dbg   pci probe 168c:003e 11ad:0807
+ +0.000416 log_dbg   boot pci_mem 0x00000000588e180f
+ +0.003786 log_info  pci irq msi oper_irq_mode 2 irq_mode 0 reset_mode 0
+ +0.003992 log_dbg   boot qca6174 chip reset
+ +0.003992 log_dbg   boot cold reset
+ +0.046153 log_dbg   boot cold reset complete
+ +0.046154 log_dbg   boot waiting target to initialise
+ +0.046224 log_dbg   boot target indicator 2
+ +0.046285 log_dbg   boot target initialised
+ +0.046285 log_dbg   boot warm reset
+ +0.069297 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.069429 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.069646 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.069780 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.069905 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.070034 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.070154 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.070155 log_dbg   boot waiting target to initialise
+ +0.070210 log_dbg   boot target indicator 0
+ +0.080239 log_dbg   boot target indicator 2
+ +0.080249 log_dbg   boot target initialised
+ +0.091294 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.091425 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.091635 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.091769 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.091894 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.092023 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.092143 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.092144 log_dbg   boot waiting target to initialise
+ +0.092199 log_dbg   boot target indicator 0
+ +0.102227 log_dbg   boot target indicator 2
+ +0.102237 log_dbg   boot target initialised
+ +0.102238 log_dbg   boot warm reset complete
+ +0.102238 log_dbg   boot qca6174 chip reset complete (cold)
+ +0.102320 log_dbg   boot hif power up
+ +0.102543 log_dbg   boot qca6174 chip reset
+ +0.102543 log_dbg   boot cold reset
+ +0.145719 log_dbg   boot cold reset complete
+ +0.145719 log_dbg   boot waiting target to initialise
+ +0.145724 log_dbg   boot target indicator 2
+ +0.145735 log_dbg   boot target initialised
+ +0.145735 log_dbg   boot warm reset
+ +0.168200 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.168223 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.168246 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.168273 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.168303 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.168329 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.168352 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.168352 log_dbg   boot waiting target to initialise
+ +0.168356 log_dbg   boot target indicator 0
+ +0.178332 log_dbg   boot target indicator 2
+ +0.178342 log_dbg   boot target initialised
+ +0.188803 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.188826 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.188849 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.188876 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.188905 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.188932 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.188954 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.188955 log_dbg   boot waiting target to initialise
+ +0.188959 log_dbg   boot target indicator 0
+ +0.198935 log_dbg   boot target indicator 2
+ +0.198945 log_dbg   boot target initialised
+ +0.198945 log_dbg   boot warm reset complete
+ +0.198946 log_dbg   boot qca6174 chip reset complete (cold)
+ +0.198972 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.198994 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.199016 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.199043 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.199071 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.199098 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.199119 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.199815 log_dbg   bmi get target info
+ +0.201200 log_dbg   Hardware name qca6174 hw3.2 version 0x5030000
+ +0.201222 log_dbg   boot fw request 'ath10k/pre-cal-pci-0000:02:00.0.bin': -2
+ +0.201233 log_dbg   boot fw request 'ath10k/cal-pci-0000:02:00.0.bin': -2
+ +0.201234 log_dbg   trying fw api 6
+ +0.204551 log_dbg   boot fw request 'ath10k/QCA6174/hw3.0/firmware-6.bin': 0
+ +0.204552 log_dbg   found fw version WLAN.RM.4.4.1-00309-
+ +0.204553 log_dbg   found fw timestamp 1679406429
+ +0.204553 log_dbg   found otp image ie (24429 B)
+ +0.204554 log_dbg   found fw image ie (681821 B)
+ +0.204554 log_dbg   found firmware features ie (2 B)
+ +0.204555 log_dbg   Enabling feature bit: 6
+ +0.204555 log_dbg   Enabling feature bit: 7
+ +0.204556 log_dbg   Enabling feature bit: 12
+ +0.204556 log_dbg   found fw ie wmi op version 4
+ +0.204556 log_dbg   found fw ie htt op version 3
+ +0.204557 log_dbg   using fw api 6
+ +0.204564 log_info  qca6174 hw3.2 target 0x05030000 chip_id 0x00340aff sub 11ad:0807
+ +0.204567 log_info  kconfig debug 1 debugfs 1 tracing 1 dfs 0 testmode 0
+ +0.204599 log_info  firmware ver WLAN.RM.4.4.1-00309- api 6 features wowlan,ignore-otp,mfp crc32 0793bcf2
+ +0.204600 log_dbg   boot did not find a pre-calibration nvmem-cell, try file next: -2
+ +0.204601 log_dbg   boot did not find a pre calibration file, try DT next: -2
+ +0.204601 log_dbg   unable to load pre cal data from DT: -2
+ +0.204602 log_dbg   could not load pre cal data: -2
+ +0.204602 log_dbg   boot upload otp to 0x1234 len 24429 for board id
+ +0.204603 log_dbg   bmi fast download address 0x1234 buffer 0x000000003d794bb3 length 24429
+ +0.204604 log_dbg   bmi lz stream start address 0x1234
+ +0.204617 log_dbg   bmi lz data buffer 0x000000003d794bb3 length 24428
+ +0.269053 log_dbg   bmi lz data buffer 0x0000000086d937d5 length 4
+ +0.269428 log_dbg   bmi lz stream start address 0x0
+ +0.269487 log_dbg   bmi execute address 0x1234 param 0x10
+ +0.269780 log_dbg   bmi execute result 0x0
+ +0.269781 log_dbg   boot get otp board id result 0x00000000 board_id 0 chip_id 0 ext_bid_support 0
+ +0.269782 log_dbg   board id does not exist in otp, ignore it
+ +0.269798 log_dbg   wrong smbios bdf ext type length (11).
+ +0.269800 log_dbg   SMBIOS bdf variant name not set.
+ +0.269800 log_dbg   DT bdf variant name not set.
+ +0.269802 log_dbg   boot using board name 'bus=pci,vendor=168c,device=003e,subsystem-vendor=11ad,subsystem-device=0807'
+ +0.269803 log_dbg   boot using board name 'bus=pci,vendor=168c,device=003e,subsystem-vendor=11ad,subsystem-device=0807'
+ +0.269804 log_dbg   boot using board name 'bus=pci,vendor=168c,device=003e,subsystem-vendor=11ad,subsystem-device=0807'
+ +0.272073 log_dbg   boot fw request 'ath10k/QCA6174/hw3.0/board-2.bin': 0
+ +0.272077 log_dbg   boot found match for name 'bus=pci,vendor=168c,device=003e,subsystem-vendor=11ad,subsystem-device=0807'
+ +0.272077 log_dbg   boot found board data for 'bus=pci,vendor=168c,device=003e,subsystem-vendor=11ad,subsystem-device=0807'
+ +0.272078 log_dbg   using board api 2
+ +0.272119 log_info  board_file api 2 bmi_id N/A crc32 d2863f91
+ +0.272121 log_dbg   bmi start
+ +0.272122 log_dbg   bmi read soc register 0x00000b2c
+ +0.272176 log_dbg   bmi read soc register value 0x00000080
+ +0.272177 log_dbg   bmi read soc register 0x00000af4
+ +0.272237 log_dbg   bmi read soc register value 0x00066666
+ +0.272238 log_dbg   bmi write soc register 0x00000af4 val 0x0006aaa8
+ +0.272251 log_dbg   bmi read soc register 0x00001018
+ +0.272336 log_dbg   bmi read soc register value 0x00000400
+ +0.272337 log_dbg   bmi write soc register 0x00001018 val 0x00000160
+ +0.272348 log_dbg   bmi read soc register 0x00000914
+ +0.272432 log_dbg   bmi read soc register value 0x00000000
+ +0.272433 log_dbg   bmi write soc register 0x00000914 val 0x00000001
+ +0.272445 log_dbg   bmi write address 0x404028 length 4
+ +0.272503 log_dbg   bmi read soc register 0x00001014
+ +0.272579 log_dbg   bmi read soc register value 0x00011458
+ +0.272580 log_dbg   bmi write soc register 0x00001014 val 0x0005145e
+ +0.272593 log_dbg   bmi read soc register 0x00001244
+ +0.272679 log_dbg   bmi read soc register value 0x00000002
+ +0.272679 log_dbg   bmi read soc register 0x00001014
+ +0.272746 log_dbg   bmi read soc register value 0x0005145e
+ +0.272746 log_dbg   bmi write soc register 0x00001014 val 0x0004145e
+ +0.272757 log_dbg   bmi read soc register 0x00001244
+ +0.272842 log_dbg   bmi read soc register value 0x00000002
+ +0.272843 log_dbg   bmi read soc register 0x00000820
+ +0.272902 log_dbg   bmi read soc register value 0x00000003
+ +0.272902 log_dbg   bmi write soc register 0x00000820 val 0x00000001
+ +0.272914 log_dbg   bmi read soc register 0x00001014
+ +0.272963 log_dbg   bmi read soc register value 0x0004145e
+ +0.272963 log_dbg   bmi write soc register 0x00001014 val 0x0000145e
+ +0.272970 log_dbg   bmi write address 0x404020 length 4
+ +0.272982 log_dbg   bmi write address 0x404024 length 4
+ +0.272993 log_dbg   boot enable pll ret 0
+ +0.272993 log_dbg   bmi write address 0x400800 length 4
+ +0.273007 log_dbg   bmi read address 0x400810 length 4
+ +0.273028 log_dbg   bmi write address 0x400810 length 4
+ +0.273035 log_dbg   bmi write address 0x400844 length 4
+ +0.273048 log_dbg   bmi write address 0x400904 length 4
+ +0.273062 log_dbg   bmi write address 0x4008bc length 4
+ +0.273074 log_dbg   boot did not find a pre-calibration nvmem-cell, try file next: -2
+ +0.273074 log_dbg   boot did not find a pre calibration file, try DT next: -2
+ +0.273075 log_dbg   unable to load pre cal data from DT: -2
+ +0.273075 log_dbg   failed to load pre cal data: -2
+ +0.273076 log_dbg   pre cal download procedure failed, try cal file: -2
+ +0.273077 log_dbg   boot did not find a calibration nvmem-cell, try file next: -2
+ +0.273077 log_dbg   boot did not find a calibration file, try DT next: -2
+ +0.273077 log_dbg   boot did not find DT entry, try target EEPROM next: -2
+ +0.273078 log_dbg   boot did not find target EEPROM entry, try OTP next: -95
+ +0.273079 log_dbg   bmi read address 0x4008ac length 4
+ +0.273099 log_dbg   boot push board extended data addr 0x0
+ +0.273100 log_dbg   bmi read address 0x400854 length 4
+ +0.273116 log_dbg   bmi write address 0x401fc0 length 8124
+ +0.278469 log_dbg   bmi write address 0x400858 length 4
+ +0.278524 log_dbg   boot upload otp to 0x1234 len 24429
+ +0.278526 log_dbg   bmi fast download address 0x1234 buffer 0x000000003d794bb3 length 24429
+ +0.278527 log_dbg   bmi lz stream start address 0x1234
+ +0.278537 log_dbg   bmi lz data buffer 0x000000003d794bb3 length 24428
+ +0.295458 log_dbg   bmi lz data buffer 0x00000000da711605 length 4
+ +0.295556 log_dbg   bmi lz stream start address 0x0
+ +0.295570 log_dbg   bmi execute address 0x1234 param 0x0
+ +0.296028 log_dbg   bmi execute result 0x3
+ +0.296029 log_dbg   boot otp execute result 3
+ +0.296030 log_dbg   boot using calibration mode otp
+ +0.296031 log_dbg   boot uploading firmware image 00000000a9d8cf43 len 681821
+ +0.332810 log_dbg   boot firmware fast diag download successfully.
+ +0.332810 log_dbg   bmi write address 0x400814 length 4
+ +0.332818 log_dbg   pci hif map service
+ +0.332819 log_dbg   boot htc service 'Control' ul pipe 0 dl pipe 1 eid 0 ready
+ +0.332820 log_dbg   boot htc service 'Control' eid 0 TX flow control disabled
+ +0.332820 log_dbg   bmi done
+ +0.332842 log_dbg   boot hif start
+ +0.346252 log_dbg   Target ready! transmit resources: 2 size:1792 actual credits:2
+ +0.346254 log_dbg   Extended ready message RX bundle size 0 alt size 0
+ +0.346256 log_dbg   boot htc service HTT Data does not allocate target credits
+ +0.346259 log_dbg   ath10k_htc_build_tx_ctrl_skb: skb 00000000306b6249
+ +0.346396 log_dbg   HTC Service HTT Data connect response: status: 0x0, assigned ep: 0x1
+ +0.346398 log_dbg   pci hif map service
+ +0.346399 log_dbg   boot htc service 'HTT Data' ul pipe 4 dl pipe 1 eid 1 ready
+ +0.346400 log_dbg   boot htc service 'HTT Data' eid 1 TX flow control disabled
+ +0.346402 log_dbg   ath10k_htc_build_tx_ctrl_skb: skb 00000000b6fff2a5
+ +0.346575 log_dbg   HTC Service WMI connect response: status: 0x0, assigned ep: 0x2
+ +0.346576 log_dbg   pci hif map service
+ +0.346577 log_dbg   boot htc service 'WMI' ul pipe 3 dl pipe 2 eid 2 ready
+ +0.346579 log_dbg   ath10k_htc_build_tx_ctrl_skb: skb 00000000855d510f
+ +0.346580 log_dbg   HTC is using TX credit flow control
+ +0.346584 log_dbg   pci hif map service
+ +0.346584 log_dbg   unsupported HTC pktlog service id: 1536
+ +0.346908 wmi_event WMI_TLV_SERVICE_AVAILABLE_EVENTID len 24
+ +0.346911 wmi_event WMI_TLV_SERVICE_READY_EVENTID len 312
+ +0.346919 log_dbg   wmi tlv abi 0x01000000 ?= 0x01000000, 0x5f414351 ?= 0x5f414351, 0x00004c4d ?= 0x00004c4d, 0x00000000 ?= 0x00000000, 0x00000000 ?= 0x00000000
+ +0.346922 log_dbg   wmi sys_cap_info 0x0
+ +0.346925 log_dbg   wmi event service ready min_tx_power 0x0000003f max_tx_power 0x0000003f ht_cap 0x0000085b vht_cap 0x338001b2 vht_supp_mcs 0x0000fffa sw_ver0 0x01000000 sw_ver1 0x000003c8 fw_build 0x441a8135 phy_capab 0x00000003 num_rf_chains 0x00000002 eeprom_rd 0x0000006c low_2ghz_chan 2312 high_2ghz_chan 2732 low_5ghz_chan 4920 high_5ghz_chan 6100 num_mem_reqs 0x00000000
+ +0.346958 log_dbg   firmware WLAN.RM.4.4.1-00309- booted
+ +0.346960 log_dbg   wmi tlv init
+ +0.346961 wmi_cmd   WMI_TLV_INIT_CMDID len 220
+ +0.361743 wmi_event WMI_TLV_READY_EVENTID len 68
+ +0.361746 log_dbg   wmi event ready sw_version 0x01000000 abi_version 968 mac_addr <mac> status 0
+ +0.361791 wmi_event 118809 len 8
+ +0.361791 log_dbg   Unknown eventid: 118809
+ +0.361822 log_dbg   wmi tlv vdev create
+ +0.361824 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
+ +0.361829 log_dbg   wmi tlv vdev delete
+ +0.361830 wmi_cmd   WMI_TLV_VDEV_DELETE_CMDID len 12
+ +0.361831 wmi_cmd   WMI_TLV_VDEV_DELETE_CMDID len 12
+ +0.364749 wmi_event WMI_TLV_DIAG_EVENT_LOG_SUPPORTED_EVENTID len 148
+ +0.364749 log_dbg   Unknown eventid: 90118
+ +0.364808 wmi_cmd   WMI_TLV_VDEV_DELETE_CMDID len 12
+ +0.364826 log_dbg   wmi tlv echo value 0x0ba991e9
+ +0.364827 wmi_cmd   WMI_TLV_ECHO_CMDID len 12
+ +0.364828 wmi_cmd   WMI_TLV_ECHO_CMDID len 12
+ +0.364920 wmi_cmd   WMI_TLV_ECHO_CMDID len 12
+ +0.365389 wmi_event WMI_TLV_ECHO_EVENTID len 8
+ +0.365390 log_dbg   wmi event echo value 0x0ba991e9
+ +0.365746 log_dbg   wmi tlv pktlog disable
+ +0.365746 wmi_cmd   WMI_TLV_PDEV_PKTLOG_DISABLE_CMDID len 12
+ +0.365756 log_info  htt-ver 3.87 wmi-op 4 htt-op 3 cal otp max-sta 32 raw 0 hwcrypto 1
+ +0.366066 log_dbg   wmi tlv pktlog disable
+ +0.366066 wmi_cmd   WMI_TLV_PDEV_PKTLOG_DISABLE_CMDID len 12
+ +0.366067 wmi_cmd   WMI_TLV_PDEV_PKTLOG_DISABLE_CMDID len 12
+ +0.366143 wmi_cmd   WMI_TLV_PDEV_PKTLOG_DISABLE_CMDID len 12
+ +0.366148 log_dbg   wmi tlv pdev suspend
+ +0.366148 wmi_cmd   WMI_TLV_PDEV_SUSPEND_CMDID len 16
+ +0.366508 log_dbg   boot suspend complete
+ +0.366611 log_dbg   boot hif stop
+ +0.366702 log_dbg   boot warm reset
+ +0.389582 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.389605 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.389652 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.389700 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.389754 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.389804 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.389847 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.389847 log_dbg   boot waiting target to initialise
+ +0.389850 log_dbg   boot target indicator 0
+ +0.399921 log_dbg   boot target indicator 2
+ +0.400022 log_dbg   boot target initialised
+ +0.410936 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.411141 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.411354 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.411801 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.412119 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.412800 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.413108 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.413109 log_dbg   boot waiting target to initialise
+ +0.413113 log_dbg   boot target indicator 0
+ +0.423182 log_dbg   boot target indicator 2
+ +0.423283 log_dbg   boot target initialised
+ +0.423284 log_dbg   boot warm reset complete
+ +0.424274 log_dbg   boot hif power down
+ +0.424404 log_dbg   regulatory hint from WRDD (alpha2-code): AP
+ +0.424405 log_dbg   fallback to eeprom programmed regulatory settings
+ +0.435262 log_dbg   boot hif power up
+ +0.435363 log_dbg   boot qca6174 chip reset
+ +0.435363 log_dbg   boot cold reset
+ +0.477513 log_dbg   boot cold reset complete
+ +0.477514 log_dbg   boot waiting target to initialise
+ +0.477520 log_dbg   boot target indicator 2
+ +0.477530 log_dbg   boot target initialised
+ +0.477531 log_dbg   boot warm reset
+ +0.499572 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.499596 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.499618 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.499646 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.499676 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.499703 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.499726 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.499726 log_dbg   boot waiting target to initialise
+ +0.499730 log_dbg   boot target indicator 0
+ +0.509707 log_dbg   boot target indicator 2
+ +0.509717 log_dbg   boot target initialised
+ +0.520767 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.520790 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.520813 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.520840 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.520870 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.520897 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.520919 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.520920 log_dbg   boot waiting target to initialise
+ +0.520924 log_dbg   boot target indicator 0
+ +0.530900 log_dbg   boot target indicator 2
+ +0.530910 log_dbg   boot target initialised
+ +0.530911 log_dbg   boot warm reset complete
+ +0.530911 log_dbg   boot qca6174 chip reset complete (cold)
+ +0.530938 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.530960 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.530982 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.531008 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.531037 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.531063 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.531085 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.531815 log_dbg   bmi start
+ +0.531816 log_dbg   bmi read soc register 0x00000b2c
+ +0.533160 log_dbg   bmi read soc register value 0x00000080
+ +0.533161 log_dbg   bmi read soc register 0x00000af4
+ +0.533219 log_dbg   bmi read soc register value 0x00066666
+ +0.533220 log_dbg   bmi write soc register 0x00000af4 val 0x0006aaa8
+ +0.533231 log_dbg   bmi read soc register 0x00001018
+ +0.533319 log_dbg   bmi read soc register value 0x00000400
+ +0.533320 log_dbg   bmi write soc register 0x00001018 val 0x00000160
+ +0.533330 log_dbg   bmi read soc register 0x00000914
+ +0.533415 log_dbg   bmi read soc register value 0x00000000
+ +0.533416 log_dbg   bmi write soc register 0x00000914 val 0x00000001
+ +0.533427 log_dbg   bmi write address 0x404028 length 4
+ +0.533493 log_dbg   bmi read soc register 0x00001014
+ +0.533581 log_dbg   bmi read soc register value 0x00011458
+ +0.533582 log_dbg   bmi write soc register 0x00001014 val 0x0005145e
+ +0.533593 log_dbg   bmi read soc register 0x00001244
+ +0.533679 log_dbg   bmi read soc register value 0x00000002
+ +0.533680 log_dbg   bmi read soc register 0x00001014
+ +0.533740 log_dbg   bmi read soc register value 0x0005145e
+ +0.533741 log_dbg   bmi write soc register 0x00001014 val 0x0004145e
+ +0.533753 log_dbg   bmi read soc register 0x00001244
+ +0.533836 log_dbg   bmi read soc register value 0x00000002
+ +0.533836 log_dbg   bmi read soc register 0x00000820
+ +0.533897 log_dbg   bmi read soc register value 0x00000003
+ +0.533897 log_dbg   bmi write soc register 0x00000820 val 0x00000001
+ +0.533909 log_dbg   bmi read soc register 0x00001014
+ +0.533956 log_dbg   bmi read soc register value 0x0004145e
+ +0.533956 log_dbg   bmi write soc register 0x00001014 val 0x0000145e
+ +0.533963 log_dbg   bmi write address 0x404020 length 4
+ +0.533974 log_dbg   bmi write address 0x404024 length 4
+ +0.533988 log_dbg   boot enable pll ret 0
+ +0.533988 log_dbg   bmi write address 0x400800 length 4
+ +0.534000 log_dbg   bmi read address 0x400810 length 4
+ +0.534022 log_dbg   bmi write address 0x400810 length 4
+ +0.534029 log_dbg   bmi write address 0x400844 length 4
+ +0.534042 log_dbg   bmi write address 0x400904 length 4
+ +0.534056 log_dbg   bmi write address 0x4008bc length 4
+ +0.534068 log_dbg   boot did not find a pre-calibration nvmem-cell, try file next: -2
+ +0.534068 log_dbg   boot did not find a pre calibration file, try DT next: -2
+ +0.534069 log_dbg   unable to load pre cal data from DT: -2
+ +0.534069 log_dbg   failed to load pre cal data: -2
+ +0.534070 log_dbg   pre cal download procedure failed, try cal file: -2
+ +0.534070 log_dbg   boot did not find a calibration nvmem-cell, try file next: -2
+ +0.534070 log_dbg   boot did not find a calibration file, try DT next: -2
+ +0.534071 log_dbg   boot did not find DT entry, try target EEPROM next: -2
+ +0.534072 log_dbg   boot did not find target EEPROM entry, try OTP next: -95
+ +0.534072 log_dbg   bmi read address 0x4008ac length 4
+ +0.534093 log_dbg   boot push board extended data addr 0x0
+ +0.534093 log_dbg   bmi read address 0x400854 length 4
+ +0.534110 log_dbg   bmi write address 0x401fc0 length 8124
+ +0.539458 log_dbg   bmi write address 0x400858 length 4
+ +0.539512 log_dbg   boot upload otp to 0x1234 len 24429
+ +0.539526 log_dbg   bmi fast download address 0x1234 buffer 0x000000003d794bb3 length 24429
+ +0.539526 log_dbg   bmi lz stream start address 0x1234
+ +0.539536 log_dbg   bmi lz data buffer 0x000000003d794bb3 length 24428
+ +0.556409 log_dbg   bmi lz data buffer 0x00000000e669dc3a length 4
+ +0.556509 log_dbg   bmi lz stream start address 0x0
+ +0.556521 log_dbg   bmi execute address 0x1234 param 0x0
+ +0.556983 log_dbg   bmi execute result 0x3
+ +0.556983 log_dbg   boot otp execute result 3
+ +0.556984 log_dbg   boot using calibration mode otp
+ +0.556985 log_dbg   boot uploading firmware image 00000000a9d8cf43 len 681821
+ +0.593411 log_dbg   boot firmware fast diag download successfully.
+ +0.593412 log_dbg   bmi write address 0x400814 length 4
+ +0.593424 log_dbg   pci hif map service
+ +0.593425 log_dbg   boot htc service 'Control' ul pipe 0 dl pipe 1 eid 0 ready
+ +0.593426 log_dbg   boot htc service 'Control' eid 0 TX flow control disabled
+ +0.593427 log_dbg   bmi done
+ +0.593441 log_dbg   boot hif start
+ +0.607136 log_dbg   Target ready! transmit resources: 2 size:1792 actual credits:2
+ +0.607137 log_dbg   Extended ready message RX bundle size 0 alt size 0
+ +0.607138 log_dbg   boot htc service HTT Data does not allocate target credits
+ +0.607141 log_dbg   ath10k_htc_build_tx_ctrl_skb: skb 00000000930e132f
+ +0.607264 log_dbg   HTC Service HTT Data connect response: status: 0x0, assigned ep: 0x1
+ +0.607265 log_dbg   pci hif map service
+ +0.607266 log_dbg   boot htc service 'HTT Data' ul pipe 4 dl pipe 1 eid 1 ready
+ +0.607267 log_dbg   boot htc service 'HTT Data' eid 1 TX flow control disabled
+ +0.607269 log_dbg   ath10k_htc_build_tx_ctrl_skb: skb 00000000f6caf6f5
+ +0.607378 log_dbg   HTC Service WMI connect response: status: 0x0, assigned ep: 0x2
+ +0.607378 log_dbg   pci hif map service
+ +0.607379 log_dbg   boot htc service 'WMI' ul pipe 3 dl pipe 2 eid 2 ready
+ +0.607380 log_dbg   ath10k_htc_build_tx_ctrl_skb: skb 00000000f1358fdb
+ +0.607381 log_dbg   HTC is using TX credit flow control
+ +0.607384 log_dbg   pci hif map service
+ +0.607385 log_dbg   unsupported HTC pktlog service id: 1536
+ +0.607684 wmi_event WMI_TLV_SERVICE_AVAILABLE_EVENTID len 24
+ +0.607687 wmi_event WMI_TLV_SERVICE_READY_EVENTID len 312
+ +0.607699 log_dbg   wmi tlv abi 0x01000000 ?= 0x01000000, 0x5f414351 ?= 0x5f414351, 0x00004c4d ?= 0x00004c4d, 0x00000000 ?= 0x00000000, 0x00000000 ?= 0x00000000
+ +0.607702 log_dbg   wmi sys_cap_info 0x0
+ +0.607704 log_dbg   wmi event service ready min_tx_power 0x0000003f max_tx_power 0x0000003f ht_cap 0x0000085b vht_cap 0x338001b2 vht_supp_mcs 0x0000fffa sw_ver0 0x01000000 sw_ver1 0x000003c8 fw_build 0x441a8135 phy_capab 0x00000003 num_rf_chains 0x00000002 eeprom_rd 0x0000006c low_2ghz_chan 2312 high_2ghz_chan 2732 low_5ghz_chan 4920 high_5ghz_chan 6100 num_mem_reqs 0x00000000
+ +0.607739 log_dbg   firmware WLAN.RM.4.4.1-00309- booted
+ +0.607742 log_dbg   wmi tlv init
+ +0.607743 wmi_cmd   WMI_TLV_INIT_CMDID len 220
+ +0.623163 wmi_event WMI_TLV_READY_EVENTID len 68
+ +0.623166 log_dbg   wmi event ready sw_version 0x01000000 abi_version 968 mac_addr <mac> status 0
+ +0.623191 wmi_event 118809 len 8
+ +0.623191 log_dbg   Unknown eventid: 118809
+ +0.623205 log_dbg   wmi tlv vdev create
+ +0.623206 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
+ +0.623212 log_dbg   wmi tlv vdev delete
+ +0.623212 wmi_cmd   WMI_TLV_VDEV_DELETE_CMDID len 12
+ +0.623214 wmi_cmd   WMI_TLV_VDEV_DELETE_CMDID len 12
+ +0.626164 wmi_event WMI_TLV_DIAG_EVENT_LOG_SUPPORTED_EVENTID len 148
+ +0.626165 log_dbg   Unknown eventid: 90118
+ +0.626165 wmi_cmd   WMI_TLV_VDEV_DELETE_CMDID len 12
+ +0.626173 log_dbg   wmi tlv echo value 0x0ba991e9
+ +0.626173 wmi_cmd   WMI_TLV_ECHO_CMDID len 12
+ +0.626768 wmi_event WMI_TLV_ECHO_EVENTID len 8
+ +0.626770 log_dbg   wmi event echo value 0x0ba991e9
+ +0.627485 log_dbg   wmi tlv pktlog disable
+ +0.627486 wmi_cmd   WMI_TLV_PDEV_PKTLOG_DISABLE_CMDID len 12
+ +0.627490 log_dbg   wmi tlv pdev set param 34 value 0x1
+ +0.627491 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.627492 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.628246 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.628254 log_dbg   wmi tlv pdev set param 10 value 0x1
+ +0.628254 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.628257 log_dbg   wmi tlv scan prob req oui
+ +0.628258 wmi_cmd   WMI_TLV_SCAN_PROB_REQ_OUI_CMDID len 12
+ +0.628259 wmi_cmd   WMI_TLV_SCAN_PROB_REQ_OUI_CMDID len 12
+ +0.628643 wmi_cmd   WMI_TLV_SCAN_PROB_REQ_OUI_CMDID len 12
+ +0.628649 log_dbg   wmi tlv adaptive qcs 1
+ +0.628649 wmi_cmd   WMI_TLV_RESMGR_ADAPTIVE_OCS_CMDID len 12
+ +0.628650 wmi_cmd   WMI_TLV_RESMGR_ADAPTIVE_OCS_CMDID len 12
+ +0.629343 wmi_cmd   WMI_TLV_RESMGR_ADAPTIVE_OCS_CMDID len 12
+ +0.629352 log_dbg   wmi tlv pdev set param 48 value 0x0
+ +0.629352 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.629356 log_dbg   wmi tlv pdev set param 44 value 0x1
+ +0.629356 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.629358 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.629643 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.629649 log_dbg   wmi tlv pdev set param 1 value 0x3
+ +0.629649 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.629651 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.635630 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.635638 log_dbg   wmi tlv pdev set param 2 value 0x3
+ +0.635638 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.635642 log_dbg   wmi tlv pdev set param 35 value 0x0
+ +0.635642 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.635643 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.636428 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.636436 log_dbg   wmi tlv pdev set param 37 value 0x1
+ +0.636436 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.636438 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.646008 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.646016 log_dbg   wmi tlv pdev set param 32 value 0x1f4
+ +0.646017 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +0.646022 log_dbg   mac channel [0/37] freq 2412 maxpower 60 regpower 60 antenna 0 mode 1
+ +0.646023 log_dbg   mac channel [1/37] freq 2417 maxpower 60 regpower 60 antenna 0 mode 1
+ +0.646024 log_dbg   mac channel [2/37] freq 2422 maxpower 60 regpower 60 antenna 0 mode 1
+ +0.646025 log_dbg   mac channel [3/37] freq 2427 maxpower 60 regpower 60 antenna 0 mode 1
+ +0.646026 log_dbg   mac channel [4/37] freq 2432 maxpower 60 regpower 60 antenna 0 mode 1
+ +0.646026 log_dbg   mac channel [5/37] freq 2437 maxpower 60 regpower 60 antenna 0 mode 1
+ +0.646027 log_dbg   mac channel [6/37] freq 2442 maxpower 60 regpower 60 antenna 0 mode 1
+ +0.646028 log_dbg   mac channel [7/37] freq 2447 maxpower 60 regpower 60 antenna 0 mode 1
+ +0.646029 log_dbg   mac channel [8/37] freq 2452 maxpower 60 regpower 60 antenna 0 mode 1
+ +0.646030 log_dbg   mac channel [9/37] freq 2457 maxpower 60 regpower 60 antenna 0 mode 1
+ +0.646031 log_dbg   mac channel [10/37] freq 2462 maxpower 60 regpower 60 antenna 0 mode 1
+ +0.646031 log_dbg   mac channel [11/37] freq 5180 maxpower 46 regpower 46 antenna 0 mode 0
+ +0.646032 log_dbg   mac channel [12/37] freq 5200 maxpower 46 regpower 46 antenna 0 mode 0
+ +0.646033 log_dbg   mac channel [13/37] freq 5220 maxpower 46 regpower 46 antenna 0 mode 0
+ +0.646034 log_dbg   mac channel [14/37] freq 5240 maxpower 46 regpower 46 antenna 0 mode 0
+ +0.646035 log_dbg   mac channel [15/37] freq 5260 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646036 log_dbg   mac channel [16/37] freq 5280 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646036 log_dbg   mac channel [17/37] freq 5300 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646037 log_dbg   mac channel [18/37] freq 5320 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646038 log_dbg   mac channel [19/37] freq 5500 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646039 log_dbg   mac channel [20/37] freq 5520 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646040 log_dbg   mac channel [21/37] freq 5540 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646053 log_dbg   mac channel [22/37] freq 5560 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646054 log_dbg   mac channel [23/37] freq 5580 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646055 log_dbg   mac channel [24/37] freq 5600 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646056 log_dbg   mac channel [25/37] freq 5620 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646057 log_dbg   mac channel [26/37] freq 5640 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646057 log_dbg   mac channel [27/37] freq 5660 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646058 log_dbg   mac channel [28/37] freq 5680 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646059 log_dbg   mac channel [29/37] freq 5700 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646060 log_dbg   mac channel [30/37] freq 5720 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.646061 log_dbg   mac channel [31/37] freq 5745 maxpower 60 regpower 60 antenna 0 mode 0
+ +0.646061 log_dbg   mac channel [32/37] freq 5765 maxpower 60 regpower 60 antenna 0 mode 0
+ +0.646080 log_dbg   mac channel [33/37] freq 5785 maxpower 60 regpower 60 antenna 0 mode 0
+ +0.646081 log_dbg   mac channel [34/37] freq 5805 maxpower 60 regpower 60 antenna 0 mode 0
+ +0.646082 log_dbg   mac channel [35/37] freq 5825 maxpower 60 regpower 60 antenna 0 mode 0
+ +0.646083 log_dbg   mac channel [36/37] freq 5845 maxpower 54 regpower 54 antenna 0 mode 0
+ +0.646085 log_dbg   wmi tlv scan chan list
+ +0.646085 wmi_cmd   WMI_TLV_SCAN_CHAN_LIST_CMDID len 1052
+ +0.646087 wmi_cmd   WMI_TLV_SCAN_CHAN_LIST_CMDID len 1052
+ +0.646303 wmi_cmd   WMI_TLV_SCAN_CHAN_LIST_CMDID len 1052
+ +0.646309 log_dbg   wmi tlv pdev set rd
+ +0.646309 wmi_cmd   WMI_TLV_PDEV_SET_REGDOMAIN_CMDID len 32
+ +0.646310 wmi_cmd   WMI_TLV_PDEV_SET_REGDOMAIN_CMDID len 32
+ +0.647233 wmi_cmd   WMI_TLV_PDEV_SET_REGDOMAIN_CMDID len 32
+ +0.647242 log_dbg   wmi tlv quiet param: period 100 duration 0 enabled 0
+ +0.647242 wmi_cmd   WMI_TLV_PDEV_SET_QUIET_MODE_CMDID len 28
+ +0.647248 log_dbg   mac create vdev 0 map f
+ +0.647249 log_dbg   mac vdev create 0 (add interface) type 2 subtype 0 bcnmode per-skb
+ +0.647250 log_dbg   wmi tlv vdev create
+ +0.647250 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
+ +0.647251 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
+ +0.647707 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
+ +0.647728 log_dbg   wmi tlv sta keepalive vdev 0 enabled 1 method 1 interval 0
+ +0.647729 wmi_cmd   WMI_TLV_STA_KEEPALIVE_CMDID len 44
+ +0.647730 wmi_cmd   WMI_TLV_STA_KEEPALIVE_CMDID len 44
+ +0.648345 wmi_cmd   WMI_TLV_STA_KEEPALIVE_CMDID len 44
+ +0.648351 log_dbg   wmi tlv vdev 0 set param 48 value 0x1
+ +0.648351 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.648355 log_dbg   wmi tlv vdev 0 set param 34 value 0x2
+ +0.648355 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.648356 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.648616 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.648623 log_dbg   wmi tlv set sta ps
+ +0.648623 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.648624 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.648925 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.648931 log_dbg   wmi tlv set sta ps
+ +0.648931 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.648935 log_dbg   wmi tlv set sta ps
+ +0.648935 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.648936 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.649214 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.649221 log_dbg   wmi tlv vdev 0 set param 1 value 0xffffffff
+ +0.649222 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.649223 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.649421 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.649426 log_dbg   mac vdev 0 recalc rts/cts prot 17
+ +0.649427 log_dbg   wmi tlv vdev 0 set param 44 value 0x11
+ +0.649427 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.649430 log_dbg   defer cts setup, vdev is not ready yet
+ +0.649431 log_dbg   mac vdev 0 slot_time 1
+ +0.649432 log_dbg   wmi tlv vdev 0 set param 7 value 0x1
+ +0.649432 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.649433 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.650116 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.650123 log_dbg   mac vdev 0 preamble 1n
+ +0.650125 log_dbg   wmi tlv vdev 0 set param 8 value 0x1
+ +0.650125 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.650126 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.650420 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +0.650431 log_dbg   wmi tlv vdev wmm conf
+ +0.650431 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +0.650435 log_dbg   wmi tlv set sta ps
+ +0.650435 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.650437 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.650730 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.650735 log_dbg   wmi tlv set sta ps
+ +0.650736 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.650737 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.651009 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.651014 log_dbg   wmi tlv set sta ps
+ +0.651015 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.651018 log_dbg   wmi tlv set sta ps
+ +0.651018 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.651019 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.651276 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.651282 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 3 prio 7 svc int 0 susp int -1 delay int -1
+ +0.651283 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +0.651283 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.651284 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.651618 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.651624 log_dbg   wmi tlv vdev wmm conf
+ +0.651624 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +0.651627 log_dbg   wmi tlv set sta ps
+ +0.651628 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.651629 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.651987 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.651993 log_dbg   wmi tlv set sta ps
+ +0.651994 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.651995 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.652298 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.652304 log_dbg   wmi tlv set sta ps
+ +0.652304 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.652307 log_dbg   wmi tlv set sta ps
+ +0.652307 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.652309 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.652587 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.652593 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 2 prio 5 svc int 0 susp int -1 delay int -1
+ +0.652594 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +0.652595 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.652596 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.652790 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.652796 log_dbg   wmi tlv vdev wmm conf
+ +0.652797 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +0.652800 log_dbg   wmi tlv set sta ps
+ +0.652800 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.652801 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653022 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653028 log_dbg   wmi tlv set sta ps
+ +0.653028 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653029 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653131 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653136 log_dbg   wmi tlv set sta ps
+ +0.653137 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653140 log_dbg   wmi tlv set sta ps
+ +0.653140 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653141 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653337 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653343 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 1 prio 2 svc int 0 susp int -1 delay int -1
+ +0.653344 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +0.653344 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.653345 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.653567 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.653575 log_dbg   wmi tlv vdev wmm conf
+ +0.653575 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +0.653579 log_dbg   wmi tlv set sta ps
+ +0.653579 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653580 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653775 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653781 log_dbg   wmi tlv set sta ps
+ +0.653781 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653783 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653876 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653881 log_dbg   wmi tlv set sta ps
+ +0.653881 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653884 log_dbg   wmi tlv set sta ps
+ +0.653884 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.653885 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.654060 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +0.654064 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 0 prio 0 svc int 0 susp int -1 delay int -1
+ +0.654065 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +0.654065 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.654066 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.654267 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +0.654272 log_dbg   mac vdev 0 psmode enable
+ +0.654273 log_dbg   wmi tlv set psmode
+ +0.654273 wmi_cmd   WMI_TLV_STA_POWERSAVE_MODE_CMDID len 16
+ +0.654276 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
+ +0.654356 log_dbg   mac vdev 0 psmode enable
+ +0.654356 log_dbg   wmi tlv set psmode
+ +0.654357 wmi_cmd   WMI_TLV_STA_POWERSAVE_MODE_CMDID len 16
+ +0.654358 wmi_cmd   WMI_TLV_STA_POWERSAVE_MODE_CMDID len 16
+ +0.654458 wmi_cmd   WMI_TLV_STA_POWERSAVE_MODE_CMDID len 16
+ +0.654504 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
+ +0.655004 log_dbg   mac channel [0/36] freq 2412 maxpower 40 regpower 60 antenna 0 mode 1
+ +0.655006 log_dbg   mac channel [1/36] freq 2417 maxpower 40 regpower 60 antenna 0 mode 1
+ +0.655007 log_dbg   mac channel [2/36] freq 2422 maxpower 40 regpower 60 antenna 0 mode 1
+ +0.655008 log_dbg   mac channel [3/36] freq 2427 maxpower 40 regpower 60 antenna 0 mode 1
+ +0.655008 log_dbg   mac channel [4/36] freq 2432 maxpower 40 regpower 60 antenna 0 mode 1
+ +0.655009 log_dbg   mac channel [5/36] freq 2437 maxpower 40 regpower 60 antenna 0 mode 1
+ +0.655010 log_dbg   mac channel [6/36] freq 2442 maxpower 40 regpower 60 antenna 0 mode 1
+ +0.655011 log_dbg   mac channel [7/36] freq 2447 maxpower 40 regpower 60 antenna 0 mode 1
+ +0.655012 log_dbg   mac channel [8/36] freq 2452 maxpower 40 regpower 60 antenna 0 mode 1
+ +0.655013 log_dbg   mac channel [9/36] freq 2457 maxpower 40 regpower 60 antenna 0 mode 1
+ +0.655014 log_dbg   mac channel [10/36] freq 2462 maxpower 40 regpower 60 antenna 0 mode 1
+ +0.655015 log_dbg   mac channel [11/36] freq 5180 maxpower 46 regpower 46 antenna 0 mode 0
+ +0.655016 log_dbg   mac channel [12/36] freq 5200 maxpower 46 regpower 46 antenna 0 mode 0
+ +0.655017 log_dbg   mac channel [13/36] freq 5220 maxpower 46 regpower 46 antenna 0 mode 0
+ +0.655017 log_dbg   mac channel [14/36] freq 5240 maxpower 46 regpower 46 antenna 0 mode 0
+ +0.655018 log_dbg   mac channel [15/36] freq 5260 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655019 log_dbg   mac channel [16/36] freq 5280 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655020 log_dbg   mac channel [17/36] freq 5300 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655021 log_dbg   mac channel [18/36] freq 5320 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655022 log_dbg   mac channel [19/36] freq 5500 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655023 log_dbg   mac channel [20/36] freq 5520 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655024 log_dbg   mac channel [21/36] freq 5540 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655025 log_dbg   mac channel [22/36] freq 5560 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655025 log_dbg   mac channel [23/36] freq 5580 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655026 log_dbg   mac channel [24/36] freq 5600 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655027 log_dbg   mac channel [25/36] freq 5620 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655028 log_dbg   mac channel [26/36] freq 5640 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655029 log_dbg   mac channel [27/36] freq 5660 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655030 log_dbg   mac channel [28/36] freq 5680 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655031 log_dbg   mac channel [29/36] freq 5700 maxpower 48 regpower 48 antenna 0 mode 0
+ +0.655032 log_dbg   mac channel [30/36] freq 5745 maxpower 60 regpower 60 antenna 0 mode 0
+ +0.655032 log_dbg   mac channel [31/36] freq 5765 maxpower 60 regpower 60 antenna 0 mode 0
+ +0.655033 log_dbg   mac channel [32/36] freq 5785 maxpower 60 regpower 60 antenna 0 mode 0
+ +0.655034 log_dbg   mac channel [33/36] freq 5805 maxpower 60 regpower 60 antenna 0 mode 0
+ +0.655035 log_dbg   mac channel [34/36] freq 5825 maxpower 60 regpower 60 antenna 0 mode 0
+ +0.655036 log_dbg   mac channel [35/36] freq 5845 maxpower 54 regpower 54 antenna 0 mode 0
+ +0.655038 log_dbg   wmi tlv scan chan list
+ +0.655038 wmi_cmd   WMI_TLV_SCAN_CHAN_LIST_CMDID len 1024
+ +0.655043 log_dbg   wmi tlv pdev set rd
+ +0.655043 wmi_cmd   WMI_TLV_PDEV_SET_REGDOMAIN_CMDID len 32
+ +0.668745 log_dbg   mac vdev 0 delete (remove interface)
+ +0.668748 log_dbg   wmi tlv vdev delete
+ +0.668749 wmi_cmd   WMI_TLV_VDEV_DELETE_CMDID len 12
+ +0.669221 log_dbg   wmi tlv pktlog disable
+ +0.669221 wmi_cmd   WMI_TLV_PDEV_PKTLOG_DISABLE_CMDID len 12
+ +0.669225 log_dbg   wmi tlv pdev suspend
+ +0.669225 wmi_cmd   WMI_TLV_PDEV_SUSPEND_CMDID len 16
+ +0.669587 log_dbg   boot suspend complete
+ +0.669618 log_dbg   boot hif stop
+ +0.669724 log_dbg   boot warm reset
+ +0.691625 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.691648 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.691671 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.691702 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.691738 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.691769 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.691796 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.691797 log_dbg   boot waiting target to initialise
+ +0.691799 log_dbg   boot target indicator 0
+ +0.701870 log_dbg   boot target indicator 2
+ +0.701970 log_dbg   boot target initialised
+ +0.713901 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.714215 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.714433 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.714972 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.715418 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.715966 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.716281 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.716282 log_dbg   boot waiting target to initialise
+ +0.716287 log_dbg   boot target indicator 0
+ +0.726357 log_dbg   boot target indicator 2
+ +0.726458 log_dbg   boot target initialised
+ +0.726459 log_dbg   boot warm reset complete
+ +0.727386 log_dbg   boot hif power down
+ +0.728094 log_dbg   boot hif power up
+ +0.728410 log_dbg   boot qca6174 chip reset
+ +0.728411 log_dbg   boot cold reset
+ +0.769753 log_dbg   boot cold reset complete
+ +0.769754 log_dbg   boot waiting target to initialise
+ +0.769759 log_dbg   boot target indicator 2
+ +0.769785 log_dbg   boot target initialised
+ +0.769785 log_dbg   boot warm reset
+ +0.791565 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.791589 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.791611 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.791639 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.791670 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.791697 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.791720 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.791720 log_dbg   boot waiting target to initialise
+ +0.791724 log_dbg   boot target indicator 0
+ +0.801701 log_dbg   boot target indicator 2
+ +0.801711 log_dbg   boot target initialised
+ +0.813138 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.813161 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.813184 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.813211 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.813241 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.813267 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.813290 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.813290 log_dbg   boot waiting target to initialise
+ +0.813294 log_dbg   boot target indicator 0
+ +0.823271 log_dbg   boot target indicator 2
+ +0.823281 log_dbg   boot target initialised
+ +0.823281 log_dbg   boot warm reset complete
+ +0.823281 log_dbg   boot qca6174 chip reset complete (cold)
+ +0.823308 log_dbg   boot init ce src ring id 0 entries 16 base_addr 0000000002365320
+ +0.823330 log_dbg   boot ce dest ring id 1 entries 512 base_addr 00000000d417c7f4
+ +0.823352 log_dbg   boot ce dest ring id 2 entries 128 base_addr 0000000088e271dd
+ +0.823379 log_dbg   boot init ce src ring id 3 entries 32 base_addr 00000000f7c39287
+ +0.823407 log_dbg   boot init ce src ring id 4 entries 8192 base_addr 00000000bd9e9337
+ +0.823433 log_dbg   boot init ce src ring id 7 entries 2 base_addr 000000001457a860
+ +0.823455 log_dbg   boot ce dest ring id 7 entries 2 base_addr 00000000f6440b2e
+ +0.824158 log_dbg   bmi start
+ +0.824158 log_dbg   bmi read soc register 0x00000b2c
+ +0.825537 log_dbg   bmi read soc register value 0x00000080
+ +0.825537 log_dbg   bmi read soc register 0x00000af4
+ +0.825604 log_dbg   bmi read soc register value 0x00066666
+ +0.825605 log_dbg   bmi write soc register 0x00000af4 val 0x0006aaa8
+ +0.825617 log_dbg   bmi read soc register 0x00001018
+ +0.825704 log_dbg   bmi read soc register value 0x00000400
+ +0.825704 log_dbg   bmi write soc register 0x00001018 val 0x00000160
+ +0.825716 log_dbg   bmi read soc register 0x00000914
+ +0.825802 log_dbg   bmi read soc register value 0x00000000
+ +0.825802 log_dbg   bmi write soc register 0x00000914 val 0x00000001
+ +0.825813 log_dbg   bmi write address 0x404028 length 4
+ +0.825857 log_dbg   bmi read soc register 0x00001014
+ +0.825947 log_dbg   bmi read soc register value 0x00011458
+ +0.825948 log_dbg   bmi write soc register 0x00001014 val 0x0005145e
+ +0.825960 log_dbg   bmi read soc register 0x00001244
+ +0.826045 log_dbg   bmi read soc register value 0x00000002
+ +0.826046 log_dbg   bmi read soc register 0x00001014
+ +0.826105 log_dbg   bmi read soc register value 0x0005145e
+ +0.826106 log_dbg   bmi write soc register 0x00001014 val 0x0004145e
+ +0.826118 log_dbg   bmi read soc register 0x00001244
+ +0.826204 log_dbg   bmi read soc register value 0x00000002
+ +0.826204 log_dbg   bmi read soc register 0x00000820
+ +0.826263 log_dbg   bmi read soc register value 0x00000003
+ +0.826264 log_dbg   bmi write soc register 0x00000820 val 0x00000001
+ +0.826276 log_dbg   bmi read soc register 0x00001014
+ +0.826323 log_dbg   bmi read soc register value 0x0004145e
+ +0.826323 log_dbg   bmi write soc register 0x00001014 val 0x0000145e
+ +0.826330 log_dbg   bmi write address 0x404020 length 4
+ +0.826341 log_dbg   bmi write address 0x404024 length 4
+ +0.826356 log_dbg   boot enable pll ret 0
+ +0.826356 log_dbg   bmi write address 0x400800 length 4
+ +0.826367 log_dbg   bmi read address 0x400810 length 4
+ +0.826388 log_dbg   bmi write address 0x400810 length 4
+ +0.826395 log_dbg   bmi write address 0x400844 length 4
+ +0.826409 log_dbg   bmi write address 0x400904 length 4
+ +0.826422 log_dbg   bmi write address 0x4008bc length 4
+ +0.826434 log_dbg   boot did not find a pre-calibration nvmem-cell, try file next: -2
+ +0.826435 log_dbg   boot did not find a pre calibration file, try DT next: -2
+ +0.826435 log_dbg   unable to load pre cal data from DT: -2
+ +0.826436 log_dbg   failed to load pre cal data: -2
+ +0.826436 log_dbg   pre cal download procedure failed, try cal file: -2
+ +0.826437 log_dbg   boot did not find a calibration nvmem-cell, try file next: -2
+ +0.826437 log_dbg   boot did not find a calibration file, try DT next: -2
+ +0.826437 log_dbg   boot did not find DT entry, try target EEPROM next: -2
+ +0.826438 log_dbg   boot did not find target EEPROM entry, try OTP next: -95
+ +0.826439 log_dbg   bmi read address 0x4008ac length 4
+ +0.826459 log_dbg   boot push board extended data addr 0x0
+ +0.826460 log_dbg   bmi read address 0x400854 length 4
+ +0.826480 log_dbg   bmi write address 0x401fc0 length 8124
+ +0.831819 log_dbg   bmi write address 0x400858 length 4
+ +0.831876 log_dbg   boot upload otp to 0x1234 len 24429
+ +0.831877 log_dbg   bmi fast download address 0x1234 buffer 0x000000003d794bb3 length 24429
+ +0.831878 log_dbg   bmi lz stream start address 0x1234
+ +0.831888 log_dbg   bmi lz data buffer 0x000000003d794bb3 length 24428
+ +0.848818 log_dbg   bmi lz data buffer 0x00000000c5a35232 length 4
+ +0.848911 log_dbg   bmi lz stream start address 0x0
+ +0.848927 log_dbg   bmi execute address 0x1234 param 0x0
+ +0.849369 log_dbg   bmi execute result 0x3
+ +0.849369 log_dbg   boot otp execute result 3
+ +0.849370 log_dbg   boot using calibration mode otp
+ +0.849371 log_dbg   boot uploading firmware image 00000000a9d8cf43 len 681821
+ +0.886674 log_dbg   boot firmware fast diag download successfully.
+ +0.886675 log_dbg   bmi write address 0x400814 length 4
+ +0.886682 log_dbg   pci hif map service
+ +0.886684 log_dbg   boot htc service 'Control' ul pipe 0 dl pipe 1 eid 0 ready
+ +0.886684 log_dbg   boot htc service 'Control' eid 0 TX flow control disabled
+ +0.886685 log_dbg   bmi done
+ +0.886702 log_dbg   boot hif start
+ +0.900541 log_dbg   Target ready! transmit resources: 2 size:1792 actual credits:2
+ +0.900542 log_dbg   Extended ready message RX bundle size 0 alt size 0
+ +0.900544 log_dbg   boot htc service HTT Data does not allocate target credits
+ +0.900546 log_dbg   ath10k_htc_build_tx_ctrl_skb: skb 0000000033525748
+ +0.900670 log_dbg   HTC Service HTT Data connect response: status: 0x0, assigned ep: 0x1
+ +0.900672 log_dbg   pci hif map service
+ +0.900673 log_dbg   boot htc service 'HTT Data' ul pipe 4 dl pipe 1 eid 1 ready
+ +0.900674 log_dbg   boot htc service 'HTT Data' eid 1 TX flow control disabled
+ +0.900676 log_dbg   ath10k_htc_build_tx_ctrl_skb: skb 00000000923a3750
+ +0.900793 log_dbg   HTC Service WMI connect response: status: 0x0, assigned ep: 0x2
+ +0.900794 log_dbg   pci hif map service
+ +0.900794 log_dbg   boot htc service 'WMI' ul pipe 3 dl pipe 2 eid 2 ready
+ +0.900796 log_dbg   ath10k_htc_build_tx_ctrl_skb: skb 000000007b71c726
+ +0.900797 log_dbg   HTC is using TX credit flow control
+ +0.900801 log_dbg   pci hif map service
+ +0.900802 log_dbg   unsupported HTC pktlog service id: 1536
+ +0.901088 wmi_event WMI_TLV_SERVICE_AVAILABLE_EVENTID len 24
+ +6.154172 log_warn  failed to receive service ready completion, polling..
+ +6.154173 log_dbg   pci hif send complete check
+ +6.154210 log_dbg   pci hif send complete check
+ +6.154221 log_dbg   pci hif send complete check
+ +6.154238 wmi_event WMI_TLV_SERVICE_READY_EVENTID len 312
+ +6.154243 log_dbg   pci hif send complete check
+ +6.154267 log_dbg   pci hif send complete check
+ +6.154275 log_dbg   wmi tlv abi 0x01000000 ?= 0x01000000, 0x5f414351 ?= 0x5f414351, 0x00004c4d ?= 0x00004c4d, 0x00000000 ?= 0x00000000, 0x00000000 ?= 0x00000000
+ +6.154275 log_dbg   pci hif send complete check
+ +6.154276 log_dbg   pci hif send complete check
+ +6.154277 log_dbg   pci hif send complete check
+ +6.154277 log_dbg   wmi sys_cap_info 0x0
+ +6.154279 log_dbg   wmi event service ready min_tx_power 0x0000003f max_tx_power 0x0000003f ht_cap 0x0000085b vht_cap 0x338001b2 vht_supp_mcs 0x0000fffa sw_ver0 0x01000000 sw_ver1 0x000003c8 fw_build 0x441a8135 phy_capab 0x00000003 num_rf_chains 0x00000002 eeprom_rd 0x0000006c low_2ghz_chan 2312 high_2ghz_chan 2732 low_5ghz_chan 4920 high_5ghz_chan 6100 num_mem_reqs 0x00000000
+ +6.154319 log_warn  service ready completion received, continuing normally
+ +6.154320 log_dbg   firmware WLAN.RM.4.4.1-00309- booted
+ +6.154322 log_dbg   wmi tlv init
+ +6.154323 wmi_cmd   WMI_TLV_INIT_CMDID len 220
+ +6.169889 wmi_event WMI_TLV_READY_EVENTID len 68
+ +6.169893 log_dbg   wmi event ready sw_version 0x01000000 abi_version 968 mac_addr <mac> status 0
+ +6.169918 wmi_event 118809 len 8
+ +6.169919 log_dbg   Unknown eventid: 118809
+ +6.169933 log_dbg   wmi tlv vdev create
+ +6.169934 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
+ +6.169940 log_dbg   wmi tlv vdev delete
+ +6.169940 wmi_cmd   WMI_TLV_VDEV_DELETE_CMDID len 12
+ +6.169941 wmi_cmd   WMI_TLV_VDEV_DELETE_CMDID len 12
+ +6.172926 wmi_event WMI_TLV_DIAG_EVENT_LOG_SUPPORTED_EVENTID len 148
+ +6.172927 log_dbg   Unknown eventid: 90118
+ +6.172930 wmi_cmd   WMI_TLV_VDEV_DELETE_CMDID len 12
+ +6.172939 log_dbg   wmi tlv echo value 0x0ba991e9
+ +6.172939 wmi_cmd   WMI_TLV_ECHO_CMDID len 12
+ +6.173770 wmi_event WMI_TLV_ECHO_EVENTID len 8
+ +6.173772 log_dbg   wmi event echo value 0x0ba991e9
+ +6.174540 log_dbg   wmi tlv pktlog disable
+ +6.174541 wmi_cmd   WMI_TLV_PDEV_PKTLOG_DISABLE_CMDID len 12
+ +6.174545 log_dbg   wmi tlv pdev set param 34 value 0x1
+ +6.174546 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.174547 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.175356 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.175364 log_dbg   wmi tlv pdev set param 10 value 0x1
+ +6.175364 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.175367 log_dbg   wmi tlv scan prob req oui
+ +6.175368 wmi_cmd   WMI_TLV_SCAN_PROB_REQ_OUI_CMDID len 12
+ +6.175369 wmi_cmd   WMI_TLV_SCAN_PROB_REQ_OUI_CMDID len 12
+ +6.176128 wmi_cmd   WMI_TLV_SCAN_PROB_REQ_OUI_CMDID len 12
+ +6.176136 log_dbg   wmi tlv adaptive qcs 1
+ +6.176137 wmi_cmd   WMI_TLV_RESMGR_ADAPTIVE_OCS_CMDID len 12
+ +6.176138 wmi_cmd   WMI_TLV_RESMGR_ADAPTIVE_OCS_CMDID len 12
+ +6.176897 wmi_cmd   WMI_TLV_RESMGR_ADAPTIVE_OCS_CMDID len 12
+ +6.176904 log_dbg   wmi tlv pdev set param 48 value 0x0
+ +6.176905 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.176908 log_dbg   wmi tlv pdev set param 44 value 0x1
+ +6.176908 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.176910 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.177665 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.177673 log_dbg   wmi tlv pdev set param 1 value 0x3
+ +6.177673 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.177675 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.183205 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.183213 log_dbg   wmi tlv pdev set param 2 value 0x3
+ +6.183214 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.183218 log_dbg   wmi tlv pdev set param 35 value 0x0
+ +6.183218 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.183220 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.184040 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.184048 log_dbg   wmi tlv pdev set param 37 value 0x1
+ +6.184048 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.184050 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.193588 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.193596 log_dbg   wmi tlv pdev set param 32 value 0x1f4
+ +6.193596 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
+ +6.193601 log_dbg   mac channel [0/36] freq 2412 maxpower 40 regpower 60 antenna 0 mode 1
+ +6.193602 log_dbg   mac channel [1/36] freq 2417 maxpower 40 regpower 60 antenna 0 mode 1
+ +6.193603 log_dbg   mac channel [2/36] freq 2422 maxpower 40 regpower 60 antenna 0 mode 1
+ +6.193605 log_dbg   mac channel [3/36] freq 2427 maxpower 40 regpower 60 antenna 0 mode 1
+ +6.193606 log_dbg   mac channel [4/36] freq 2432 maxpower 40 regpower 60 antenna 0 mode 1
+ +6.193607 log_dbg   mac channel [5/36] freq 2437 maxpower 40 regpower 60 antenna 0 mode 1
+ +6.193607 log_dbg   mac channel [6/36] freq 2442 maxpower 40 regpower 60 antenna 0 mode 1
+ +6.193609 log_dbg   mac channel [7/36] freq 2447 maxpower 40 regpower 60 antenna 0 mode 1
+ +6.193610 log_dbg   mac channel [8/36] freq 2452 maxpower 40 regpower 60 antenna 0 mode 1
+ +6.193611 log_dbg   mac channel [9/36] freq 2457 maxpower 40 regpower 60 antenna 0 mode 1
+ +6.193611 log_dbg   mac channel [10/36] freq 2462 maxpower 40 regpower 60 antenna 0 mode 1
+ +6.193612 log_dbg   mac channel [11/36] freq 5180 maxpower 46 regpower 46 antenna 0 mode 0
+ +6.193613 log_dbg   mac channel [12/36] freq 5200 maxpower 46 regpower 46 antenna 0 mode 0
+ +6.193614 log_dbg   mac channel [13/36] freq 5220 maxpower 46 regpower 46 antenna 0 mode 0
+ +6.193615 log_dbg   mac channel [14/36] freq 5240 maxpower 46 regpower 46 antenna 0 mode 0
+ +6.193616 log_dbg   mac channel [15/36] freq 5260 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193616 log_dbg   mac channel [16/36] freq 5280 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193618 log_dbg   mac channel [17/36] freq 5300 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193619 log_dbg   mac channel [18/36] freq 5320 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193620 log_dbg   mac channel [19/36] freq 5500 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193620 log_dbg   mac channel [20/36] freq 5520 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193621 log_dbg   mac channel [21/36] freq 5540 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193622 log_dbg   mac channel [22/36] freq 5560 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193623 log_dbg   mac channel [23/36] freq 5580 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193624 log_dbg   mac channel [24/36] freq 5600 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193624 log_dbg   mac channel [25/36] freq 5620 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193638 log_dbg   mac channel [26/36] freq 5640 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193639 log_dbg   mac channel [27/36] freq 5660 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193639 log_dbg   mac channel [28/36] freq 5680 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193640 log_dbg   mac channel [29/36] freq 5700 maxpower 48 regpower 48 antenna 0 mode 0
+ +6.193641 log_dbg   mac channel [30/36] freq 5745 maxpower 60 regpower 60 antenna 0 mode 0
+ +6.193642 log_dbg   mac channel [31/36] freq 5765 maxpower 60 regpower 60 antenna 0 mode 0
+ +6.193643 log_dbg   mac channel [32/36] freq 5785 maxpower 60 regpower 60 antenna 0 mode 0
+ +6.193643 log_dbg   mac channel [33/36] freq 5805 maxpower 60 regpower 60 antenna 0 mode 0
+ +6.193644 log_dbg   mac channel [34/36] freq 5825 maxpower 60 regpower 60 antenna 0 mode 0
+ +6.193645 log_dbg   mac channel [35/36] freq 5845 maxpower 54 regpower 54 antenna 0 mode 0
+ +6.193667 log_dbg   wmi tlv scan chan list
+ +6.193667 wmi_cmd   WMI_TLV_SCAN_CHAN_LIST_CMDID len 1024
+ +6.193669 wmi_cmd   WMI_TLV_SCAN_CHAN_LIST_CMDID len 1024
+ +6.193865 wmi_cmd   WMI_TLV_SCAN_CHAN_LIST_CMDID len 1024
+ +6.193872 log_dbg   wmi tlv pdev set rd
+ +6.193872 wmi_cmd   WMI_TLV_PDEV_SET_REGDOMAIN_CMDID len 32
+ +6.193873 wmi_cmd   WMI_TLV_PDEV_SET_REGDOMAIN_CMDID len 32
+ +6.194846 wmi_cmd   WMI_TLV_PDEV_SET_REGDOMAIN_CMDID len 32
+ +6.194854 log_dbg   wmi tlv quiet param: period 100 duration 0 enabled 0
+ +6.194855 wmi_cmd   WMI_TLV_PDEV_SET_QUIET_MODE_CMDID len 28
+ +6.194860 log_dbg   mac create vdev 0 map f
+ +6.194861 log_dbg   mac vdev create 0 (add interface) type 2 subtype 0 bcnmode per-skb
+ +6.194862 log_dbg   wmi tlv vdev create
+ +6.194862 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
+ +6.194863 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
+ +6.195697 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
+ +6.195705 log_dbg   wmi tlv sta keepalive vdev 0 enabled 1 method 1 interval 0
+ +6.195706 wmi_cmd   WMI_TLV_STA_KEEPALIVE_CMDID len 44
+ +6.195707 wmi_cmd   WMI_TLV_STA_KEEPALIVE_CMDID len 44
+ +6.196541 wmi_cmd   WMI_TLV_STA_KEEPALIVE_CMDID len 44
+ +6.196549 log_dbg   wmi tlv vdev 0 set param 48 value 0x1
+ +6.196549 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.196553 log_dbg   wmi tlv vdev 0 set param 34 value 0x2
+ +6.196553 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.196555 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.197306 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.197314 log_dbg   wmi tlv set sta ps
+ +6.197314 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.197316 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.198071 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.198079 log_dbg   wmi tlv set sta ps
+ +6.198079 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.198082 log_dbg   wmi tlv set sta ps
+ +6.198082 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.198084 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.198374 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.198382 log_dbg   wmi tlv vdev 0 set param 1 value 0xffffffff
+ +6.198382 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.198384 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.198647 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.198655 log_dbg   mac vdev 0 recalc rts/cts prot 17
+ +6.198657 log_dbg   wmi tlv vdev 0 set param 44 value 0x11
+ +6.198657 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.198660 log_dbg   defer cts setup, vdev is not ready yet
+ +6.198661 log_dbg   mac vdev 0 slot_time 1
+ +6.198661 log_dbg   wmi tlv vdev 0 set param 7 value 0x1
+ +6.198662 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.198663 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.198986 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.198993 log_dbg   mac vdev 0 preamble 1n
+ +6.198995 log_dbg   wmi tlv vdev 0 set param 8 value 0x1
+ +6.198995 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.198997 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.199299 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.199309 log_dbg   wmi tlv vdev wmm conf
+ +6.199309 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +6.199313 log_dbg   wmi tlv set sta ps
+ +6.199313 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.199314 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.199657 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.199663 log_dbg   wmi tlv set sta ps
+ +6.199663 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.199664 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.199982 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.199988 log_dbg   wmi tlv set sta ps
+ +6.199988 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.199991 log_dbg   wmi tlv set sta ps
+ +6.199991 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.199992 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.200299 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.200305 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 3 prio 7 svc int 0 susp int -1 delay int -1
+ +6.200306 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +6.200307 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.200308 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.200645 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.200651 log_dbg   wmi tlv vdev wmm conf
+ +6.200651 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +6.200654 log_dbg   wmi tlv set sta ps
+ +6.200655 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.200656 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.200978 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.200985 log_dbg   wmi tlv set sta ps
+ +6.200985 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.200986 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.201260 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.201266 log_dbg   wmi tlv set sta ps
+ +6.201266 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.201269 log_dbg   wmi tlv set sta ps
+ +6.201269 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.201270 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.201458 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.201465 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 2 prio 5 svc int 0 susp int -1 delay int -1
+ +6.201466 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +6.201466 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.201467 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.201670 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.201677 log_dbg   wmi tlv vdev wmm conf
+ +6.201677 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +6.201680 log_dbg   wmi tlv set sta ps
+ +6.201681 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.201682 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.201897 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.201903 log_dbg   wmi tlv set sta ps
+ +6.201903 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.201904 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202012 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202018 log_dbg   wmi tlv set sta ps
+ +6.202018 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202021 log_dbg   wmi tlv set sta ps
+ +6.202021 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202023 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202218 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202225 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 1 prio 2 svc int 0 susp int -1 delay int -1
+ +6.202225 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +6.202226 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.202227 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.202435 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.202441 log_dbg   wmi tlv vdev wmm conf
+ +6.202442 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +6.202445 log_dbg   wmi tlv set sta ps
+ +6.202445 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202446 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202662 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202668 log_dbg   wmi tlv set sta ps
+ +6.202668 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202669 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202775 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202781 log_dbg   wmi tlv set sta ps
+ +6.202781 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202785 log_dbg   wmi tlv set sta ps
+ +6.202785 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202786 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202989 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.202995 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 0 prio 0 svc int 0 susp int -1 delay int -1
+ +6.202996 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +6.202996 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.202998 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.203195 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.203201 log_dbg   mac vdev 0 psmode enable
+ +6.203203 log_dbg   wmi tlv set psmode
+ +6.203203 wmi_cmd   WMI_TLV_STA_POWERSAVE_MODE_CMDID len 16
+ +6.203206 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
+ +6.203242 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
+ +6.203268 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
+ +6.204029 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
+ +6.217413 log_dbg   mac create vdev 1 map e
+ +6.217415 log_dbg   mac vdev create 1 (add interface) type 2 subtype 1 bcnmode per-skb
+ +6.217417 log_dbg   wmi tlv vdev create
+ +6.217418 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
+ +6.217426 log_dbg   wmi tlv sta keepalive vdev 1 enabled 1 method 1 interval 0
+ +6.217427 wmi_cmd   WMI_TLV_STA_KEEPALIVE_CMDID len 44
+ +6.217428 wmi_cmd   WMI_TLV_STA_KEEPALIVE_CMDID len 44
+ +6.217798 wmi_cmd   WMI_TLV_STA_KEEPALIVE_CMDID len 44
+ +6.217806 log_dbg   wmi tlv vdev 1 set param 48 value 0x1
+ +6.217806 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.217811 log_dbg   wmi tlv vdev 1 set param 34 value 0x2
+ +6.217811 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.217813 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.218068 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.218072 log_dbg   wmi tlv set sta ps
+ +6.218072 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.218073 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.218279 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.218283 log_dbg   wmi tlv set sta ps
+ +6.218284 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.218287 log_dbg   wmi tlv set sta ps
+ +6.218287 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.218322 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.218490 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.218543 log_dbg   wmi tlv vdev 1 set param 1 value 0xffffffff
+ +6.218544 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.218545 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.218722 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
+ +6.218730 log_dbg   wmi tlv vdev wmm conf
+ +6.218730 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +6.218734 log_dbg   wmi tlv set sta ps
+ +6.218735 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.218736 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.218962 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.218969 log_dbg   wmi tlv set sta ps
+ +6.218969 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.218971 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219066 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219074 log_dbg   wmi tlv set sta ps
+ +6.219075 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219081 log_dbg   wmi tlv set sta ps
+ +6.219081 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219083 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219277 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219281 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 3 prio 7 svc int 0 susp int -1 delay int -1
+ +6.219282 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +6.219282 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.219284 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.219443 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.219450 log_dbg   wmi tlv vdev wmm conf
+ +6.219450 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +6.219454 log_dbg   wmi tlv set sta ps
+ +6.219454 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219455 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219642 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219648 log_dbg   wmi tlv set sta ps
+ +6.219648 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219650 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219754 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219758 log_dbg   wmi tlv set sta ps
+ +6.219759 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219762 log_dbg   wmi tlv set sta ps
+ +6.219762 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219764 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219942 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.219947 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 2 prio 5 svc int 0 susp int -1 delay int -1
+ +6.219948 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +6.219949 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.219950 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.220120 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.220124 log_dbg   wmi tlv vdev wmm conf
+ +6.220125 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +6.220128 log_dbg   wmi tlv set sta ps
+ +6.220128 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.220129 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.220311 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.220315 log_dbg   wmi tlv set sta ps
+ +6.220316 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.220317 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.220421 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.220426 log_dbg   wmi tlv set sta ps
+ +6.220426 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.220429 log_dbg   wmi tlv set sta ps
+ +6.220429 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.220430 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.220664 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.220674 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 1 prio 2 svc int 0 susp int -1 delay int -1
+ +6.220675 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +6.220676 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.220677 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.220877 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.220883 log_dbg   wmi tlv vdev wmm conf
+ +6.220883 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
+ +6.220886 log_dbg   wmi tlv set sta ps
+ +6.220886 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.220887 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.221079 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.221084 log_dbg   wmi tlv set sta ps
+ +6.221084 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.221085 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.221187 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.221190 log_dbg   wmi tlv set sta ps
+ +6.221190 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.221193 log_dbg   wmi tlv set sta ps
+ +6.221193 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.221194 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.221369 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
+ +6.221376 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 0 prio 0 svc int 0 susp int -1 delay int -1
+ +6.221376 log_dbg   wmi tlv vdev sta uapsd auto trigger
+ +6.221377 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.221378 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.221554 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
+ +6.225607 log_dbg   wmi tlv start scan
+ +6.225609 wmi_cmd   WMI_TLV_START_SCAN_CMDID len 408
+ +6.226282 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.226285 log_dbg   scan event started type 1 reason 7 freq 0 req_id 40961 scan_id 40960 vdev_id 0 state starting (1)
+ +6.226377 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.226379 log_dbg   scan event bss channel type 4 reason 7 freq 0 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.229812 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.229814 log_dbg   scan event foreign channel type 8 reason 7 freq 2412 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.229817 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.241107 wmi_event WMI_TLV_MGMT_RX_EVENTID len 464
+ +6.244792 wmi_event WMI_TLV_MGMT_RX_EVENTID len 464
+ +6.248480 wmi_event WMI_TLV_MGMT_RX_EVENTID len 464
+ +6.273448 wmi_event WMI_TLV_MGMT_RX_EVENTID len 372
+ +6.279754 wmi_event WMI_TLV_MGMT_RX_EVENTID len 364
+ +6.279776 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.279798 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.279800 log_dbg   scan event bss channel type 4 reason 7 freq 2412 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.282646 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.282649 log_dbg   scan event foreign channel type 8 reason 7 freq 2417 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.282654 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.294133 wmi_event WMI_TLV_MGMT_RX_EVENTID len 464
+ +6.297790 wmi_event WMI_TLV_MGMT_RX_EVENTID len 464
+ +6.301437 wmi_event WMI_TLV_MGMT_RX_EVENTID len 464
+ +6.310671 wmi_event WMI_TLV_MGMT_RX_EVENTID len 364
+ +6.324010 wmi_event WMI_TLV_MGMT_RX_EVENTID len 364
+ +6.330592 wmi_event WMI_TLV_MGMT_RX_EVENTID len 372
+ +6.331770 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.331775 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.331776 log_dbg   scan event bss channel type 4 reason 7 freq 2417 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.334616 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.334618 log_dbg   scan event foreign channel type 8 reason 7 freq 2422 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.334621 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.345793 wmi_event WMI_TLV_MGMT_RX_EVENTID len 464
+ +6.352829 wmi_event WMI_TLV_MGMT_RX_EVENTID len 464
+ +6.356695 wmi_event WMI_TLV_MGMT_RX_EVENTID len 464
+ +6.361887 wmi_event WMI_TLV_MGMT_RX_EVENTID len 372
+ +6.375786 wmi_event WMI_TLV_MGMT_RX_EVENTID len 372
+ +6.382079 wmi_event WMI_TLV_MGMT_RX_EVENTID len 364
+ +6.384346 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.384353 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.384355 log_dbg   scan event bss channel type 4 reason 7 freq 2422 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.387301 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.387304 log_dbg   scan event foreign channel type 8 reason 7 freq 2427 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.387308 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.397389 wmi_event WMI_TLV_MGMT_RX_EVENTID len 352
+ +6.433293 wmi_event WMI_TLV_MGMT_RX_EVENTID len 372
+ +6.436364 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.436369 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.436371 log_dbg   scan event bss channel type 4 reason 7 freq 2427 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.439001 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.439002 log_dbg   scan event foreign channel type 8 reason 7 freq 2432 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.439006 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.478118 wmi_event WMI_TLV_MGMT_RX_EVENTID len 372
+ +6.489035 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.489042 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.489044 log_dbg   scan event bss channel type 4 reason 7 freq 2432 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.491939 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.491943 log_dbg   scan event foreign channel type 8 reason 7 freq 2437 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.491949 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.529212 wmi_event WMI_TLV_MGMT_RX_EVENTID len 364
+ +6.541358 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.541364 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.541366 log_dbg   scan event bss channel type 4 reason 7 freq 2437 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.544064 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.544067 log_dbg   scan event foreign channel type 8 reason 7 freq 2442 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.544071 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.553931 wmi_event WMI_TLV_MGMT_RX_EVENTID len 352
+ +6.593638 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.593645 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.593646 log_dbg   scan event bss channel type 4 reason 7 freq 2442 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.596622 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.596625 log_dbg   scan event foreign channel type 8 reason 7 freq 2447 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.596630 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.612817 wmi_event WMI_TLV_MGMT_RX_EVENTID len 352
+ +6.645926 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.645933 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.645935 log_dbg   scan event bss channel type 4 reason 7 freq 2447 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.648716 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.648720 log_dbg   scan event foreign channel type 8 reason 7 freq 2452 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.648723 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.652559 wmi_event WMI_TLV_MGMT_RX_EVENTID len 336
+ +6.658779 wmi_event WMI_TLV_MGMT_RX_EVENTID len 348
+ +6.698237 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.698245 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.698247 log_dbg   scan event bss channel type 4 reason 7 freq 2452 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.701044 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.701048 log_dbg   scan event foreign channel type 8 reason 7 freq 2457 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.701051 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.711104 wmi_event WMI_TLV_MGMT_RX_EVENTID len 348
+ +6.750527 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.750534 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.750536 log_dbg   scan event bss channel type 4 reason 7 freq 2457 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.753323 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.753326 log_dbg   scan event foreign channel type 8 reason 7 freq 2462 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.753330 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.763231 wmi_event WMI_TLV_MGMT_RX_EVENTID len 328
+ +6.765871 wmi_event WMI_TLV_MGMT_RX_EVENTID len 348
+ +6.802812 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.802819 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.802821 log_dbg   scan event bss channel type 4 reason 7 freq 2462 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.802823 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.802824 log_dbg   scan event completed type 2 reason 0 freq 2462 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.802867 log_dbg   wmi tlv start scan
+ +6.802868 wmi_cmd   WMI_TLV_START_SCAN_CMDID len 472
+ +6.804306 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.804309 log_dbg   scan event started type 1 reason 7 freq 2462 req_id 40961 scan_id 40960 vdev_id 0 state starting (1)
+ +6.804314 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.804316 log_dbg   scan event bss channel type 4 reason 7 freq 2462 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.811210 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.811213 log_dbg   scan event foreign channel type 8 reason 7 freq 5180 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.811216 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.956861 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +6.956885 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.956887 log_dbg   scan event bss channel type 4 reason 7 freq 5180 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.959267 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +6.959269 log_dbg   scan event foreign channel type 8 reason 7 freq 5200 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +6.959322 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.109160 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.109167 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.109169 log_dbg   scan event bss channel type 4 reason 7 freq 5200 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.111655 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.111657 log_dbg   scan event foreign channel type 8 reason 7 freq 5220 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.111684 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.118236 wmi_event WMI_TLV_MGMT_RX_EVENTID len 504
+ +7.118944 wmi_event WMI_TLV_MGMT_RX_EVENTID len 504
+ +7.120171 wmi_event WMI_TLV_MGMT_RX_EVENTID len 504
+ +7.120888 wmi_event WMI_TLV_MGMT_RX_EVENTID len 504
+ +7.146569 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
+ +7.152679 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
+ +7.161397 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.161444 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.161446 log_dbg   scan event bss channel type 4 reason 7 freq 5220 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.163998 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.164001 log_dbg   scan event foreign channel type 8 reason 7 freq 5240 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.164054 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.313745 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.313750 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.313753 log_dbg   scan event bss channel type 4 reason 7 freq 5240 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.316479 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.316481 log_dbg   scan event foreign channel type 8 reason 7 freq 5260 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.316484 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.465990 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.466019 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.466021 log_dbg   scan event bss channel type 4 reason 7 freq 5260 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.468601 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.468603 log_dbg   scan event foreign channel type 8 reason 7 freq 5280 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.468660 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.618302 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.618309 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.618311 log_dbg   scan event bss channel type 4 reason 7 freq 5280 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.621401 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.621405 log_dbg   scan event foreign channel type 8 reason 7 freq 5300 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.621409 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.770847 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.770853 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.770855 log_dbg   scan event bss channel type 4 reason 7 freq 5300 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.773404 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.773406 log_dbg   scan event foreign channel type 8 reason 7 freq 5320 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.773410 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.923522 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +7.923528 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.923530 log_dbg   scan event bss channel type 4 reason 7 freq 5320 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.925967 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +7.925970 log_dbg   scan event foreign channel type 8 reason 7 freq 5500 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +7.925974 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.075547 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.075553 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.075555 log_dbg   scan event bss channel type 4 reason 7 freq 5500 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.078254 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.078258 log_dbg   scan event foreign channel type 8 reason 7 freq 5520 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.078275 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.227459 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.227491 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.227493 log_dbg   scan event bss channel type 4 reason 7 freq 5520 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.230007 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.230010 log_dbg   scan event foreign channel type 8 reason 7 freq 5540 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.230054 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.380414 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.380421 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.380423 log_dbg   scan event bss channel type 4 reason 7 freq 5540 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.382858 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.382861 log_dbg   scan event foreign channel type 8 reason 7 freq 5560 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.382865 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.532708 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.532715 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.532717 log_dbg   scan event bss channel type 4 reason 7 freq 5560 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.535127 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.535130 log_dbg   scan event foreign channel type 8 reason 7 freq 5580 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.535134 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.685032 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.685039 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.685042 log_dbg   scan event bss channel type 4 reason 7 freq 5580 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.687361 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.687364 log_dbg   scan event foreign channel type 8 reason 7 freq 5600 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.687368 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.837292 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.837299 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.837301 log_dbg   scan event bss channel type 4 reason 7 freq 5600 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.839644 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.839648 log_dbg   scan event foreign channel type 8 reason 7 freq 5620 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.839651 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.989588 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +8.989595 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.989597 log_dbg   scan event bss channel type 4 reason 7 freq 5620 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.992096 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +8.992100 log_dbg   scan event foreign channel type 8 reason 7 freq 5640 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +8.992103 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.141692 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.141700 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.141701 log_dbg   scan event bss channel type 4 reason 7 freq 5640 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.144364 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.144367 log_dbg   scan event foreign channel type 8 reason 7 freq 5660 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.144371 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.294148 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.294155 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.294157 log_dbg   scan event bss channel type 4 reason 7 freq 5660 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.296597 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.296600 log_dbg   scan event foreign channel type 8 reason 7 freq 5680 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.296604 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.446433 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.446439 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.446441 log_dbg   scan event bss channel type 4 reason 7 freq 5680 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.448773 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.448777 log_dbg   scan event foreign channel type 8 reason 7 freq 5700 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.448780 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.598748 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.598754 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.598756 log_dbg   scan event bss channel type 4 reason 7 freq 5700 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.601188 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.601191 log_dbg   scan event foreign channel type 8 reason 7 freq 5745 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.601195 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.638444 wmi_event WMI_TLV_MGMT_RX_EVENTID len 292
+ +9.650706 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.650713 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.650714 log_dbg   scan event bss channel type 4 reason 7 freq 5745 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.653470 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.653474 log_dbg   scan event foreign channel type 8 reason 7 freq 5765 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.653477 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.803062 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.803069 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.803071 log_dbg   scan event bss channel type 4 reason 7 freq 5765 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.805869 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.805872 log_dbg   scan event foreign channel type 8 reason 7 freq 5785 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.805876 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.955630 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
+ +9.955636 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.955638 log_dbg   scan event bss channel type 4 reason 7 freq 5785 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.957973 wmi_event WMI_TLV_SCAN_EVENTID len 32
+ +9.957976 log_dbg   scan event foreign channel type 8 reason 7 freq 5805 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
+ +9.957980 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
++10.107600 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
++10.107607 wmi_event WMI_TLV_SCAN_EVENTID len 32
++10.107609 log_dbg   scan event bss channel type 4 reason 7 freq 5805 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
++10.110272 wmi_event WMI_TLV_SCAN_EVENTID len 32
++10.110275 log_dbg   scan event foreign channel type 8 reason 7 freq 5825 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
++10.110279 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
++10.259510 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
++10.259559 wmi_event WMI_TLV_SCAN_EVENTID len 32
++10.259561 log_dbg   scan event bss channel type 4 reason 7 freq 5825 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
++10.262167 wmi_event WMI_TLV_SCAN_EVENTID len 32
++10.262169 log_dbg   scan event foreign channel type 8 reason 7 freq 5845 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
++10.262172 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
++10.412463 wmi_event WMI_TLV_CHAN_INFO_EVENTID len 92
++10.412469 wmi_event WMI_TLV_SCAN_EVENTID len 32
++10.412471 log_dbg   scan event bss channel type 4 reason 7 freq 5845 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
++10.412473 wmi_event WMI_TLV_SCAN_EVENTID len 32
++10.412475 log_dbg   scan event completed type 2 reason 0 freq 5845 req_id 40961 scan_id 40960 vdev_id 0 state running (2)
++10.421916 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
++10.432007 log_dbg   mac vdev 0 delete (remove interface)
++10.432010 log_dbg   wmi tlv vdev delete
++10.432011 wmi_cmd   WMI_TLV_VDEV_DELETE_CMDID len 12
++10.432022 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
++10.432590 log_dbg   mac create vdev 0 map d
++10.432591 log_dbg   mac vdev create 0 (add interface) type 2 subtype 0 bcnmode per-skb
++10.432593 log_dbg   wmi tlv vdev create
++10.432593 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
++10.432599 log_dbg   wmi tlv sta keepalive vdev 0 enabled 1 method 1 interval 0
++10.432599 wmi_cmd   WMI_TLV_STA_KEEPALIVE_CMDID len 44
++10.432603 log_dbg   wmi tlv vdev 0 set param 48 value 0x1
++10.432604 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.432605 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.433046 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.433053 log_dbg   wmi tlv vdev 0 set param 34 value 0x2
++10.433054 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.433055 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.433295 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.433300 log_dbg   wmi tlv set sta ps
++10.433300 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.433303 log_dbg   wmi tlv set sta ps
++10.433304 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.433305 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.433491 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.433494 log_dbg   wmi tlv set sta ps
++10.433494 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.433495 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.433647 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.433653 log_dbg   wmi tlv vdev 0 set param 1 value 0xffffffff
++10.433654 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.433658 log_dbg   mac vdev 0 recalc rts/cts prot 17
++10.433659 log_dbg   wmi tlv vdev 0 set param 44 value 0x11
++10.433660 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.433661 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.433846 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.433851 log_dbg   defer cts setup, vdev is not ready yet
++10.433852 log_dbg   mac vdev 0 slot_time 1
++10.433853 log_dbg   wmi tlv vdev 0 set param 7 value 0x1
++10.433853 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.433855 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.434065 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.434071 log_dbg   mac vdev 0 preamble 1n
++10.434072 log_dbg   wmi tlv vdev 0 set param 8 value 0x1
++10.434072 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.434076 log_dbg   wmi tlv vdev wmm conf
++10.434077 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.434078 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.434274 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.434278 log_dbg   wmi tlv set sta ps
++10.434278 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.434279 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.434510 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.434514 log_dbg   wmi tlv set sta ps
++10.434515 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.434542 log_dbg   wmi tlv set sta ps
++10.434542 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.434543 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.434726 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.434731 log_dbg   wmi tlv set sta ps
++10.434732 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.434733 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.435017 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.435023 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 3 prio 7 svc int 0 susp int -1 delay int -1
++10.435024 log_dbg   wmi tlv vdev sta uapsd auto trigger
++10.435025 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.435028 log_dbg   wmi tlv vdev wmm conf
++10.435029 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.435030 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.435278 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.435282 log_dbg   wmi tlv set sta ps
++10.435283 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.435284 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.435543 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.435548 log_dbg   wmi tlv set sta ps
++10.435548 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.435551 log_dbg   wmi tlv set sta ps
++10.435551 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.435552 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.435905 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.435911 log_dbg   wmi tlv set sta ps
++10.435911 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.435913 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.436215 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.436221 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 2 prio 5 svc int 0 susp int -1 delay int -1
++10.436221 log_dbg   wmi tlv vdev sta uapsd auto trigger
++10.436222 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.436225 log_dbg   wmi tlv vdev wmm conf
++10.436226 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.436227 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.436514 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.436544 log_dbg   wmi tlv set sta ps
++10.436544 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.436545 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.436928 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.436933 log_dbg   wmi tlv set sta ps
++10.436934 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.436937 log_dbg   wmi tlv set sta ps
++10.436937 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.436938 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.437219 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.437225 log_dbg   wmi tlv set sta ps
++10.437226 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.437227 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.437410 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.437414 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 1 prio 2 svc int 0 susp int -1 delay int -1
++10.437415 log_dbg   wmi tlv vdev sta uapsd auto trigger
++10.437415 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.437419 log_dbg   wmi tlv vdev wmm conf
++10.437419 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.437420 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.437667 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.437672 log_dbg   wmi tlv set sta ps
++10.437673 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.437674 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.438092 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.438098 log_dbg   wmi tlv set sta ps
++10.438098 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.438101 log_dbg   wmi tlv set sta ps
++10.438101 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.438103 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.438388 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.438391 log_dbg   wmi tlv set sta ps
++10.438392 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.438392 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.438653 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.438659 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 0 prio 0 svc int 0 susp int -1 delay int -1
++10.438660 log_dbg   wmi tlv vdev sta uapsd auto trigger
++10.438660 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.438746 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
++10.438996 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
++10.440307 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
++10.450407 log_dbg   mac chanctx add freq 5220 width 3 ptr 000000002a774d7f
++10.450408 log_dbg   mac monitor recalc started? 0 needed? 0 allowed? 1
++10.450410 log_dbg   mac chanctx change freq 5220 width 3 ptr 000000002a774d7f changed 10
++10.450411 log_dbg   mac chanctx assign ptr 000000002a774d7f vdev_id 0
++10.450412 log_dbg   mac vdev 0 start center_freq 5220 phymode 11ac-vht80
++10.450414 log_dbg   wmi tlv vdev start
++10.450415 wmi_cmd   WMI_TLV_VDEV_START_REQUEST_CMDID len 112
++10.501964 wmi_event WMI_TLV_VDEV_START_RESP_EVENTID len 44
++10.501965 log_dbg   WMI_VDEV_START_RESP_EVENTID
++10.502004 log_dbg   mac vdev 0 psmode disable
++10.502007 log_dbg   wmi tlv set psmode
++10.502008 wmi_cmd   WMI_TLV_STA_POWERSAVE_MODE_CMDID len 16
++10.502014 log_dbg   mac vdev 0 cts_protection 0
++10.502015 log_dbg   wmi tlv vdev 0 set param 26 value 0x0
++10.502016 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.502020 log_dbg   mac vdev_id 0 txpower 23
++10.502021 log_dbg   mac txpower 2g: 46, 5g: 46
++10.502022 log_dbg   wmi tlv pdev set param 3 value 0x2e
++10.502022 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.502024 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.502133 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.502140 log_dbg   wmi tlv pdev set param 4 value 0x2e
++10.502141 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.502142 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.502307 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.502316 log_dbg   wmi tlv vdev 0 set param 3 value 0x64
++10.502316 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.502320 log_dbg   mac vdev 0 beacon_interval 100
++10.502321 log_dbg   wmi tlv vdev 0 set param 25 value 0x3
++10.502321 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.502322 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.502812 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.502821 log_dbg   mac vdev 0 peer create <mac> (new sta) sta 1 / 32 peer 1 / 33
++10.502823 log_dbg   wmi tlv peer create
++10.502823 wmi_cmd   WMI_TLV_PEER_CREATE_CMDID len 24
++10.502825 wmi_cmd   WMI_TLV_PEER_CREATE_CMDID len 24
++10.502946 wmi_cmd   WMI_TLV_PEER_CREATE_CMDID len 24
++10.505688 wmi_event WMI_TLV_MGMT_RX_EVENTID len 108
++10.509801 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++10.509892 log_dbg   wmi tlv vdev wmm conf
++10.509893 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.509899 log_dbg   wmi tlv set sta ps
++10.509899 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.509902 log_dbg   wmi tlv set sta ps
++10.509902 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.509904 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510110 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510117 log_dbg   wmi tlv set sta ps
++10.510118 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510119 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510210 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510216 log_dbg   wmi tlv set sta ps
++10.510217 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510220 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 3 prio 7 svc int 0 susp int -1 delay int -1
++10.510221 log_dbg   wmi tlv vdev sta uapsd auto trigger
++10.510221 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.510223 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.510297 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.510304 log_dbg   wmi tlv vdev wmm conf
++10.510305 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.510306 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.510397 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.510401 log_dbg   wmi tlv set sta ps
++10.510401 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510404 log_dbg   wmi tlv set sta ps
++10.510404 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510405 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510594 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510600 log_dbg   wmi tlv set sta ps
++10.510601 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510602 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510711 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510718 log_dbg   wmi tlv set sta ps
++10.510718 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510722 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 2 prio 5 svc int 0 susp int -1 delay int -1
++10.510723 log_dbg   wmi tlv vdev sta uapsd auto trigger
++10.510723 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.510725 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.510822 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.510829 log_dbg   wmi tlv vdev wmm conf
++10.510829 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.510830 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.510936 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.510942 log_dbg   wmi tlv set sta ps
++10.510942 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510945 log_dbg   wmi tlv set sta ps
++10.510946 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.510947 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511097 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511103 log_dbg   wmi tlv set sta ps
++10.511103 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511104 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511205 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511211 log_dbg   wmi tlv set sta ps
++10.511211 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511215 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 1 prio 2 svc int 0 susp int -1 delay int -1
++10.511216 log_dbg   wmi tlv vdev sta uapsd auto trigger
++10.511216 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.511217 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.511275 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.511279 log_dbg   wmi tlv vdev wmm conf
++10.511279 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.511280 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.511345 wmi_cmd   WMI_TLV_VDEV_SET_WMM_PARAMS_CMDID len 124
++10.511348 log_dbg   wmi tlv set sta ps
++10.511348 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511351 log_dbg   wmi tlv set sta ps
++10.511351 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511352 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511478 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511481 log_dbg   wmi tlv set sta ps
++10.511482 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511483 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511563 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511566 log_dbg   wmi tlv set sta ps
++10.511566 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.511583 log_dbg   wmi tlv vdev sta uapsd auto trigger ac 0 prio 0 svc int 0 susp int -1 delay int -1
++10.511584 log_dbg   wmi tlv vdev sta uapsd auto trigger
++10.511584 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.511585 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.511632 wmi_cmd   WMI_TLV_STA_UAPSD_AUTO_TRIG_CMDID len 52
++10.511638 log_dbg   mac vdev 0 slot_time 2
++10.511639 log_dbg   wmi tlv vdev 0 set param 7 value 0x2
++10.511639 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.511640 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.511707 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.511710 log_dbg   mac vdev 0 assoc bssid <mac> aid 0
++10.511713 log_dbg   ath10k_peer_assoc_h_crypto: rsn ie found
++10.511714 log_dbg   mac ht peer <mac> mcs cnt 16 nss 2
++10.511715 log_dbg   mac peer <mac> phymode 11ac-vht80
++10.511716 log_dbg   mac vht peer <mac> max_mpdu 1048575 flags 0x601b005 peer_rx_nss_override 0x0
++10.511717 log_dbg   mac peer <mac> qos 1
++10.511718 log_dbg   wmi tlv peer assoc
++10.511718 wmi_cmd   WMI_TLV_PEER_ASSOC_CMDID len 136
++10.511721 log_dbg   wmi tlv vdev 0 peer <mac> set param 1 value 0x0
++10.511722 wmi_cmd   WMI_TLV_PEER_SET_PARAM_CMDID len 28
++10.511723 wmi_cmd   WMI_TLV_PEER_SET_PARAM_CMDID len 28
++10.511786 wmi_cmd   WMI_TLV_PEER_SET_PARAM_CMDID len 28
++10.511789 log_dbg   mac vdev 0 up (associated) bssid <mac> aid 5
++10.511790 log_dbg   wmi tlv pdev set param 139 value 0x1
++10.511790 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.511791 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.512354 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.512357 log_dbg   wmi tlv vdev up
++10.512357 wmi_cmd   WMI_TLV_VDEV_UP_CMDID len 24
++10.512358 wmi_cmd   WMI_TLV_VDEV_UP_CMDID len 24
++10.512412 wmi_cmd   WMI_TLV_VDEV_UP_CMDID len 24
++10.512416 log_dbg   mac txpower 2g: 46, 5g: 46
++10.512417 log_dbg   wmi tlv pdev set param 3 value 0x2e
++10.512418 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.512419 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.512546 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.512550 log_dbg   wmi tlv pdev set param 4 value 0x2e
++10.512550 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.512551 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.512832 wmi_cmd   WMI_TLV_PDEV_SET_PARAM_CMDID len 20
++10.512835 log_dbg   wmi tlv vdev 0 peer <mac> set param 255 value 0x1
++10.512836 wmi_cmd   WMI_TLV_PEER_SET_PARAM_CMDID len 28
++10.512836 wmi_cmd   WMI_TLV_PEER_SET_PARAM_CMDID len 28
++10.512931 wmi_cmd   WMI_TLV_PEER_SET_PARAM_CMDID len 28
++10.512937 log_dbg   mac monitor recalc started? 0 needed? 1 allowed? 1
++10.512938 log_dbg   wmi tlv vdev create
++10.512938 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
++10.512940 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
++10.513058 wmi_cmd   WMI_TLV_VDEV_CREATE_CMDID len 28
++10.513064 log_dbg   mac monitor vdev 2 created
++10.513067 log_dbg   wmi tlv vdev start
++10.513067 wmi_cmd   WMI_TLV_VDEV_START_REQUEST_CMDID len 112
++10.526196 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++10.532019 wmi_event WMI_TLV_VDEV_START_RESP_EVENTID len 44
++10.532019 log_dbg   WMI_VDEV_START_RESP_EVENTID
++10.532025 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++10.532058 log_dbg   wmi tlv vdev up
++10.532059 wmi_cmd   WMI_TLV_VDEV_UP_CMDID len 24
++10.532066 log_dbg   mac monitor vdev 2 started
++10.532066 log_dbg   mac monitor started
++10.532069 log_dbg   mac chanctx change freq 5220 width 3 ptr 000000002a774d7f changed 2
++10.532165 log_dbg   mac channel [0/37] freq 2412 maxpower 60 regpower 60 antenna 0 mode 1
++10.532166 log_dbg   mac channel [1/37] freq 2417 maxpower 60 regpower 60 antenna 0 mode 1
++10.532168 log_dbg   mac channel [2/37] freq 2422 maxpower 60 regpower 60 antenna 0 mode 1
++10.532168 log_dbg   mac channel [3/37] freq 2427 maxpower 60 regpower 60 antenna 0 mode 1
++10.532169 log_dbg   mac channel [4/37] freq 2432 maxpower 60 regpower 60 antenna 0 mode 1
++10.532170 log_dbg   mac channel [5/37] freq 2437 maxpower 60 regpower 60 antenna 0 mode 1
++10.532171 log_dbg   mac channel [6/37] freq 2442 maxpower 60 regpower 60 antenna 0 mode 1
++10.532172 log_dbg   mac channel [7/37] freq 2447 maxpower 60 regpower 60 antenna 0 mode 1
++10.532173 log_dbg   mac channel [8/37] freq 2452 maxpower 60 regpower 60 antenna 0 mode 1
++10.532174 log_dbg   mac channel [9/37] freq 2457 maxpower 60 regpower 60 antenna 0 mode 1
++10.532175 log_dbg   mac channel [10/37] freq 2462 maxpower 60 regpower 60 antenna 0 mode 1
++10.532176 log_dbg   mac channel [11/37] freq 5180 maxpower 46 regpower 46 antenna 0 mode 0
++10.532177 log_dbg   mac channel [12/37] freq 5200 maxpower 46 regpower 46 antenna 0 mode 0
++10.532178 log_dbg   mac channel [13/37] freq 5220 maxpower 46 regpower 46 antenna 0 mode 0
++10.532179 log_dbg   mac channel [14/37] freq 5240 maxpower 46 regpower 46 antenna 0 mode 0
++10.532180 log_dbg   mac channel [15/37] freq 5260 maxpower 48 regpower 48 antenna 0 mode 0
++10.532181 log_dbg   mac channel [16/37] freq 5280 maxpower 48 regpower 48 antenna 0 mode 0
++10.532182 log_dbg   mac channel [17/37] freq 5300 maxpower 48 regpower 48 antenna 0 mode 0
++10.532183 log_dbg   mac channel [18/37] freq 5320 maxpower 48 regpower 48 antenna 0 mode 0
++10.532184 log_dbg   mac channel [19/37] freq 5500 maxpower 48 regpower 48 antenna 0 mode 0
++10.532185 log_dbg   mac channel [20/37] freq 5520 maxpower 48 regpower 48 antenna 0 mode 0
++10.532186 log_dbg   mac channel [21/37] freq 5540 maxpower 48 regpower 48 antenna 0 mode 0
++10.532187 log_dbg   mac channel [22/37] freq 5560 maxpower 48 regpower 48 antenna 0 mode 0
++10.532188 log_dbg   mac channel [23/37] freq 5580 maxpower 48 regpower 48 antenna 0 mode 0
++10.532189 log_dbg   mac channel [24/37] freq 5600 maxpower 48 regpower 48 antenna 0 mode 0
++10.532190 log_dbg   mac channel [25/37] freq 5620 maxpower 48 regpower 48 antenna 0 mode 0
++10.532190 log_dbg   mac channel [26/37] freq 5640 maxpower 48 regpower 48 antenna 0 mode 0
++10.532191 log_dbg   mac channel [27/37] freq 5660 maxpower 48 regpower 48 antenna 0 mode 0
++10.532192 log_dbg   mac channel [28/37] freq 5680 maxpower 48 regpower 48 antenna 0 mode 0
++10.532193 log_dbg   mac channel [29/37] freq 5700 maxpower 48 regpower 48 antenna 0 mode 0
++10.532194 log_dbg   mac channel [30/37] freq 5720 maxpower 48 regpower 48 antenna 0 mode 0
++10.532195 log_dbg   mac channel [31/37] freq 5745 maxpower 60 regpower 60 antenna 0 mode 0
++10.532196 log_dbg   mac channel [32/37] freq 5765 maxpower 60 regpower 60 antenna 0 mode 0
++10.532196 log_dbg   mac channel [33/37] freq 5785 maxpower 60 regpower 60 antenna 0 mode 0
++10.532197 log_dbg   mac channel [34/37] freq 5805 maxpower 60 regpower 60 antenna 0 mode 0
++10.532198 log_dbg   mac channel [35/37] freq 5825 maxpower 60 regpower 60 antenna 0 mode 0
++10.532199 log_dbg   mac channel [36/37] freq 5845 maxpower 54 regpower 54 antenna 0 mode 0
++10.532202 log_dbg   wmi tlv scan chan list
++10.532202 wmi_cmd   WMI_TLV_SCAN_CHAN_LIST_CMDID len 1052
++10.532209 log_dbg   wmi tlv pdev set rd
++10.532209 wmi_cmd   WMI_TLV_PDEV_SET_REGDOMAIN_CMDID len 32
++10.550869 log_dbg   wmi tlv vdev install key
++10.550883 wmi_cmd   WMI_TLV_VDEV_INSTALL_KEY_CMDID len 120
++10.551081 log_dbg   sec ind peer_id 155 unicast 1 type 6
++10.551112 log_dbg   wmi tlv vdev 0 peer <mac> set param 3 value 0x1
++10.551114 wmi_cmd   WMI_TLV_PEER_SET_PARAM_CMDID len 28
++10.551115 wmi_cmd   WMI_TLV_PEER_SET_PARAM_CMDID len 28
++10.551209 wmi_event WMI_TLV_VDEV_INSTALL_KEY_COMPLETE_EVENTID len 28
++10.551210 log_dbg   WMI_VDEV_INSTALL_KEY_COMPLETE_EVENTID
++10.551236 wmi_cmd   WMI_TLV_PEER_SET_PARAM_CMDID len 28
++10.551393 wmi_event WMI_TLV_PEER_STATE_EVENTID len 20
++10.551394 log_dbg   Unknown eventid: 24581
++10.558857 log_dbg   wmi tlv vdev install key
++10.558858 wmi_cmd   WMI_TLV_VDEV_INSTALL_KEY_CMDID len 120
++10.559158 log_dbg   sec ind peer_id 155 unicast 0 type 6
++10.559185 wmi_event WMI_TLV_VDEV_INSTALL_KEY_COMPLETE_EVENTID len 28
++10.559185 log_dbg   WMI_VDEV_INSTALL_KEY_COMPLETE_EVENTID
++10.560710 log_warn  invalid vht params rate 60 100kbps nss 2 mcs 9
++10.561876 log_dbg   mac monitor recalc started? 1 needed? 1 allowed? 1
++10.562582 log_dbg   mac monitor recalc started? 1 needed? 1 allowed? 1
++10.577303 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++10.577345 log_dbg   wmi tlv set sta ps
++10.577346 wmi_cmd   WMI_TLV_STA_POWERSAVE_PARAM_CMDID len 20
++10.577350 log_dbg   mac vdev 0 psmode enable
++10.577351 log_dbg   wmi tlv set psmode
++10.577351 wmi_cmd   WMI_TLV_STA_POWERSAVE_MODE_CMDID len 16
++10.577428 log_dbg   mac vdev 0 dtim_period 1
++10.577429 log_dbg   wmi tlv vdev 0 set param 13 value 0x1
++10.577430 wmi_cmd   WMI_TLV_VDEV_SET_PARAM_CMDID len 20
++10.628939 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++10.634818 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++10.679737 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++10.682186 wmi_event WMI_TLV_TX_PAUSE_EVENTID len 24
++10.682187 log_dbg   wmi tlv tx pause pause_id 1 action 0 vdev_map 0x00000001 peer_id 0 tid_map 0x00000000
++10.685811 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++10.716415 wmi_event WMI_TLV_TX_PAUSE_EVENTID len 24
++10.716417 log_dbg   wmi tlv tx pause pause_id 1 action 1 vdev_map 0x00000001 peer_id 0 tid_map 0x00000000
++10.716422 wmi_event WMI_TLV_TX_PAUSE_EVENTID len 24
++10.716423 log_dbg   wmi tlv tx pause pause_id 1 action 0 vdev_map 0x00000001 peer_id 0 tid_map 0x00000000
++10.716425 wmi_event WMI_TLV_TX_PAUSE_EVENTID len 24
++10.716426 log_dbg   wmi tlv tx pause pause_id 1 action 0 vdev_map 0x00000004 peer_id 0 tid_map 0x00000000
++10.722679 wmi_event WMI_TLV_TX_PAUSE_EVENTID len 24
++10.722681 log_dbg   wmi tlv tx pause pause_id 1 action 1 vdev_map 0x00000001 peer_id 0 tid_map 0x00000000
++10.722695 wmi_event WMI_TLV_TX_PAUSE_EVENTID len 24
++10.722696 log_dbg   wmi tlv tx pause pause_id 1 action 1 vdev_map 0x00000004 peer_id 0 tid_map 0x00000000
++10.730647 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++10.781838 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++10.787974 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++10.833003 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++10.839155 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++10.884471 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++10.886162 log_warn  invalid vht params rate 60 100kbps nss 2 mcs 9
++10.890593 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++10.935542 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++10.941642 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++10.987303 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++10.993392 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.038447 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.044589 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.089704 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.095405 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.140555 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.147011 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.192091 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.198370 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.243271 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.249400 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.293904 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.300102 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.345653 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.351797 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.396895 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.403002 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.448023 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.454197 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.499100 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.505104 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.550456 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.556592 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.601467 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.652856 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.658721 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.704097 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.722050 log_dbg   mac monitor recalc started? 1 needed? 1 allowed? 1
++11.722052 log_dbg   mac monitor recalc started? 1 needed? 1 allowed? 1
++11.755130 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.760771 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.806301 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.812608 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.857043 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.863173 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.908491 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++11.914612 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.959401 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++11.965594 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.011320 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.013124 log_dbg   mac monitor recalc started? 1 needed? 1 allowed? 1
++12.016798 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.062463 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.067997 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.113272 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.119812 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.164439 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.170744 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.215483 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.221848 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.267266 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.272840 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.317884 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.324107 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.369656 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.375810 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.420673 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.426750 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.471708 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.477843 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.522856 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.529419 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.573849 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.580612 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.625295 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.631432 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.676984 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.683016 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.727759 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.734223 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.779275 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.785417 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.830483 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.836630 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.859589 log_dbg   mac monitor recalc started? 1 needed? 1 allowed? 1
++12.881509 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.888788 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.932570 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++12.938662 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.983708 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++12.989871 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.035341 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.040849 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.086486 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.092452 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.137090 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.143269 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.188727 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.194707 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.240145 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.245845 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.290673 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.296763 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.342115 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.348157 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.393687 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.399284 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.444367 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.450669 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.496112 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.501875 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.546886 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.552813 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.597892 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.604180 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.649750 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.655842 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.700585 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.706754 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.751851 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.757831 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.803073 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.809435 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.853935 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.860027 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.905698 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++13.911841 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.956658 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++13.962676 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.008099 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.014241 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.058888 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.064813 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.109892 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.116164 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.161798 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.167457 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.212899 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.218745 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.263586 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.269664 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.315303 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.321126 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.365934 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.372221 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.381164 wmi_event WMI_TLV_MGMT_RX_EVENTID len 700
++14.417703 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.423844 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.469023 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.474763 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.519895 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.526245 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.570747 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.622376 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.628367 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.673769 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.679468 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.725008 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.730908 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.775757 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.781825 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.827331 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.878173 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.929712 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++14.935444 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.980295 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++14.986404 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.031770 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.037878 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.082832 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.089190 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.133901 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.140545 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.185139 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.236602 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.242696 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.288197 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.339320 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.344816 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.390469 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.441084 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.447782 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.492980 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.544125 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.550263 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.594709 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.600823 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.645956 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.652209 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.697290 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.748709 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.754762 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.800098 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.805819 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.851258 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.857473 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.902379 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++15.908604 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.953782 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++15.959645 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.004321 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.010421 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.055480 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.061610 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.106710 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.157891 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.164015 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.209403 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.260700 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.266464 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.311803 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.363343 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.369486 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.414653 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.420210 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.465744 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.471498 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.516322 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.522587 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.567843 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.574286 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.619326 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.624956 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.670544 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.676686 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.721864 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.727647 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.773053 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.823967 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.829830 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.875086 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.880828 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.926394 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++16.977762 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++16.983847 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.029015 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.034730 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.080151 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.086052 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.130855 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.137324 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.182487 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.188503 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.233821 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.239538 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.284954 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.290786 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.335836 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.341836 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.387372 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.393191 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.438413 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.445296 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.489700 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.540914 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.546538 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.591844 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.598305 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.642871 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.648916 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.694244 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.700783 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.745211 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.751345 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.797047 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.802818 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.847725 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.853854 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.899364 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++17.905506 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.950062 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++17.956306 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.001688 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.053045 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.058855 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.104166 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.110211 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.155446 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.161132 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.206574 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.212403 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.257163 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.263530 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.309009 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.315008 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.359883 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.365830 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.411197 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.417517 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.462171 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.468521 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.513461 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.564678 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.570762 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.616178 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.667185 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.673156 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.718532 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.724618 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.769501 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.775624 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.820908 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.826773 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.871955 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.923630 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++18.974646 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++18.980436 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.025805 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.031928 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.076719 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.082803 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.128205 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.134328 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.178793 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.184905 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.229958 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.236230 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.281821 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.287296 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.332993 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.338817 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.383840 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.389816 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.435383 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.441409 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.486644 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.492257 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.537559 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.543523 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.589036 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.594746 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.640168 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.646005 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.690890 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.697303 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.742595 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.748735 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.793486 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.799315 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.844766 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.850848 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.895981 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.901765 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.947400 wmi_event WMI_TLV_MGMT_RX_EVENTID len 416
++19.953544 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408
++19.998431 wmi_event WMI_TLV_MGMT_RX_EVENTID len 408

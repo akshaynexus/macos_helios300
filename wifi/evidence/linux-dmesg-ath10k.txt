@@ -1,0 +1,21 @@
+== dmesg ath10k
+[    3.905232] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    4.640071] ath10k_pci 0000:02:00.0: pci irq msi oper_irq_mode 2 irq_mode 0 reset_mode 0
+[    4.885286] ath10k_pci 0000:02:00.0: qca6174 hw3.2 target 0x05030000 chip_id 0x00340aff sub 11ad:0807
+[    4.885307] ath10k_pci 0000:02:00.0: kconfig debug 1 debugfs 1 tracing 1 dfs 0 testmode 0
+[    4.885544] ath10k_pci 0000:02:00.0: firmware ver WLAN.RM.4.4.1-00309- api 6 features wowlan,ignore-otp,mfp crc32 0793bcf2
+[    4.957797] ath10k_pci 0000:02:00.0: board_file api 2 bmi_id N/A crc32 d2863f91
+[    5.049913] ath10k_pci 0000:02:00.0: htt-ver 3.87 wmi-op 4 htt-op 3 cal otp max-sta 32 raw 0 hwcrypto 1
+[    5.107971] ath: EEPROM regdomain: 0x6c
+[    5.107987] ath: EEPROM indicates we should expect a direct regpair map
+[    5.107989] ath: Country alpha2 being used: 00
+[    5.107990] ath: Regpair used: 0x6c
+[   11.048245] ath: EEPROM regdomain: 0x8348
+[   11.048251] ath: EEPROM indicates we should expect a country code
+[   11.048256] ath: doing EEPROM country->regdmn map search
+[   11.048260] ath: country maps to regdmn code: 0x3a
+[   11.048265] ath: Country alpha2 being used: US
+[   11.048269] ath: Regpair used: 0x3a
+[   11.048273] ath: regdomain 0x8348 dynamically updated by country element
+[   11.114120] ath10k_pci 0000:02:00.0: invalid vht params rate 60 100kbps nss 2 mcs 9
+[   11.339622] ath10k_pci 0000:02:00.0: invalid vht params rate 60 100kbps nss 2 mcs 9
