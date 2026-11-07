@@ -14,7 +14,7 @@ BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$ROOT/kext/
 
 [[ "$(uname -s)" == Darwin ]] || { echo "error: requires macOS/Xcode" >&2; exit 2; }
 [[ -f "$SDK_ROOT/Library/x86_64/libkmod.a" ]] || { echo "error: MacKernelSDK missing at $SDK_ROOT" >&2; exit 2; }
-[[ -f "$GEN/qca_rome_firmware.h" ]] || python3 "$ROOT/scripts/gen_firmware_header.py" "$GEN/qca_rome_firmware.h"
+[[ -f "$GEN/qca_rome_firmware.h" ]] || python3 -I "$ROOT/scripts/gen_firmware_header.py" "$GEN/qca_rome_firmware.h" --cache "$ROOT/build/firmware-cache"
 
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
 CLANG="$(xcrun --find clang)"
@@ -34,6 +34,7 @@ COMMON=(
 "$CLANGXX" "${COMMON[@]}" -std=gnu++17 -fapple-kext -nostdinc++ \
   -c "$ROOT/kext/QCARomePatchRAM/QCARomePatchRAM.cpp" -o "$OBJ/QCARomePatchRAM.o"
 "$CLANG" "${COMMON[@]}" -std=gnu11 -c "$ROOT/src/core/qca_rome.c" -o "$OBJ/qca_rome.o"
+"$CLANG" "${COMMON[@]}" -std=gnu11 -c "$ROOT/src/core/qca_lifecycle.c" -o "$OBJ/qca_lifecycle.o"
 "$CLANG" "${COMMON[@]}" -std=gnu11 \
   -DQCAROME_BUNDLE_ID="\"$BUNDLE_ID\"" -DQCAROME_VERSION="\"$VERSION\"" \
   -c "$ROOT/kext/QCARomePatchRAM/kmod_info.c" -o "$OBJ/kmod_info.o"
@@ -43,6 +44,8 @@ COMMON=(
   "$OBJ"/*.o -lkmod -o "$BIN"
 
 cp "$ROOT/kext/QCARomePatchRAM/Info.plist" "$BUNDLE/Contents/Info.plist"
+mkdir -p "$BUNDLE/Contents/Resources"
+cp "$ROOT/firmware/LICENSE.QualcommAtheros_ath10k" "$ROOT/firmware/NOTICE.qca" "$ROOT/LICENSE" "$BUNDLE/Contents/Resources/"
 chmod -R u+rwX,go+rX "$BUNDLE"
 
 file "$BIN"

@@ -1,0 +1,7 @@
+# tools/kpi-audit.py allowlist: IOUSBHostFamily imports must be declared in
+# the macOS 26.5 SDK headers of the family (class + method name).
+hdr com.apple.iokit.IOUSBHostFamily IOKit/usb/IOUSBHostDevice.h
+hdr com.apple.iokit.IOUSBHostFamily IOKit/usb/IOUSBHostInterface.h
+hdr com.apple.iokit.IOUSBHostFamily IOKit/usb/IOUSBHostPipe.h
+hdr com.apple.iokit.IOUSBHostFamily IOKit/usb/IOUSBHostIOSource.h
+hdr com.apple.iokit.IOUSBHostFamily IOKit/usb/StandardUSB.h

@@ -1,19 +1,40 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// QCARomePatchRAM: one-shot firmware uploader for Lite-On 04ca:3016
-// (QCA6174A-5 / Qualcomm Rome 3.2 USB Bluetooth).
+// QCARomePatchRAM: resident firmware uploader for Lite-On 04ca:3016
+// (QCA6174A / Qualcomm Rome 3.2 USB Bluetooth) on macOS 12+ (target: 26).
 //
-// Lifecycle (modelled on acidanthera/BrcmPatchRAM3, IOUSBHostDevice API):
-//   probe  : verify VID/PID, raise score. No device I/O.
-//   start  : open IOUSBHostDevice, ensure configured, open interface 0,
-//            copy bulk-OUT pipe 0x02, run the portable qca_rome state machine,
-//            then close everything and return false so this object is
-//            detached. The personality uses its own IOMatchCategory, so Apple
-//            transports in other categories are never blocked; after closing
-//            we re-register the device/interface to re-trigger matching.
+// Originally duckducktw/qca-rome-bt-macos (one-shot uploader); reworked for
+// kexts/bluetooth in macos_helios300 (see UPSTREAM.md).
 //
-// Boot args:  -qcarpoff   skip entirely
-//             -qcarpprobe read-only probe (GET_VERSION + CHECK_STATUS)
+// Lifecycle (model: acidanthera/BrcmPatchRAM3, IOUSBHostDevice API):
+//   probe   VID/PID check, no device I/O.
+//   start   stays attached in its own IOMatchCategory (other drivers and the
+//           userspace Bluetooth stack can still use the device), joins the
+//           power tree, and schedules a setup run on its own workloop.
+//   setup   open the device, make sure it is configured, run the portable
+//           qca_rome state machine (it downloads only what CHECK_STATUS says
+//           is missing; the bulk pipe is opened only if a download is
+//           needed), close everything. On success rename the device to
+//           "Bluetooth USB Host Controller" (macOS 12+, as
+//           IntelBluetoothFirmware does) and re-register it so bluetoothd
+//           (patched by BlueToolFixup) picks it up.
+//   wake    setPowerState(on) after an off: run the setup again 800 ms later
+//           (four control reads if the chip kept its patch; a full download
+//           if it lost power without re-enumerating).
+//   retry   transient USB failures: up to 4 attempts, 250/500/1000 ms apart;
+//           again on every wake. Permanent errors (wrong chip/firmware) stop.
+//   unplug  willTerminate aborts outstanding control requests and waits for a
+//           run in progress; a re-enumerated device gets a new instance.
+// Decisions live in src/core/qca_lifecycle.c (host-tested).
+//
+// No Apple transport personality is injected: on macOS 12+ the USB HCI
+// transport is bluetoothd in userspace (BlueToolFixup patches it); the
+// kernel transport classes the old BrcmBluetoothInjector matched are
+// macOS <= 11 only. See README.md.
+//
+// Boot args:  -qcarpoff     do not attach
+//             -qcarpprobe   read-only: GET_VERSION + CHECK_STATUS, no writes
+//             -qcarpnoname  do not rename the device (diagnostics)
 #include "QCARomePatchRAM.hpp"
 
 #include <IOKit/IOLib.h>
@@ -26,15 +47,17 @@
 
 #define LOG(fmt, ...) IOLog("QCARomePatchRAM: " fmt "\n", ##__VA_ARGS__)
 
-// Set on the IOUSBHostDevice after one attempt. Prevents a match loop when we
-// re-register the device so Apple's transport can match. A real re-enumeration
-// (replug, sleep/wake power loss) creates a new IOUSBHostDevice without it.
-#define kQCAAttemptedKey "QCARomePatchRAM-Attempted"
-
 #define super IOService
 OSDefineMetaClassAndStructors(QCARomePatchRAM, IOService)
 
 namespace {
+
+enum { kPowerOff = 0, kPowerOn = 1, kPowerStates = 2 };
+
+IOPMPowerState gPowerStates[kPowerStates] = {
+    {kIOPMPowerStateVersion1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {kIOPMPowerStateVersion1, kIOPMPowerOn, kIOPMPowerOn, kIOPMPowerOn, 0, 0, 0, 0, 0, 0, 0, 0},
+};
 
 int trCtrlIn(void *ctx, uint8_t req, void *buf, uint16_t len, uint32_t *actual, uint32_t to)
 {
@@ -72,28 +95,32 @@ bool bootFlag(const char *name)
     return PE_parse_boot_argn(name, dummy, sizeof(dummy));
 }
 
+IOReturn gatedEventAction(OSObject *owner, void *arg0, void *, void *, void *)
+{
+    static_cast<QCARomePatchRAM *>(owner)->gatedEvent(
+        static_cast<qca_life_event>(reinterpret_cast<uintptr_t>(arg0)));
+    return kIOReturnSuccess;
+}
+
+void timerAction(OSObject *owner, IOTimerEventSource *)
+{
+    static_cast<QCARomePatchRAM *>(owner)->timerFired();
+}
+
 } // namespace
 
 IOService *QCARomePatchRAM::probe(IOService *provider, SInt32 *score)
 {
     IOUSBHostDevice *dev = OSDynamicCast(IOUSBHostDevice, provider);
-    if (!dev) {
-        LOG("probe: provider is not IOUSBHostDevice");
+    if (!dev)
         return nullptr;
-    }
     const StandardUSB::DeviceDescriptor *dd = dev->getDeviceDescriptor();
-    if (!dd) {
-        LOG("probe: no device descriptor");
+    if (!dd)
         return nullptr;
-    }
     uint16_t vid = USBToHost16(dd->idVendor);
     uint16_t pid = USBToHost16(dd->idProduct);
     if (vid != QCAROME_VENDOR_ID || pid != QCAROME_PRODUCT_ID) {
         LOG("probe: unexpected device %04x:%04x, declining", vid, pid);
-        return nullptr;
-    }
-    if (dev->getProperty(kQCAAttemptedKey)) {
-        // Already handled this device instance; stay out of the way.
         return nullptr;
     }
     if (bootFlag("-qcarpoff")) {
@@ -101,112 +128,223 @@ IOService *QCARomePatchRAM::probe(IOService *provider, SInt32 *score)
         return nullptr;
     }
     LOG("probe: %04x:%04x on Darwin %d.%d", vid, pid, version_major, version_minor);
-    IOService *ret = super::probe(provider, score);
-    if (score)
-        *score = 4000;
-    return ret;
+    return super::probe(provider, score);
 }
 
-bool QCARomePatchRAM::openDeviceAndInterface(IOUSBHostDevice *dev, uint8_t *configValueOut,
-                                             bool *weConfigured)
+bool QCARomePatchRAM::start(IOService *provider)
 {
-    *weConfigured = false;
-    if (!dev->open(this)) {
-        LOG("could not open IOUSBHostDevice (already owned?)");
+    IOUSBHostDevice *dev = OSDynamicCast(IOUSBHostDevice, provider);
+    if (!dev || !super::start(provider))
+        return false;
+
+    fDevice = dev;
+    fDevice->retain();
+    qca_life_init(&fLife);
+
+    fWorkLoop = IOWorkLoop::workLoop();
+    fTimer = fWorkLoop ? IOTimerEventSource::timerEventSource(this, timerAction) : nullptr;
+    if (!fTimer || fWorkLoop->addEventSource(fTimer) != kIOReturnSuccess) {
+        LOG("start: cannot create workloop/timer");
+        OSSafeReleaseNULL(fTimer);
+        OSSafeReleaseNULL(fWorkLoop);
+        OSSafeReleaseNULL(fDevice);
+        super::stop(provider);
+        return false;
+    }
+
+    PMinit();
+    registerPowerDriver(this, gPowerStates, kPowerStates);
+    provider->joinPMtree(this);
+    fPMStarted = true;
+
+    fWorkLoop->runAction(gatedEventAction, this, reinterpret_cast<void *>(QCA_EV_START));
+    registerService();
+    return true;
+}
+
+bool QCARomePatchRAM::willTerminate(IOService *provider, IOOptionBits options)
+{
+    // Unplug or unload: fail every outstanding and future transfer fast, then
+    // wait (gate) for a run in progress to finish before stop() tears down.
+    fTerminating = true;
+    if (fDevice)
+        fDevice->abortDeviceRequests(this, IOUSBHostIOSource::kAbortAsynchronous, kIOReturnAborted);
+    if (fWorkLoop)
+        fWorkLoop->runAction(gatedEventAction, this, reinterpret_cast<void *>(QCA_EV_TERMINATE));
+    return super::willTerminate(provider, options);
+}
+
+void QCARomePatchRAM::stop(IOService *provider)
+{
+    fTerminating = true;
+    if (fWorkLoop) {
+        fWorkLoop->runAction(gatedEventAction, this, reinterpret_cast<void *>(QCA_EV_TERMINATE));
+        if (fTimer) {
+            fTimer->cancelTimeout();
+            fWorkLoop->removeEventSource(fTimer); // waits for a running action
+        }
+    }
+    OSSafeReleaseNULL(fTimer);
+    OSSafeReleaseNULL(fWorkLoop);
+    if (fPMStarted) {
+        PMstop();
+        fPMStarted = false;
+    }
+    closeAll();
+    OSSafeReleaseNULL(fDevice);
+    super::stop(provider);
+}
+
+IOReturn QCARomePatchRAM::setPowerState(unsigned long state, IOService *)
+{
+    if (fWorkLoop && !fTerminating)
+        fWorkLoop->runAction(gatedEventAction, this,
+                             reinterpret_cast<void *>(state == kPowerOff ? QCA_EV_POWER_OFF
+                                                                         : QCA_EV_POWER_ON));
+    return IOPMAckImplied;
+}
+
+void QCARomePatchRAM::gatedEvent(qca_life_event ev)
+{
+    if (ev == QCA_EV_POWER_OFF || ev == QCA_EV_POWER_ON)
+        LOG("power %s (state %s)", ev == QCA_EV_POWER_ON ? "on" : "off",
+            qca_life_state_name(fLife.state));
+    apply(qca_life_on_event(&fLife, ev));
+    publishState();
+}
+
+void QCARomePatchRAM::timerFired()
+{
+    apply(qca_life_on_event(&fLife, QCA_EV_TIMER));
+    publishState();
+}
+
+void QCARomePatchRAM::apply(qca_life_action a)
+{
+    // Runs on fWorkLoop with the gate held. A run is synchronous here: the
+    // workloop is ours alone, so blocking USB calls do not stall the USB
+    // family or the power-management thread beyond one run (~0.5 s).
+    while (true) {
+        if (a.cancel_timer && fTimer)
+            fTimer->cancelTimeout();
+        if (a.arm_timer_ms && fTimer && !fTerminating)
+            fTimer->setTimeoutMS(a.arm_timer_ms);
+        if (!a.run_setup)
+            return;
+        qca_err e = runSetup();
+        a = qca_life_on_result(&fLife, e);
+        if (fLife.state == QCA_LS_FAILED || fLife.state == QCA_LS_DEAD)
+            LOG("giving up (%s) after %u attempt(s): %s", qca_life_state_name(fLife.state),
+                fLife.attempts, qca_strerror(e));
+    }
+}
+
+bool QCARomePatchRAM::openDevice()
+{
+    if (fDeviceOpen)
+        return true;
+    if (fTerminating || isInactive() || !fDevice || !fDevice->open(this)) {
+        LOG("cannot open IOUSBHostDevice (owned by another client or going away)");
         return false;
     }
     fDeviceOpen = true;
+    return true;
+}
 
-    // Current configuration via standard GET_CONFIGURATION.
+bool QCARomePatchRAM::ensureConfigured()
+{
     uint8_t current = 0;
-    {
-        StandardUSB::DeviceRequest req;
-        req.bmRequestType = makeDeviceRequestbmRequestType(kRequestDirectionIn, kRequestTypeStandard,
-                                                           kRequestRecipientDevice);
-        req.bRequest = kDeviceRequestGetConfiguration;
-        req.wValue = 0;
-        req.wIndex = 0;
-        req.wLength = 1;
-        uint32_t got = 0;
-        IOReturn rc = dev->deviceRequest(this, req, &current, got,
+    StandardUSB::DeviceRequest req;
+    req.bmRequestType = makeDeviceRequestbmRequestType(kRequestDirectionIn, kRequestTypeStandard,
+                                                       kRequestRecipientDevice);
+    req.bRequest = kDeviceRequestGetConfiguration;
+    req.wValue = 0;
+    req.wIndex = 0;
+    req.wLength = 1;
+    uint32_t got = 0;
+    IOReturn rc = fDevice->deviceRequest(this, req, &current, got,
                                          kUSBHostStandardRequestCompletionTimeout);
-        if (rc != kIOReturnSuccess || got != 1) {
-            LOG("GET_CONFIGURATION failed (0x%08x, %u bytes)", rc, got);
-            return false;
-        }
+    if (rc != kIOReturnSuccess || got != 1) {
+        LOG("GET_CONFIGURATION failed (0x%08x, %u bytes)", rc, got);
+        return false;
     }
-
-    const StandardUSB::ConfigurationDescriptor *cd = dev->getConfigurationDescriptor(0);
+    if (current != 0)
+        return true;
+    const StandardUSB::ConfigurationDescriptor *cd = fDevice->getConfigurationDescriptor(0);
     if (!cd) {
         LOG("no configuration descriptor at index 0");
         return false;
     }
-    *configValueOut = cd->bConfigurationValue;
-    LOG("current configuration %u, descriptor bConfigurationValue %u, interfaces %u",
-        current, cd->bConfigurationValue, cd->bNumInterfaces);
-
-    if (current == 0) {
-        // Interfaces are only published once the device is configured with
-        // interface matching enabled (same as acidanthera/BrcmPatchRAM). We
-        // open interface 0 ourselves immediately after, so a competing HCI
-        // driver cannot start DFU traffic on EP2 before the upload finishes.
-        IOReturn rc = dev->setConfiguration(cd->bConfigurationValue, true);
-        if (rc != kIOReturnSuccess) {
-            LOG("setConfiguration(%u) failed (0x%08x)", cd->bConfigurationValue, rc);
-            return false;
-        }
-        *weConfigured = true;
+    // Interfaces are published (and matched) only once the device is
+    // configured with interface matching on (as BrcmPatchRAM3 and
+    // IntelBluetoothFirmware do). The device stays configured afterwards,
+    // which is the state the Bluetooth stack expects.
+    rc = fDevice->setConfiguration(cd->bConfigurationValue, true);
+    if (rc != kIOReturnSuccess) {
+        LOG("setConfiguration(%u) failed (0x%08x)", cd->bConfigurationValue, rc);
+        return false;
     }
+    LOG("configured device (bConfigurationValue %u)", cd->bConfigurationValue);
+    return true;
+}
 
-    // Find interface 0 among the device's children (interfaces may be
-    // published shortly after setConfiguration).
-    auto findInterface0 = [&](int attempts) {
-        for (int attempt = 0; attempt < attempts && !fInterface; attempt++) {
-            OSIterator *it = dev->getChildIterator(gIOServicePlane);
-            if (it) {
-                while (OSObject *o = it->getNextObject()) {
-                    IOUSBHostInterface *intf = OSDynamicCast(IOUSBHostInterface, o);
-                    if (!intf)
-                        continue;
-                    const StandardUSB::InterfaceDescriptor *id = intf->getInterfaceDescriptor();
-                    if (id && id->bInterfaceNumber == 0 && id->bAlternateSetting == 0) {
-                        intf->retain();
-                        fInterface = intf;
-                        break;
-                    }
+IOUSBHostInterface *QCARomePatchRAM::findInterface0(int attempts)
+{
+    for (int i = 0; i < attempts && !fTerminating; i++) {
+        OSIterator *it = fDevice->getChildIterator(gIOServicePlane);
+        IOUSBHostInterface *found = nullptr;
+        if (it) {
+            while (OSObject *o = it->getNextObject()) {
+                IOUSBHostInterface *intf = OSDynamicCast(IOUSBHostInterface, o);
+                if (!intf)
+                    continue;
+                const StandardUSB::InterfaceDescriptor *id = intf->getInterfaceDescriptor();
+                if (id && id->bInterfaceNumber == 0 && id->bAlternateSetting == 0) {
+                    intf->retain();
+                    found = intf;
+                    break;
                 }
-                it->release();
             }
-            if (!fInterface)
-                IOSleep(10);
+            it->release();
         }
-    };
-    findInterface0(50);
-    if (!fInterface && current != 0) {
-        // Device came up already configured (e.g. by firmware or a previous
-        // host) but IOUSBHostFamily never published interface nubs because no
-        // driver ran setConfiguration on this boot. Unconfigure and configure
-        // again so the interfaces are created.
-        LOG("configured but no interface nubs; re-applying configuration %u", cd->bConfigurationValue);
-        dev->setConfiguration(0, false);
-        IOReturn rc = dev->setConfiguration(cd->bConfigurationValue, true);
-        if (rc != kIOReturnSuccess) {
-            LOG("re-setConfiguration(%u) failed (0x%08x)", cd->bConfigurationValue, rc);
-            return false;
+        if (found)
+            return found;
+        IOSleep(10);
+    }
+    return nullptr;
+}
+
+bool QCARomePatchRAM::acquireBulkPipe()
+{
+    // Only needed when a download is due. Interface 0 carries the DFU bulk
+    // endpoint 0x02 (Linux usb_sndbulkpipe(udev, 0x02)).
+    if (fBulkOut)
+        return true;
+    if (!fInterface)
+        fInterface = findInterface0(200);
+    if (!fInterface) {
+        // Configured by someone else with interface matching off: no nubs.
+        // Re-apply the configuration once (we hold the device open, so no
+        // other client is using it) so the interfaces get published.
+        const StandardUSB::ConfigurationDescriptor *cd = fDevice->getConfigurationDescriptor(0);
+        if (cd && !fTerminating) {
+            LOG("no interface nubs; re-applying configuration %u", cd->bConfigurationValue);
+            fDevice->setConfiguration(0, false);
+            if (fDevice->setConfiguration(cd->bConfigurationValue, true) == kIOReturnSuccess)
+                fInterface = findInterface0(200);
         }
-        *weConfigured = true;
-        findInterface0(200);
     }
     if (!fInterface) {
         LOG("interface 0 not found");
         return false;
     }
-    if (!fInterface->open(this)) {
-        LOG("could not open interface 0 (owned by another driver?)");
-        return false;
+    if (!fIfaceOpen) {
+        if (!fInterface->open(this)) {
+            LOG("cannot open interface 0 (owned by the Bluetooth stack?)");
+            return false;
+        }
+        fIfaceOpen = true;
     }
-    fIfaceOpen = true;
-
     fBulkOut = fInterface->copyPipe(QCA_DFU_BULK_EP);
     if (!fBulkOut) {
         LOG("copyPipe(0x%02x) failed", QCA_DFU_BULK_EP);
@@ -216,24 +354,21 @@ bool QCARomePatchRAM::openDeviceAndInterface(IOUSBHostDevice *dev, uint8_t *conf
     if (!ed || StandardUSB::getEndpointType(ed) != kEndpointTypeBulk ||
         StandardUSB::getEndpointDirection(ed) != kEndpointDirectionOut) {
         LOG("endpoint 0x%02x is not bulk OUT", QCA_DFU_BULK_EP);
+        OSSafeReleaseNULL(fBulkOut);
         return false;
     }
-
     fBulkBuffer = IOBufferMemoryDescriptor::inTaskWithOptions(kernel_task, kIODirectionOut,
                                                               QCA_DFU_PACKET_LEN);
-    if (!fBulkBuffer) {
+    if (!fBulkBuffer || fBulkBuffer->prepare(kIODirectionOut) != kIOReturnSuccess) {
         LOG("bulk buffer allocation failed");
-        return false;
-    }
-    if (fBulkBuffer->prepare(kIODirectionOut) != kIOReturnSuccess) {
-        LOG("bulk buffer prepare failed");
         OSSafeReleaseNULL(fBulkBuffer);
+        OSSafeReleaseNULL(fBulkOut);
         return false;
     }
     return true;
 }
 
-void QCARomePatchRAM::closeAll(IOUSBHostDevice *dev)
+void QCARomePatchRAM::closeAll()
 {
     if (fBulkBuffer) {
         fBulkBuffer->complete(kIODirectionOut);
@@ -247,15 +382,19 @@ void QCARomePatchRAM::closeAll(IOUSBHostDevice *dev)
         if (fIfaceOpen)
             fInterface->close(this);
         fIfaceOpen = false;
+        OSSafeReleaseNULL(fInterface);
     }
-    if (fDeviceOpen && dev)
-        dev->close(this);
+    if (fDeviceOpen && fDevice)
+        fDevice->close(this);
     fDeviceOpen = false;
 }
 
 int QCARomePatchRAM::xferControlIn(uint8_t reqCode, void *buf, uint16_t len, uint32_t *actual,
                                    uint32_t timeoutMs)
 {
+    *actual = 0;
+    if (fTerminating)
+        return (int)kIOReturnAborted;
     StandardUSB::DeviceRequest req;
     req.bmRequestType = makeDeviceRequestbmRequestType(kRequestDirectionIn, kRequestTypeVendor,
                                                        kRequestRecipientDevice);
@@ -274,6 +413,9 @@ int QCARomePatchRAM::xferControlIn(uint8_t reqCode, void *buf, uint16_t len, uin
 int QCARomePatchRAM::xferControlOut(uint8_t reqCode, const void *buf, uint16_t len,
                                     uint32_t *actual, uint32_t timeoutMs)
 {
+    *actual = 0;
+    if (fTerminating)
+        return (int)kIOReturnAborted;
     uint8_t local[64];
     if (len > sizeof(local))
         return (int)kIOReturnBadArgument;
@@ -298,53 +440,43 @@ int QCARomePatchRAM::xferBulkOut(uint8_t ep, const void *buf, uint32_t len, uint
                                  uint32_t timeoutMs)
 {
     *actual = 0;
-    if (ep != QCA_DFU_BULK_EP || !fBulkOut || !fBulkBuffer || len > QCA_DFU_PACKET_LEN)
+    if (fTerminating)
+        return (int)kIOReturnAborted;
+    if (ep != QCA_DFU_BULK_EP || len > QCA_DFU_PACKET_LEN)
         return (int)kIOReturnBadArgument;
+    if (!acquireBulkPipe())
+        return (int)kIOReturnNotOpen;
     memcpy(fBulkBuffer->getBytesNoCopy(), buf, len);
     uint32_t sent = 0;
     IOReturn rc = fBulkOut->io(fBulkBuffer, len, sent, timeoutMs);
     *actual = sent;
     if (rc != kIOReturnSuccess) {
         LOG("bulk OUT %u bytes failed (0x%08x)", len, rc);
-        if (rc != kIOReturnAborted && rc != kIOReturnNoDevice)
+        if (rc != kIOReturnAborted && rc != kIOReturnNoDevice && !fTerminating)
             fBulkOut->clearStall(true);
     }
     return (int)rc;
 }
 
-void QCARomePatchRAM::publishResult(IOUSBHostDevice *dev, const qca_result &r)
+qca_err QCARomePatchRAM::runSetup()
 {
-    // Diagnostic properties on the provider for `ioreg -l`.
-    dev->setProperty("QCARomePatchRAM-Result", qca_strerror(r.err));
-    dev->setProperty("QCARomePatchRAM-Stage", qca_stage_name(r.stage));
-    dev->setProperty("QCARomePatchRAM-RomVersion", (unsigned long long)r.version_initial.rom_version, 32);
-    dev->setProperty("QCARomePatchRAM-PatchVersionBefore", (unsigned long long)r.version_initial.patch_version, 32);
-    dev->setProperty("QCARomePatchRAM-PatchVersionAfter", (unsigned long long)r.version_after.patch_version, 32);
-    dev->setProperty("QCARomePatchRAM-StatusInitial", (unsigned long long)r.status_initial, 8);
-    dev->setProperty("QCARomePatchRAM-StatusFinal", (unsigned long long)r.status_final, 8);
-    dev->setProperty("QCARomePatchRAM-RampatchDownloaded", r.rampatch_downloaded != 0);
-    dev->setProperty("QCARomePatchRAM-NVMDownloaded", r.nvm_downloaded != 0);
-    if (r.err != QCA_OK)
-        dev->setProperty("QCARomePatchRAM-TransportReturn", (unsigned long long)(uint32_t)r.transport_rc, 32);
-}
-
-bool QCARomePatchRAM::start(IOService *provider)
-{
-    IOUSBHostDevice *dev = OSDynamicCast(IOUSBHostDevice, provider);
-    if (!dev || !super::start(provider))
-        return false;
-
-    fDevice = dev;
-    fDevice->retain();
-    dev->setProperty(kQCAAttemptedKey, true);
-
     uint64_t t0 = 0, t1 = 0, ns = 0;
     clock_get_uptime(&t0);
 
-    uint8_t configValue = 0;
-    bool weConfigured = false;
-    bool opened = openDeviceAndInterface(dev, &configValue, &weConfigured);
-    if (opened) {
+    const bool probeOnly = bootFlag("-qcarpprobe");
+    qca_result r;
+    bzero(&r, sizeof(r));
+    qca_err e;
+    if (!openDevice()) {
+        // Busy or going away: transient, retried by the policy.
+        r.err = e = QCA_ERR_GET_VERSION_IO;
+        r.stage = QCA_STAGE_GET_VERSION;
+        r.transport_rc = (int)kIOReturnExclusiveAccess;
+    } else if (!ensureConfigured()) {
+        r.err = e = QCA_ERR_GET_VERSION_IO;
+        r.stage = QCA_STAGE_GET_VERSION;
+        r.transport_rc = (int)kIOReturnNotReady;
+    } else {
         qca_transport t;
         t.ctx = this;
         t.control_in = trCtrlIn;
@@ -352,53 +484,65 @@ bool QCARomePatchRAM::start(IOService *provider)
         t.bulk_out = trBulkOut;
         t.sleep_ms = trSleep;
         t.log = trLog;
-
         const qca_firmware rampatch = {qca_rampatch_usb_00000302, qca_rampatch_usb_00000302_len};
         const qca_firmware nvm = {qca_nvm_usb_00000302, qca_nvm_usb_00000302_len};
         qca_options opt;
-        opt.probe_only = bootFlag("-qcarpprobe") ? 1 : 0;
-
-        qca_result r;
-        qca_err e = qca_rome_setup(&t, &rampatch, &nvm, &opt, &r);
-        if (e == QCA_OK) {
-            LOG("%s: rom 0x%08x patch 0x%x->0x%x status 0x%02x->0x%02x (rampatch=%d nvm=%d, %u bulk packets)",
-                opt.probe_only ? "probe-only done" : "firmware ready",
-                r.version_initial.rom_version, r.version_initial.patch_version,
-                r.version_after.patch_version, r.status_initial, r.status_final,
-                r.rampatch_downloaded, r.nvm_downloaded, r.bulk_packets);
-        } else {
-            LOG("FAILED at %s: %s (transport 0x%08x, offset %u, expected %u, actual %u)",
-                qca_stage_name(r.stage), qca_strerror(e), (uint32_t)r.transport_rc,
-                r.fail_offset, r.expected_len, r.actual_len);
-        }
-        publishResult(dev, r);
+        opt.probe_only = probeOnly ? 1 : 0;
+        e = qca_rome_setup(&t, &rampatch, &nvm, &opt, &r);
     }
-
-    closeAll(dev);
-
-    // Let the Apple Bluetooth stack (or BlueToolFixup-enabled path) match.
-    if (fInterface) {
-        fInterface->registerService(kIOServiceAsynchronous);
-        OSSafeReleaseNULL(fInterface);
-    }
-    if (weConfigured)
-        LOG("configured device with bConfigurationValue %u", configValue);
-    dev->registerService(kIOServiceAsynchronous);
+    closeAll();
 
     clock_get_uptime(&t1);
     absolutetime_to_nanoseconds(t1 - t0, &ns);
-    LOG("done in %llu ms; releasing device", ns / 1000000ULL);
-
-    OSSafeReleaseNULL(fDevice);
-    super::stop(provider);
-    // Returning false detaches this object; we hold no open session.
-    return false;
+    if (e == QCA_OK) {
+        LOG("%s in %llu ms: rom 0x%08x patch 0x%x->0x%x status 0x%02x->0x%02x "
+            "(rampatch=%d nvm=%d, %u bulk packets, run %u)",
+            probeOnly ? "probe-only done" : "firmware ready", ns / 1000000ULL,
+            r.version_initial.rom_version, r.version_initial.patch_version,
+            r.version_after.patch_version, r.status_initial, r.status_final,
+            r.rampatch_downloaded, r.nvm_downloaded, r.bulk_packets, fLife.runs);
+    } else {
+        LOG("run %u FAILED at %s: %s (transport 0x%08x, offset %u, expected %u, actual %u)",
+            fLife.runs, qca_stage_name(r.stage), qca_strerror(e), (uint32_t)r.transport_rc,
+            r.fail_offset, r.expected_len, r.actual_len);
+    }
+    if (!fTerminating && !isInactive()) {
+        publishResult(r, probeOnly);
+        bool reregister = r.rampatch_downloaded || r.nvm_downloaded;
+        if (e == QCA_OK && !probeOnly && !fRenamed && version_major >= 21 &&
+            !bootFlag("-qcarpnoname")) {
+            fDevice->setName(QCAROME_BT_DEVICE_NAME);
+            fRenamed = true;
+            reregister = true;
+            LOG("device named \"%s\" for bluetoothd", QCAROME_BT_DEVICE_NAME);
+        }
+        if (e == QCA_OK && reregister)
+            fDevice->registerService(kIOServiceAsynchronous);
+    }
+    return e;
 }
 
-void QCARomePatchRAM::stop(IOService *provider)
+void QCARomePatchRAM::publishResult(const qca_result &r, bool probeOnly)
 {
-    closeAll(fDevice);
-    OSSafeReleaseNULL(fInterface);
-    OSSafeReleaseNULL(fDevice);
-    super::stop(provider);
+    // Diagnostics on the provider for `ioreg -l -w0 | grep QCARomePatchRAM`.
+    fDevice->setProperty("QCARomePatchRAM-Result", qca_strerror(r.err));
+    fDevice->setProperty("QCARomePatchRAM-Stage", qca_stage_name(r.stage));
+    fDevice->setProperty("QCARomePatchRAM-ProbeOnly", probeOnly);
+    fDevice->setProperty("QCARomePatchRAM-RomVersion", (unsigned long long)r.version_initial.rom_version, 32);
+    fDevice->setProperty("QCARomePatchRAM-PatchVersionBefore", (unsigned long long)r.version_initial.patch_version, 32);
+    fDevice->setProperty("QCARomePatchRAM-PatchVersionAfter", (unsigned long long)r.version_after.patch_version, 32);
+    fDevice->setProperty("QCARomePatchRAM-StatusInitial", (unsigned long long)r.status_initial, 8);
+    fDevice->setProperty("QCARomePatchRAM-StatusFinal", (unsigned long long)r.status_final, 8);
+    fDevice->setProperty("QCARomePatchRAM-RampatchDownloaded", r.rampatch_downloaded != 0);
+    fDevice->setProperty("QCARomePatchRAM-NVMDownloaded", r.nvm_downloaded != 0);
+    fDevice->setProperty("QCARomePatchRAM-TransportReturn", (unsigned long long)(uint32_t)r.transport_rc, 32);
+}
+
+void QCARomePatchRAM::publishState()
+{
+    setProperty("State", qca_life_state_name(fLife.state));
+    setProperty("Runs", (unsigned long long)fLife.runs, 32);
+    setProperty("Successes", (unsigned long long)fLife.successes, 32);
+    setProperty("Wakes", (unsigned long long)fLife.wakes, 32);
+    setProperty("LastError", qca_strerror(fLife.last_err));
 }

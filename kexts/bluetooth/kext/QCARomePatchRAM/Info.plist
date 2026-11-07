@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>QCARomePatchRAM</string>
 	<key>CFBundleIdentifier</key>
-	<string>tw.duckduck.QCARomePatchRAM</string>
+	<string>io.github.akshaynexus.helios300.QCARomePatchRAM</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -15,15 +15,17 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>0.2.0</string>
 	<key>CFBundleVersion</key>
-	<string>0.1.0</string>
+	<string>0.2.0</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>GPL-2.0-or-later. Based on QCARomePatchRAM by duckducktw. Embeds Qualcomm Atheros firmware from linux-firmware (see Resources/LICENSE.QualcommAtheros_ath10k, NOTICE.qca).</string>
 	<key>IOKitPersonalities</key>
 	<dict>
 		<key>LiteOn-04ca-3016</key>
 		<dict>
 			<key>CFBundleIdentifier</key>
-			<string>tw.duckduck.QCARomePatchRAM</string>
+			<string>io.github.akshaynexus.helios300.QCARomePatchRAM</string>
 			<key>IOClass</key>
 			<string>QCARomePatchRAM</string>
 			<key>IOMatchCategory</key>
@@ -47,8 +49,6 @@
 		<key>com.apple.kpi.libkern</key>
 		<string>12.0</string>
 		<key>com.apple.kpi.mach</key>
-		<string>12.0</string>
-		<key>com.apple.kpi.bsd</key>
 		<string>12.0</string>
 	</dict>
 	<key>OSBundleRequired</key>
