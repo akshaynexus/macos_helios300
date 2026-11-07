@@ -90,24 +90,27 @@
       "source": {"tree": "self", "path": "kexts/wifi"},
       "built_by": "cross", "licence": "GPL-3.0-only",
       "contains_firmware": "QCA6174 firmware, OTP and the Acer 11ad:0807 board data from linux-firmware (Qualcomm licence)",
-      "status": "pre-release: host-tested and cross-checked against Linux ath10k; not yet run on macOS",
+      "status": "pre-release: the ath10k core (firmware, board data, DMA); host-tested and cross-checked against Linux ath10k; not yet run on macOS",
       "install": "opencore",
       "opencore": {"order": 140, "BundlePath": "Ath10kMac.kext", "ExecutablePath": "Contents/MacOS/Ath10kMac", "PlistPath": "Contents/Info.plist",
                    "Arch": "x86_64", "MinKernel": "25.0.0", "MaxKernel": "25.99.99", "Enabled": true, "Comment": "QCA6174 Wi-Fi - macos_helios300"},
       "requires": [],
       "conflicts": ["AirportItlwm.kext", "itlwm.kext", "AirPortAtheros40-Tahoe.kext"],
-      "hardware": [{"bus": "pci", "vendor": "168c", "device": "003e", "subsystem_vendor": "11ad", "subsystem_device": "0807"}]
+      "hardware": [{"bus": "pci", "vendor": "168c", "device": "003e", "subsystem_vendor": "11ad", "subsystem_device": "0807"}],
+      "boot_args_optional": [
+        {"arg": "ath10k_cc=IN", "what": "two-letter wireless-regdb country (default 00, world rules); use your own country"},
+        {"arg": "ath10k_txpower=20", "what": "TX power cap in dBm (default: the regdb limit per channel)"}
+      ]
     },
     {
-      "name": "AirportAth10k.kext", "kind": "kext",
+      "name": "AirportAth10k.kext", "kind": "kext", "bundle_id": "com.helios300.AirportAth10k",
       "source": {"tree": "self", "path": "kexts/wifi/native"},
       "built_by": "cross", "licence": "GPL-3.0-only",
-      "status": "pre-release: native macOS Wi-Fi front end (IO80211/Skywalk) over Ath10kMac; shipped only when the wifi tree builds it",
+      "status": "pre-release: native macOS 26 Wi-Fi front end (IO80211/Skywalk) over the Ath10kMac core; links the core by bundle id, so it loads after it",
       "install": "opencore",
       "opencore": {"order": 145, "BundlePath": "AirportAth10k.kext", "ExecutablePath": "Contents/MacOS/AirportAth10k", "PlistPath": "Contents/Info.plist",
                    "Arch": "x86_64", "MinKernel": "25.0.0", "MaxKernel": "25.99.99", "Enabled": true, "Comment": "QCA6174 native Wi-Fi front end - macos_helios300"},
       "requires": ["Ath10kMac.kext"],
-      "optional": true,
       "hardware": [{"bus": "pci", "vendor": "168c", "device": "003e", "subsystem_vendor": "11ad", "subsystem_device": "0807"}]
     },
     {
