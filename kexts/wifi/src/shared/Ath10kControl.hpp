@@ -25,6 +25,10 @@ struct Response {
 // [32] SSID length + [33..64] raw SSID, [68..83] driver version.
 // BSS extensions after RSN: SNR u32, estimate RSSI = SNR - 95 dBm (Linux convention).
 // After SNR, optional BSS flags u32: bit 1 (value 2) means hidden SSID.
+// After the flags, 105 bytes for the native front end: capabilities u16, beacon
+// interval u16, rate count u8 + 32 rates, element bits u8 (1 HT caps, 2 HT op,
+// 4 VHT caps, 8 VHT op), HT caps[26], HT op[22], VHT caps[12], VHT op[5],
+// power constraint present u8 + dB u8.
 // SecurityHold index 1 pauses ordinary TX so queued data can drain for EAPOL;
 // RadioOptions index 0/1 requests STA power saving (no payload). Info bit 64 advertises it.
 // Connect index 1 supplies the SSID of the selected hidden BSSID; Info bit 128 advertises it.

@@ -116,7 +116,15 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   o.data[40]=b.advertisedChannel?b.advertisedChannel:static_cast<UInt8>(b.rxChannel);
   o.data[41]=AthSecurity::supportsWPA2(b.rsn,b.rsnLength);
   Ath10k::htcWriteLE16(o.data+42,b.rsnLength);bcopy(b.rsn,o.data+44,b.rsnLength);o.length=44+b.rsnLength;Ath10k::htcWriteLE32(o.data+o.length,b.snr);o.length+=4;
-  Ath10k::htcWriteLE32(o.data+o.length,b.hidden?2u:0u);o.length+=4;return kIOReturnSuccess;
+  Ath10k::htcWriteLE32(o.data+o.length,b.hidden?2u:0u);o.length+=4;
+  // Native front end extension (105 bytes): what WCL's scan results need
+  // beyond SSID/RSN. Capabilities, beacon interval, rates and the HT/VHT
+  // elements as received. Always fits: 44+257+8+105 < 512.
+  UInt8 *x=o.data+o.length;
+  Ath10k::htcWriteLE16(x,b.capabilities);Ath10k::htcWriteLE16(x+2,b.beaconInterval);x[4]=b.rateCount;bcopy(b.rates,x+5,32);
+  x[37]=static_cast<UInt8>((b.htPresent?1:0)|(b.htOperation?2:0)|(b.vhtPresent?4:0)|(b.vhtOperation?8:0));
+  bcopy(b.ht,x+38,26);bcopy(b.htOp,x+64,22);bcopy(b.vht,x+86,12);bcopy(b.vhtOp,x+98,5);
+  x[103]=b.powerConstraintPresent?1:0;x[104]=b.powerConstraintDb;o.length+=105;return kIOReturnSuccess;
  }
  if(r.operation==Info){self->fillControlInfo(o);return kIOReturnSuccess;}
  if(r.operation==Restart){

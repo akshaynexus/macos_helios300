@@ -79,7 +79,9 @@ int main(){
  assert(call(BSS)==kIOReturnNotFound);
  auto &ap=d._wmiBSS.entries[0];d._wmiBSS.count=1;ap.bssid[0]=2;ap.bssid[5]=7;ap.ssid[0]='T';ap.ssidLength=1;
  ap.capabilities=1;ap.beaconInterval=100;ap.rxChannel=1;ap.rates[0]=0x82;ap.rateCount=1;
- assert(call(BSS)==0 && o.length==52 && o.data[8]=='T');
+ ap.capabilities=0x411;ap.beaconInterval=100;ap.rateCount=2;ap.rates[0]=0x8c;ap.rates[1]=0x12;ap.htPresent=true;ap.ht[0]=0xef;ap.vhtOperation=true;ap.vhtOp[0]=1;ap.powerConstraintPresent=true;ap.powerConstraintDb=3;
+ assert(call(BSS)==0 && o.length==52+105 && o.data[8]=='T');
+ {const uint8_t *x=o.data+52;assert(x[0]==0x11 && x[1]==0x04 && x[2]==100 && x[3]==0 && x[4]==2 && x[5]==0x8c && x[6]==0x12 && x[37]==(1|8) && x[38]==0xef && x[98]==1 && x[103]==1 && x[104]==3);}
  // Binding a supplied SSID to a hidden BSSID is explicit and preserves RSN/security checks.
  ap.hidden=true;ap.ssidLength=0;r.index=1;r.length=9;r.data[0]=1;memcpy(r.data+2,ap.bssid,6);r.data[8]='T';
  d._wmiScan.failed=true;assert(call(Connect)==kIOReturnNotReady);d._wmiScan.failed=false;
