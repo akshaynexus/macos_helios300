@@ -1,0 +1,14 @@
+# kpi-audit allowlist for the kext families Ath10kMac links (not xnu KPIs).
+# Each imported family symbol must name a class/method declared in the macOS SDK
+# header below (tools/kpi-audit.py "hdr" rule).
+hdr com.apple.iokit.IOPCIFamily IOKit/pci/IOPCIDevice.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOEthernetController.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkController.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOEthernetInterface.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkInterface.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkMedium.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOOutputQueue.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOGatedOutputQueue.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOBasicOutputQueue.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkData.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkStats.h
