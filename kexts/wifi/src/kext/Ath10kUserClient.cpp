@@ -75,8 +75,12 @@ void Ath10kPCIDevice::fillControlInfo(AthControl::Response &o){
  Ath10k::htcWriteLE32(o.data+96,_connection.powerConstraintDb);Ath10k::htcWriteLE32(o.data+100,r.completed);
  Ath10k::htcWriteLE32(o.data+104,_connection.beaconTimeoutMs);
  Ath10k::htcWriteLE32(o.data+108,(_wmiScan.completed?1u:0u)|(_wmiScan.failed?2u:0u)|(_wmiScan.cancelRequested?4u:0u)|(_wmiScan.started?8u:0u));
+ // [112..113] regulatory alpha2, [114] 0, [115] bit 0 native front end; the
+ // native front end (AirportAth10k) reports the country to WCL from here.
+ const char *cc=_regulatory.country?_regulatory.country->alpha2:"00";
+ o.data[112]=static_cast<UInt8>(cc[0]);o.data[113]=static_cast<UInt8>(cc[1]);o.data[114]=0;o.data[115]=_nativeFrontEnd?1:0;o.length=116;
 }
-IOReturn Ath10kPCIDevice::controlRequest(IOUserClient *client,const AthControl::Request *r,AthControl::Response *o){
+IOReturn Ath10kPCIDevice::controlRequest(OSObject *client,const AthControl::Request *r,AthControl::Response *o){
  if(!_wmiWorkLoop || isInactive())return kIOReturnNotReady;
  // Keep this object alive if termination detaches its clients immediately.
  retain();
@@ -86,7 +90,7 @@ IOReturn Ath10kPCIDevice::controlRequest(IOUserClient *client,const AthControl::
  }
  release();return result;
 }
-void Ath10kPCIDevice::closeControl(IOUserClient *client){
+void Ath10kPCIDevice::closeControl(OSObject *client){
  if(_wmiWorkLoop)_wmiWorkLoop->runAction(controlAction,this,client,nullptr,nullptr);
 }
 IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,void *output,void *){
@@ -153,7 +157,7 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   s.rfChains=static_cast<UInt8>(self->_wmiInit.requestedChainMask==1?1:2);
   const char *error=Ath10k::selectOpenBSS(s,self->_wmiBSS);
   if(error){s.error=error;return kIOReturnUnsupported;}
-  self->_controlOwner=static_cast<IOUserClient *>(who);s.error="none";s.stage=Ath10k::LinkStage::Scan;
+  self->_controlOwner=static_cast<OSObject *>(who);s.error="none";s.stage=Ath10k::LinkStage::Scan;
   self->publishConnection();return kIOReturnSuccess;
  }
  if(self->_controlOwner!=who)return kIOReturnNotPermitted;

@@ -291,6 +291,7 @@ public:
     struct Queue {UInt32 wakes=0;void service(unsigned options){assert(options==1);++wakes;}} queue;
     bool queueEnabled=false;
     Queue *getOutputQueue(){return queueEnabled?&queue:nullptr;}
+    Queue *txQueue(){return getOutputQueue();}
 #ifdef ATH10K_WMI_RUNTIME_TEST
     IOWorkLoop *getWorkLoop(){return IOWorkLoop::workLoop();}
 #endif

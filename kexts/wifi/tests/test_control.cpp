@@ -23,7 +23,7 @@ public:
  struct {UInt8 mac[6]{2,1,2,3,4,5};UInt32 requestedChainMask=3;} _wmiInit;
  struct {UInt32 htCapability=1,vhtCapability=0,rfChains=1;Ath10k::HTCCreditState credits{};} _wmi;
  bool _networkLinkUp=false,_networkEnabled=true;
- IOUserClient *_controlOwner=nullptr;
+ OSObject *_controlOwner=nullptr;
  static IOReturn controlAction(OSObject *,void *,void *,void *,void *);
  Ath10kPCIDevice(){_wmiScan.completed=true;}
  void fillControlInfo(AthControl::Response &){}

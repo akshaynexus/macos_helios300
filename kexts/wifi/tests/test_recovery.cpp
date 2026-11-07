@@ -7,7 +7,7 @@
 using IOReturn=int;
 constexpr unsigned kIOServiceRequired=1,kIOServiceSynchronous=2;
 constexpr int kIOReturnSuccess=0,kIOReturnNotReady=3;
-struct IOUserClient{};
+struct OSObject{};struct IOUserClient:OSObject{};
 struct Gate {
  bool inside=false;
  template<class F,class D,class C,class R,class O> int runAction(F f,D *d,C *c,R *r,O *o){inside=true;int result=f(d,c,r,o);inside=false;return result;}
@@ -15,7 +15,7 @@ struct Gate {
 class Ath10kPCIDevice {
 public:
  Ath10k::PowerState _power{};
- bool _systemSuspended=false,_reprobeRequested=false,_dmaQuarantine=false,inactive=false;
+ bool _systemSuspended=false,_reprobeRequested=false,_dmaQuarantine=false,inactive=false,_nativeFrontEnd=false;
  struct PCIMock{const char *phase=nullptr;void setProperty(const char *k,const char *v){if(!strcmp(k,"Ath10kRecoveryPhase"))phase=v;}} pciMock;PCIMock *_pci=&pciMock;bool terminateOK=true,resetQuarantines=false;unsigned resets=0,terminations=0,options=0,refs=1;
  Gate gate;Gate *_wmiWorkLoop=&gate;
  struct {bool active=true;} _wmiLive;
@@ -23,9 +23,9 @@ public:
  Ath10k::RegulatoryPolicy _regulatory{};
  unsigned powerBlock=0;bool powerIOBlocked(){return powerBlock!=0;}bool powerRestartAllowed(){return powerBlock==2;}
  bool requestDeviceRestart();void fillControlInfo(AthControl::Response &);
- IOReturn controlRequest(IOUserClient *,const AthControl::Request *,AthControl::Response *);
+ IOReturn controlRequest(OSObject *,const AthControl::Request *,AthControl::Response *);
  bool isInactive(){return inactive;}void retain(){++refs;}void release(){--refs;}
- static int controlAction(Ath10kPCIDevice *d,IOUserClient *,AthControl::Request *r,AthControl::Response *o){
+ static int controlAction(Ath10kPCIDevice *d,OSObject *,AthControl::Request *r,AthControl::Response *o){
   assert(d->gate.inside);if(r->operation==AthControl::Restart)return d->requestDeviceRestart()?0:kIOReturnNotReady;
   d->fillControlInfo(*o);return 0;
  }
@@ -45,7 +45,7 @@ int main(){
  Ath10kPCIDevice rejected;rejected.terminateOK=false;assert(restart(rejected)==kIOReturnNotReady && !rejected._reprobeRequested && rejected.refs==1);
  auto &s=good._connection;s.ssidLength=3;memcpy(s.ssid,"abc",3);s.operatingChannel=36;s.width=80;s.nss=2;s.signalDbm=-50;
  good._wmiScan.generation=10;good.fillControlInfo(response);
- assert(response.length==112 && response.data[32]==3 && !memcmp(response.data+33,"abc",3));
+ assert(response.length==116 && response.data[112]=='0' && response.data[113]=='0' && !response.data[115] && response.data[32]==3 && !memcmp(response.data+33,"abc",3));
  assert(Ath10k::wmiReadLE32(response.data+4)==10 && int32_t(Ath10k::wmiReadLE32(response.data+12))==-50);
  assert(!strcmp(reinterpret_cast<char *>(response.data+68),ATH10K_VERSION));
  assert(Ath10k::wmiReadLE32(response.data)&512);

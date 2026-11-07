@@ -14,6 +14,7 @@
 #include "Ath10kPerformance.hpp"
 #include "Ath10kPower.hpp"
 #include <IOKit/IONotifier.h>
+#include <IOKit/network/IOOutputQueue.h>
 #include <IOKit/pwr_mgt/IOPM.h>
 #include "Ath10kHw.hpp"
 #include "Ath10kPayloadProfile.hpp"
@@ -39,8 +40,19 @@ class Ath10kPCIDevice : public IOEthernetController
 
 public:
     IOReturn newUserClient(task_t,void *,UInt32,OSDictionary *,IOUserClient **) override;
-    IOReturn controlRequest(IOUserClient *,const AthControl::Request *,AthControl::Response *);
-    void closeControl(IOUserClient *);
+    // Control ABI (src/shared/Ath10kControl.hpp). Callers: the user client
+    // (menu-bar app) or the in-kernel native front end (AirportAth10k); the
+    // owner identity only serialises who may drive a connection.
+    IOReturn controlRequest(OSObject *,const AthControl::Request *,AthControl::Response *);
+    void closeControl(OSObject *);
+    // Native front end: with the Ath10kNativeFrontEnd personality key the core
+    // attaches no IOEthernetInterface. AirportAth10k attaches its own interface
+    // and output queue here (run under the WMI gate) once Ath10kNativeReady is set.
+    bool nativeFrontEnd() const {return _nativeFrontEnd;}
+    IOReturn nativeAttachInterface(IONetworkInterface *,IOOutputQueue *);
+    void nativeDetachInterface();
+    IOReturn nativeEnable(bool);
+    bool nativeLinkUp() const {return _networkLinkUp;}
     IOService *probe(IOService *provider, SInt32 *score) override;
     bool start(IOService *provider) override;
     void stop(IOService *provider) override;
@@ -56,7 +68,11 @@ private:
     bool payloadMatchesTarget() const {
         return payload().matchesTarget(_bmiTargetVersion, _bmiTargetType, _bmiTargetInfoLength);
     }
-    IOUserClient *_controlOwner=nullptr;
+    OSObject *_controlOwner=nullptr;
+    bool _nativeFrontEnd=false;
+    IOOutputQueue *_nativeOutputQueue=nullptr;
+    IOOutputQueue *txQueue() const {return _nativeOutputQueue?_nativeOutputQueue:getOutputQueue();}
+    static IOReturn nativeAction(OSObject *,void *,void *,void *,void *);
     bool _reprobeRequested=false,_systemSuspended=false;
     bool requestDeviceRestart();
     Ath10k::PowerState _power{};

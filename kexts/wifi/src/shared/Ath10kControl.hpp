@@ -31,7 +31,9 @@ struct Response {
 // Info bit 256 indicates infrastructure DFS association enabled in the kext policy.
 // Info [84] PS requested/applied/busy bits (1/2/4), [88] beacon misses,
 // [92] applied TX half-dBm, [96] AP Power Constraint dB, [100] radio transactions,
-// [104] beacon timeout ms. The original prefix and structure sizes are unchanged.
+// [104] beacon timeout ms, [108] scan bits (1 completed,2 failed,4 cancel,8 started),
+// [112..113] regulatory country alpha2 ("00" world), [115] bit 0 = native front end
+// (AirportAth10k owns the interface). The original prefix and structure sizes are unchanged.
 // index 0 releases it after the serial EAPOL transaction.
 // Cancel stops a connection at an ownership-safe boundary; Restart asynchronously
 // terminates and rematches the PCI driver only after verified quiescence.

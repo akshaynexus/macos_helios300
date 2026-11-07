@@ -74,9 +74,9 @@ void Ath10kPCIDevice::networkLink(bool up)
     if(!up){_dataTXStalled=false;flushNetworkRX();_rxReorder.reset([](Ath10k::RXBatch *b){IOFree(b,sizeof(*b));});_rxDefrag.reset();_rxBatch.reset();}
     if(_networkLinkUp==up)return;
     _networkLinkUp=up;
-    if(!up && getOutputQueue()){getOutputQueue()->stop();getOutputQueue()->flush();}
+    if(!up && txQueue()){txQueue()->stop();txQueue()->flush();}
     setLinkStatus(kIONetworkLinkValid|(up?kIONetworkLinkActive:0));
-    if(up && getOutputQueue())getOutputQueue()->start();
+    if(up && txQueue())txQueue()->start();
 }
 bool Ath10kPCIDevice::prepareNetwork()
 {
@@ -120,7 +120,52 @@ bool Ath10kPCIDevice::prepareNetwork()
             }
         }
     }
+    if(_nativeFrontEnd){
+        // AirportAth10k matches on Ath10kNativeReady and attaches its own
+        // IO80211/Skywalk interface (nativeAttachInterface).
+        setProperty("Ath10kNativeReady",kOSBooleanTrue);
+        registerService(kIOServiceAsynchronous);
+        return true;
+    }
     return attachInterface(&_networkInterface);
+}
+// Native front end plumbing: every entry runs under the WMI work loop like
+// the IONetworkController enable/disable it replaces.
+IOReturn Ath10kPCIDevice::nativeAction(OSObject *owner,void *op,void *a,void *b,void *)
+{
+    auto *self=OSDynamicCast(Ath10kPCIDevice,owner);if(!self)return kIOReturnBadArgument;
+    switch(reinterpret_cast<uintptr_t>(op)){
+    case 0:{
+        if(self->_networkInterface)return kIOReturnExclusiveAccess;
+        auto *netif=static_cast<IONetworkInterface *>(a);auto *queue=static_cast<IOOutputQueue *>(b);
+        netif->retain();self->_networkInterface=netif;
+        if(queue){queue->retain();self->_nativeOutputQueue=queue;}
+        return kIOReturnSuccess;}
+    case 1:
+        self->_networkEnabled=false;self->networkLink(false);
+        if(self->_nativeOutputQueue){self->_nativeOutputQueue->release();self->_nativeOutputQueue=nullptr;}
+        if(self->_networkInterface){self->_networkInterface->release();self->_networkInterface=nullptr;}
+        return kIOReturnSuccess;
+    case 2:return self->enable(self->_networkInterface);
+    case 3:return self->disable(self->_networkInterface);
+    }
+    return kIOReturnBadArgument;
+}
+IOReturn Ath10kPCIDevice::nativeAttachInterface(IONetworkInterface *netif,IOOutputQueue *queue)
+{
+    if(!_nativeFrontEnd || !netif)return kIOReturnUnsupported;
+    if(!_wmiWorkLoop || isInactive())return kIOReturnNotReady;
+    return _wmiWorkLoop->runAction(nativeAction,this,reinterpret_cast<void *>(0),netif,queue);
+}
+void Ath10kPCIDevice::nativeDetachInterface()
+{
+    if(_wmiWorkLoop)_wmiWorkLoop->runAction(nativeAction,this,reinterpret_cast<void *>(1));
+}
+IOReturn Ath10kPCIDevice::nativeEnable(bool on)
+{
+    if(!_nativeFrontEnd)return kIOReturnUnsupported;
+    if(!_wmiWorkLoop || isInactive() || !_networkInterface)return kIOReturnNotReady;
+    return _wmiWorkLoop->runAction(nativeAction,this,reinterpret_cast<void *>(on?2:3));
 }
 void Ath10kPCIDevice::publishConnection()
 {
@@ -623,12 +668,12 @@ const char *Ath10kPCIDevice::serviceConnection(UInt64 nowMs)
                 if(s.txStatus)++s.spectrum.dropped;else ++s.spectrum.completed;
                 s.txWakePending=true;
             }
-            if(!s.txManagement && getOutputQueue())getOutputQueue()->service(1); // IOBasicOutputQueue::kServiceAsync, avoid recursive output
+            if(!s.txManagement && txQueue())txQueue()->service(1); // IOBasicOutputQueue::kServiceAsync, avoid recursive output
         }else if(nowMs-s.txSinceMs>=5000)return "packet-completion-timeout";
     }
     if(s.txWakePending && !s.probe.active && !s.txPauseMask && !s.csa.blocked && !(s.radio.blocked || s.radio.powerBlocked) && !s.txOwned){
         s.txWakePending=false;
-        if(getOutputQueue())getOutputQueue()->service(1);
+        if(txQueue())txQueue()->service(1);
     }
     if(s.stats.step){const char *error=serviceStatsMaintenance(nowMs);if(error)return error;if(s.stats.step)return nullptr;}
     if(s.radio.step){const char *error=serviceRadioMaintenance(nowMs);if(error)return error;if(s.radio.step || s.radio.blocked)return nullptr;}
@@ -753,7 +798,7 @@ const char *Ath10kPCIDevice::serviceConnection(UInt64 nowMs)
             ++s.securityGeneration;s.portAuthorized=true;networkLink(true);
             IOLog("Ath10kMac: WPA2 port authorized generation=%u peer=%u peers=%u channel=%u ap-step=%u\n",
                 s.securityGeneration,s.peerId,s.peerCount,s.operatingChannel,s.maintenance.step);
-            if(getOutputQueue())getOutputQueue()->service(1);
+            if(txQueue())txQueue()->service(1);
         }
         publishConnection();return nullptr;
     }
@@ -882,7 +927,7 @@ const char *Ath10kPCIDevice::serviceAPMaintenance(UInt64 nowMs)
         m.peerRatesValid=true;m.peerNSS=m.target.nss;m.peerWidth=m.target.width;
         ++m.completed;m.step=0;m.submitted=false;
         m.blocked=!Ath10k::sameAPConfig(Ath10k::desiredAPConfig(s),m.applied);m.draining=false;m.sinceMs=nowMs;
-        if(!m.blocked && !s.cancelRequested && !s.csa.blocked && !s.radio.blocked && !s.radio.powerBlocked && !s.eapolPause && getOutputQueue())getOutputQueue()->service(1);
+        if(!m.blocked && !s.cancelRequested && !s.csa.blocked && !s.radio.blocked && !s.radio.powerBlocked && !s.eapolPause && txQueue())txQueue()->service(1);
         publishConnection();return nullptr;
     }
     if(m.step==11){m.ratesPending=false;m.step=8;}else ++m.step;
@@ -976,7 +1021,7 @@ const char *Ath10kPCIDevice::serviceRadioMaintenance(UInt64 nowMs)
         const bool stale=Ath10k::stationOperationalPowerLimit(s)!=r.targetPower ||
             (s.ap.timPresent && (s.ap.dtimPeriod!=r.targetDTIM || s.ap.beaconInterval!=r.targetBeacon));
         r.blocked=stale;r.sinceMs=nowMs;
-        if(!r.blocked && !r.powerBlocked && !s.csa.blocked && !s.probe.active && !s.eapolPause && !s.cancelRequested && getOutputQueue())getOutputQueue()->service(1);
+        if(!r.blocked && !r.powerBlocked && !s.csa.blocked && !s.probe.active && !s.eapolPause && !s.cancelRequested && txQueue())txQueue()->service(1);
         publishConnection();return nullptr;
     }
     if(r.step==10){r.appliedPS=false;r.step=9;}
@@ -1021,7 +1066,7 @@ const char *Ath10kPCIDevice::serviceChannelSwitch(UInt64 nowMs)
     if(c.phase==P::Confirm){
         if(!c.confirmed)return nullptr;
         ++c.completed;c.phase=P::Idle;c.blocked=false;c.status="complete";s.lastBeaconMs=nowMs;
-        if(!s.radio.powerBlocked && getOutputQueue())getOutputQueue()->service(1);
+        if(!s.radio.powerBlocked && txQueue())txQueue()->service(1);
         IOLog("Ath10kMac: CSA complete channel=%u center=%u width=%u; keys/replay state retained\n",s.operatingChannel,s.centerChannel,s.width);
         publishConnection();return nullptr;
     }
@@ -1271,8 +1316,8 @@ const char *Ath10kPCIDevice::serviceDataTX(UInt64 nowMs)
         }
     }
     if(wake && _dataTXStalled && !s.probe.active && !s.txPauseMask && !s.csa.blocked && !(s.radio.blocked || s.radio.powerBlocked) && !s.txOwned &&
-       s.dataPending<=Ath10k::kDataTxSlots*3/4 && s.disconnect==Ath10k::DisconnectStage::None && getOutputQueue()){
-        _dataTXStalled=false;++_perf.txWakeups;getOutputQueue()->service(1);
+       s.dataPending<=Ath10k::kDataTxSlots*3/4 && s.disconnect==Ath10k::DisconnectStage::None && txQueue()){
+        _dataTXStalled=false;++_perf.txWakeups;txQueue()->service(1);
     }
     return nullptr;
 }

@@ -161,6 +161,8 @@ bool Ath10kPCIDevice::start(IOService *provider)
     // runs on a normal-priority thread call so IOConfigThread can return and
     // macOS can finish booting while Wi-Fi initialization continues.
     ath10kSetRecoveryStatus(_pci, "probe-queued", "PCI setup complete; firmware probe is queued");
+    _nativeFrontEnd=getProperty("Ath10kNativeFrontEnd")==kOSBooleanTrue;
+    setProperty("Ath10kNativeFrontEnd",_nativeFrontEnd);
     registerService();
     // thread_call_allocate_with_priority/thread_call_cancel_wait are
     // com.apple.kpi.private on macOS 26 (xnu-12377 config/Private.exports), which
@@ -368,7 +370,12 @@ void Ath10kPCIDevice::stop(IOService *provider)
         _pci = nullptr;
     }
 
-    if(_networkInterface){detachInterface(_networkInterface,true);_networkInterface->release();_networkInterface=nullptr;}
+    if(_nativeOutputQueue){_nativeOutputQueue->release();_nativeOutputQueue=nullptr;}
+    if(_networkInterface){
+        // The native front end's interface belongs to AirportAth10k; only drop our reference.
+        if(!_nativeFrontEnd)detachInterface(_networkInterface,true);
+        _networkInterface->release();_networkInterface=nullptr;
+    }
     super::stop(provider);
     if(rematch){
         if(releaseDMA && !_dmaQuarantine) {
