@@ -99,6 +99,10 @@ ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-crypto"
 "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
     -I"$test_tmp_dir" -Isrc/kext native/tests/test_native_bridge.cpp -o "$test_tmp_dir/native-bridge"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-bridge"
+# AWDL engine: byte-exact against OWL's vectors, OWL's unit tests, two-node simulation.
+"${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
+    native/tests/test_native_awdl.cpp -o "$test_tmp_dir/native-awdl"
+ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-awdl"
 "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
     -I"$test_tmp_dir" -Isrc/kext -Ibuild/gen/test tests/test_rx_pipeline.cpp -o "$test_tmp_dir/rx-pipeline"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/rx-pipeline"
