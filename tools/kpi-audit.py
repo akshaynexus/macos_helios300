@@ -23,6 +23,10 @@ Allowlist file format (one entry per line, '#' comments):
                                        OSDeclare*Structors(C) and C::_RESERVEDC<N>
                                        from OSMetaClassDeclareReserved*(C, N)
                                        are accepted when those macros are there.
+                                       A symbol is also accepted when the header
+                                       names it verbatim as an asm label,
+                                       __asm__("<mangled>"), the way reconstructed
+                                       Apple headers pin vtable slots.
 The header check matches names, not full signatures.
 
 Exit 0 = every import resolved; 1 = at least one unresolved (listed).
@@ -170,6 +174,12 @@ def main():
             for r, rb in regexes:
                 if r.fullmatch(s):
                     b = rb
+                    break
+        if not b and headers:
+            label = '__asm__("' + s + '")'
+            for text, hb, hname in headers:
+                if label in text:
+                    b, how = hb, hname
                     break
         if not b and headers:
             cls, mem = parse_demangled(dem.get(s, s))
