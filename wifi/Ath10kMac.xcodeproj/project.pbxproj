@@ -1,0 +1,67 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXFileReference section */
+		A100001 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		A100002 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		A100003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Ath10kMac.kext/Contents/Info.plist; sourceTree = "<group>"; };
+		A100004 /* Ath10kPCIDevice.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = src/kext/Ath10kPCIDevice.cpp; sourceTree = "<group>"; };
+		A100005 /* Ath10kPCIDevice.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kPCIDevice.hpp; sourceTree = "<group>"; };
+		A100006 /* kmod_info.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = src/kext/kmod_info.c; sourceTree = "<group>"; };
+		A100007 /* Ath10kHw.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kHw.hpp; sourceTree = "<group>"; };
+		A100008 /* Ath10kRegisterIO.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kRegisterIO.hpp; sourceTree = "<group>"; };
+		A100009 /* Ath10kTarget.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kTarget.hpp; sourceTree = "<group>"; };
+		A10000A /* Ath10kCE.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kCE.hpp; sourceTree = "<group>"; };
+		A10000B /* Ath10kDMA.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kDMA.hpp; sourceTree = "<group>"; };
+		A10000C /* Ath10kCERing.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kCERing.hpp; sourceTree = "<group>"; };
+		A10000D /* Ath10kBMI.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kBMI.hpp; sourceTree = "<group>"; };
+		A100200 /* Ath10kMac.kext */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = build/out/Ath10kMac.kext; sourceTree = "<group>"; };
+		A10000E /* Ath10kPayload.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kPayload.hpp; sourceTree = "<group>"; };
+        A100011 /* Ath10kNetwork.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = src/kext/Ath10kNetwork.cpp; sourceTree = "<group>"; };
+        A100012 /* Ath10kConnection.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kConnection.hpp; sourceTree = "<group>"; };
+        A100013 /* Ath10kRuntime.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = src/kext/Ath10kRuntime.cpp; sourceTree = "<group>"; };
+        A100014 /* Ath10kPerformance.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kPerformance.hpp; sourceTree = "<group>"; };
+        A100015 /* Ath10kRXRate.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kRXRate.hpp; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Boot protocol headers */
+		A10000F /* Ath10kBoot.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kBoot.hpp; sourceTree = "<group>"; };
+		A100010 /* Ath10kHTC.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = src/kext/Ath10kHTC.hpp; sourceTree = "<group>"; };
+
+/* Begin PBXGroup section */
+		A200000 = {isa = PBXGroup; children = (A200010, A200020, A200030); sourceTree = "<group>"; };
+		A200010 = {isa = PBXGroup; name = Sources; children = (A100004, A100005, A100011, A100012, A100013, A100014, A100015, A100007, A100008, A100009, A10000A, A10000B, A10000C, A10000D, A10000E, A10000F, A100010, A100006); sourceTree = "<group>"; };
+		A200020 = {isa = PBXGroup; name = Supporting; children = (A100003, A100002, A100001); sourceTree = "<group>"; };
+		A200030 = {isa = PBXGroup; name = Products; children = (A100200); sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A300000 = {isa = PBXNativeTarget; buildConfigurationList = A400010; buildPhases = (A500000); buildRules = (); dependencies = (); name = Ath10kMac; productName = Ath10kMac; productReference = A100200; productType = "com.apple.product-type.kernel-extension"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A600000 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = NO; LastUpgradeCheck = 1500;}; buildConfigurationList = A400000; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = A200000; productRefGroup = A200030; projectDirPath = ""; projectRoot = ""; targets = (A300000); };
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A500000 = {isa = PBXShellScriptBuildPhase; alwaysOutOfDate = 1; buildActionMask = 2147483647; files = (); inputFileListPaths = (); inputPaths = (); name = "Build Ath10kMac via Makefile"; outputFileListPaths = (); outputPaths = ("$(SRCROOT)/build/out/Ath10kMac.kext/Contents/MacOS/Ath10kMac"); runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = "set -e\ncd \"$SRCROOT\"\nmake kext\n"; showEnvVarsInLog = 0; };
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A400001 = {isa = XCBuildConfiguration; buildSettings = {MACOSX_DEPLOYMENT_TARGET = 11.0; SDKROOT = macosx;}; name = Debug; };
+		A400002 = {isa = XCBuildConfiguration; buildSettings = {MACOSX_DEPLOYMENT_TARGET = 11.0; SDKROOT = macosx;}; name = Release; };
+		A400011 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = NO; INFOPLIST_FILE = Ath10kMac.kext/Contents/Info.plist; MACOSX_DEPLOYMENT_TARGET = 11.0; PRODUCT_BUNDLE_IDENTIFIER = br.com.jonasw8.driver.ath10kmac; PRODUCT_NAME = Ath10kMac; SKIP_INSTALL = YES;}; name = Debug; };
+		A400012 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = NO; INFOPLIST_FILE = Ath10kMac.kext/Contents/Info.plist; MACOSX_DEPLOYMENT_TARGET = 11.0; PRODUCT_BUNDLE_IDENTIFIER = br.com.jonasw8.driver.ath10kmac; PRODUCT_NAME = Ath10kMac; SKIP_INSTALL = YES;}; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A400000 = {isa = XCConfigurationList; buildConfigurations = (A400001, A400002); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A400010 = {isa = XCConfigurationList; buildConfigurations = (A400011, A400012); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = A600000;
+}
