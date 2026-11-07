@@ -1,0 +1,4 @@
+[submodule "kexts/nvidia-macos-driver"]
+	path = kexts/nvidia-macos-driver
+	url = https://github.com/akshaynexus/nvidia-macos-driver.git
+	branch = pascal-gp106

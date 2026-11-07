@@ -1,0 +1,4 @@
+build/
+*.o
+*.kext/
+.DS_Store
