@@ -13,6 +13,12 @@ while [ "$i" -le 3 ]; do
 done
 sh scripts/test-info.sh
 
+echo "== Native front end (AirportAth10k) =="
+ioreg -r -c Ath10kPCIDevice -l -w 0 | awk '/"Ath10kNative(FrontEnd|Ready)"/' || true
+ioreg -r -c AirportAth10k -l -w 0 | awk '/"(AirportAth10kVersion|IOInterfaceName|IOLinkStatus|IOMACAddress|IOModel|IOUserVisibleName)"/' || true
+ioreg -r -c AirportAth10kInterface -l -w 0 | awk '/"(IOInterfaceName|IOInterfaceUnit|IOInterfaceNamePrefix)"/' || true
+kmutil showloaded 2>/dev/null | grep -i -e ath10k -e airportath10k || true
+
 # Read-only network diagnostics; never change another interface's configuration.
 echo "== macOS interfaces and DHCP =="
 networksetup -listallhardwareports || true

@@ -1,0 +1,23 @@
+AirportAth10k — native macOS 26 Wi-Fi front end for the ath10k core (Ath10kMac).
+
+Code in kexts/wifi/native/src is GPL-3.0-or-later (see kexts/wifi/LICENSE), except:
+
+* native/src/AirportWCL.hpp is imported unchanged from laobamac/itlwm
+  (AirportItlwm/WCL/WCL.hpp, commit 7204c69d1bfa7f5cc0f7864e08fb03e55d0ec29e,
+  2026-11-01). Copyright © 2026 laobamac. All rights reserved.
+* native/include/Airport/** are the reconstructed Apple IO80211Family /
+  IOSkywalkFamily / corecapture class declarations from laobamac/itlwm
+  include/Airport (same commit). Copyright © 2019-2023 钟先耀 (zxystd),
+  © 2026 laobamac, © Apple Inc. for the apple80211 ioctl definitions.
+  All rights reserved.
+* native/src/AirportAth10k.cpp, AirportAth10kInterface.cpp and
+  AirportAth10kEthernetInterface.cpp follow the structure, call order and
+  WCL event choreography of laobamac/itlwm AirportItlwm/AirportItlwmV2.cpp,
+  AirportItlwmSkywalkInterface.cpp, WCL/WCL.cpp and
+  AirportItlwmEthernetInterface.cpp (same commit), rewritten over the ath10k
+  core's control ABI.
+
+The laobamac/itlwm material is marked "All rights reserved" in its repository
+(which is GPL-2.0 as a whole). It is used here with the author's permission,
+per the repository owner (2026-11-08), who collaborates with laobamac. The
+original notices are kept in every imported file.

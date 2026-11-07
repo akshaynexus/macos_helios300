@@ -1,0 +1,32 @@
+# kpi-audit allowlist for AirportAth10k: every imported family symbol must be
+# declared in one of these headers (tools/kpi-audit.py "hdr" rule). The Apple
+# IO80211/Skywalk/corecapture declarations are the reconstructed headers under
+# native/include/Airport (paths absolute at build time, see cross-build-native.sh).
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOEthernetController.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkController.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOEthernetInterface.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkInterface.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkMedium.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOOutputQueue.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOGatedOutputQueue.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOBasicOutputQueue.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkData.h
+hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkStats.h
+sym com.apple.iokit.IONetworkingFamily _gIONetworkFilterGroup
+# Private SPI (__PRIVATE_SPI__ in IONetworkingFamily): marks the BSD interface as Wi-Fi for WCL.
+sym com.apple.iokit.IONetworkingFamily __ZN19IONetworkInterface19setInterfaceSubTypeEj
+hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211ControllerV2.h
+hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211SkywalkInterface.h
+hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211InfraInterface.h
+hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211InfraProtocol.h
+hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211WorkQueue.h
+hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/FaultReporter.h
+hdr com.apple.iokit.IOSkywalkFamily @AIRPORT@/macOS26/IOSkywalkInterface.h
+hdr com.apple.iokit.IOSkywalkFamily @AIRPORT@/macOS26/IOSkywalkNetworkInterface.h
+hdr com.apple.iokit.IOSkywalkFamily @AIRPORT@/macOS26/IOSkywalkEthernetInterface.h
+hdr com.apple.driver.corecapture @AIRPORT@/CCPipe.h
+hdr com.apple.driver.corecapture @AIRPORT@/CCStream.h
+hdr com.apple.driver.corecapture @AIRPORT@/CCLogStream.h
+hdr com.apple.driver.corecapture @AIRPORT@/macOS26/FaultReporter.h
+# The ath10k core kext (same tree): the front end links its control ABI and native hooks.
+hdr br.com.jonasw8.driver.ath10kmac @CORE@/Ath10kPCIDevice.hpp

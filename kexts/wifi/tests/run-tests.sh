@@ -92,6 +92,13 @@ if [ "$(uname -s)" != Darwin ]; then security_libs="-lcrypto"; fi
     tests/test_security.cpp $security_libs -o "$test_tmp_dir/security"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/security"
 echo 'WPA2 supplicant tests passed (independent crypto vectors, MIC, GTK unwrap, retries, RSN mismatch and no key reinstall).'
+# Native (IO80211/WCL) front end: kernel crypto policy and the bridge logic.
+"${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
+    -Isrc/kext native/tests/test_native_crypto.cpp -o "$test_tmp_dir/native-crypto"
+ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-crypto"
+"${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
+    -I"$test_tmp_dir" -Isrc/kext native/tests/test_native_bridge.cpp -o "$test_tmp_dir/native-bridge"
+ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-bridge"
 "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
     -I"$test_tmp_dir" -Isrc/kext -Ibuild/gen/test tests/test_rx_pipeline.cpp -o "$test_tmp_dir/rx-pipeline"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/rx-pipeline"
