@@ -288,6 +288,8 @@ private:
     bool assocNotified=false,firstBeaconNotified=false,linkIndicated=false;
     bool keysSubmitted=false,m4Sent=false,authorized=false;
     AthSecurity::Supplicant<Crypto> supplicant;
+    // 56 bytes (TK, GTK, cipher, index, RSC) in the release build; 81 adds the IGTK block when AIRPORT_ATH10K_WPASEC is on.
+    static constexpr uint32_t kKeyPayloadBytes=AIRPORT_ATH10K_WPASEC?81:56;
     uint8_t pendingFrame[160]{};size_t pendingLength=0;
     uint8_t rekeyKeys[AthSecurity::Supplicant<Crypto>::keyPayloadLength]{};uint32_t rekeyOperation=0;bool rekeyKeysReady=false,rekeyResponsePending=false;
     uint16_t beaconSequence=0;uint64_t lqmReportedMs=0,restartRequestedMs=0;uint32_t restartRequests=0;
@@ -453,7 +455,7 @@ private:
             AthSecurity::wipe(rx.data,sizeof(rx.data));
             if(result==S::Fatal){lastError=supplicant.error;fail(23);return false;}
             if(result==S::Keys){
-                AthControl::Request keys{};keys.length=S::keyPayloadLength;memcpy(keys.data,supplicant.keys,keys.length);
+                AthControl::Request keys{};keys.length=kKeyPayloadBytes;memcpy(keys.data,supplicant.keys,keys.length);
                 AthControl::Response o{};keys.operation=AthControl::InstallKeys;
                 const int r=core.call(keys,o);
                 AthSecurity::wipe(keys.data,sizeof(keys.data));AthSecurity::wipe(supplicant.keys,sizeof(supplicant.keys));
@@ -471,7 +473,7 @@ private:
             if(rekeyKeysReady)break;
         }
         if(rekeyKeysReady){
-            const int r=call(rekeyOperation,0,rekeyKeys,sizeof(rekeyKeys));
+            const int r=call(rekeyOperation,0,rekeyKeys,kKeyPayloadBytes);
             if(!r){AthSecurity::wipe(rekeyKeys,sizeof(rekeyKeys));rekeyOperation=0;rekeyKeysReady=false;}
             else if(r!=kBusy && r!=kNotReady){lastError="rekey-rejected";fail(18);return false;}
         }

@@ -61,7 +61,7 @@ bool Ath10kPCIDevice::requestDeviceRestart(){
  return true;
 }
 void Ath10kPCIDevice::fillControlInfo(AthControl::Response &o){
- Ath10k::htcWriteLE32(o.data,0x2ff|(_regulatory.stationDFS?256u:0u));Ath10k::htcWriteLE32(o.data+4,_wmiScan.generation);
+ Ath10k::htcWriteLE32(o.data,0x2ff|(AIRPORT_ATH10K_WPASEC?1024u:0u)|(_regulatory.stationDFS?256u:0u));Ath10k::htcWriteLE32(o.data+4,_wmiScan.generation);
  Ath10k::htcWriteLE32(o.data+8,_connection.operatingChannel);
  Ath10k::htcWriteLE32(o.data+12,static_cast<UInt32>(_connection.signalDbm));
  Ath10k::htcWriteLE32(o.data+16,_connection.width);Ath10k::htcWriteLE32(o.data+20,_connection.nss);
@@ -79,6 +79,14 @@ void Ath10kPCIDevice::fillControlInfo(AthControl::Response &o){
  // native front end (AirportAth10k) reports the country to WCL from here.
  const char *cc=_regulatory.country?_regulatory.country->alpha2:"00";
  o.data[112]=static_cast<UInt8>(cc[0]);o.data[113]=static_cast<UInt8>(cc[1]);o.data[114]=0;o.data[115]=_nativeFrontEnd?1:0;o.length=116;
+#if AIRPORT_ATH10K_WPASEC
+ // [116] security state, [120..125] the station MAC in use (Ath10kControl.hpp).
+ const auto &s=_connection;const bool idle=s.stage==Ath10k::LinkStage::Disabled;
+ const UInt8 *mac=idle?_vdevMAC:s.local;
+ Ath10k::htcWriteLE32(o.data+116,(s.externalAuth && s.stage==Ath10k::LinkStage::Auth?1u:0u)|(s.pmf && !idle?2u:0u)|(s.enterprise && !idle?4u:0u)|
+  (Ath10k::sameMAC(mac,_wmiInit.mac)?0u:8u)|(s.saQuery.active?16u:0u));
+ bcopy(mac,o.data+120,6);o.length=128;
+#endif
 }
 IOReturn Ath10kPCIDevice::controlRequest(OSObject *client,const AthControl::Request *r,AthControl::Response *o){
  if(!_wmiWorkLoop || isInactive())return kIOReturnNotReady;
@@ -102,11 +110,11 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
    if(Ath10k::requestDisconnect(s,n/1000000u)){s.diagnostics.cancelOrigin=s.diagnostics.lastCancelOrigin="client-close";self->networkLink(false);self->publishConnection();}
    else if(self->_wmiLive.active && s.stage!=Ath10k::LinkStage::Disabled){s.diagnostics.cancelOrigin="client-close";s.cancelRequested=true;s.portAuthorized=false;self->networkLink(false);self->publishConnection();}}return kIOReturnSuccess;}
  const auto &r=*static_cast<const Request *>(input);auto &o=*static_cast<Response *>(output);
- if(r.version!=version || r.length>512 || r.operation>RadioOptions)return kIOReturnBadArgument;
+ if(r.version!=version || r.length>512 || r.operation>=(AIRPORT_ATH10K_WPASEC?OperationCount:UInt32(SendAuth)))return kIOReturnBadArgument;
  bzero(&o,sizeof(o));o.version=version;o.stage=static_cast<UInt32>(s.stage);o.phase=s.securityPhase;
  o.flags=128|512|((self->_wmiScan.attempted && !self->_wmiScan.completed)?256:0)|(s.disconnect!=Ath10k::DisconnectStage::None?64:0)|(self->_wmiLive.active?1:0)|(self->_wmiScan.completed?2:0)|(self->_networkLinkUp?4:0)|(s.txOwned?8:0)|(s.secure?16:0)|(s.eapolTxFailed?32:0);
  o.count=self->_wmiBSS.count;bcopy(s.local,o.local,6);bcopy(s.bssid,o.bssid,6);
- if(s.stage==Ath10k::LinkStage::Disabled)bcopy(self->_wmiInit.mac,o.local,6);
+ if(s.stage==Ath10k::LinkStage::Disabled)bcopy(self->_vdevMAC,o.local,6);
  strlcpy(o.error,s.error,sizeof(o.error));
  if(r.operation==Status)return kIOReturnSuccess;
  if(r.operation==BSS){
@@ -124,7 +132,11 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   Ath10k::htcWriteLE16(x,b.capabilities);Ath10k::htcWriteLE16(x+2,b.beaconInterval);x[4]=b.rateCount;bcopy(b.rates,x+5,32);
   x[37]=static_cast<UInt8>((b.htPresent?1:0)|(b.htOperation?2:0)|(b.vhtPresent?4:0)|(b.vhtOperation?8:0));
   bcopy(b.ht,x+38,26);bcopy(b.htOp,x+64,22);bcopy(b.vht,x+86,12);bcopy(b.vhtOp,x+98,5);
-  x[103]=b.powerConstraintPresent?1:0;x[104]=b.powerConstraintDb;o.length+=105;return kIOReturnSuccess;
+  x[103]=b.powerConstraintPresent?1:0;x[104]=b.powerConstraintDb;o.length+=105;
+#if AIRPORT_ATH10K_WPASEC
+  o.data[o.length]=b.rsnxeLength;bcopy(b.rsnxe,o.data+o.length+1,18);o.length+=19;
+#endif
+  return kIOReturnSuccess;
  }
  if(r.operation==Info){self->fillControlInfo(o);return kIOReturnSuccess;}
  if(r.operation==Restart){
@@ -158,9 +170,33 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   if(self->_wmiEvents.rfKill)return kIOReturnNotReady;
   if(self->_controlOwner || s.stage!=Ath10k::LinkStage::Disabled)return kIOReturnExclusiveAccess;
   if(!self->_wmiScan.completed || self->_wmiScan.failed || self->_wmiScan.cancelRequested || !self->_networkEnabled)return kIOReturnNotReady;
-  if(r.index>1 || r.length<9 || !r.data[0] || r.data[0]>32 || r.length!=8u+r.data[0] || r.data[1]>1 || (r.data[2]&1))return kIOReturnBadArgument;
-  s.regulatory=self->_regulatory;s.hiddenSSID=r.index==1;
-  s.secure=r.data[1];s.ssidLength=r.data[0];bcopy(r.data+2,s.bssid,6);bcopy(r.data+8,s.ssid,s.ssidLength);bcopy(self->_wmiInit.mac,s.local,6);
+  if(r.index>3 || r.length<9 || !r.data[0] || r.data[0]>32 || r.length<8u+r.data[0] || r.data[1]>1 || (r.data[2]&1))return kIOReturnBadArgument;
+  const bool extended=(r.index&2)!=0;const UInt8 *x=r.data+8+r.data[0];const UInt32 xBytes=r.length-8u-r.data[0];
+  if(!extended && xBytes)return kIOReturnBadArgument;
+  if(extended && !AIRPORT_ATH10K_WPASEC)return kIOReturnUnsupported; // paused feature set (docs/WIFI-SECURITY.md)
+  if(extended){
+   // Extended block: flags, AKM, station MAC, RSN element, RSNXE (Ath10kControl.hpp).
+   if(xBytes<10 || x[8]>64 || xBytes<10u+x[8] || x[9+x[8]]>18 || xBytes!=10u+x[8]+x[9+x[8]] || (x[0]&~31u))return kIOReturnBadArgument;
+   const UInt8 akm=x[1];const bool external=(x[0]&1)!=0,pmfCapable=(x[0]&2)!=0,pmfRequired=(x[0]&4)!=0,enterprise=(x[0]&8)!=0,withMAC=(x[0]&16)!=0;
+   if(r.data[1]){
+    if(akm!=AthSecurity::akm8021X && akm!=AthSecurity::akmPSK && akm!=AthSecurity::akm8021XSHA256 && akm!=AthSecurity::akmPSKSHA256 && akm!=AthSecurity::akmSAE)return kIOReturnBadArgument;
+    AthSecurity::RSNInfo own;
+    if(!x[8] || !AthSecurity::parseRSN(x+9,x[8],own) || !own.akm(akm) || !own.pairwiseCCMP || (pmfRequired && !pmfCapable) || (own.mfpc!=pmfCapable) || (own.mfpr!=pmfRequired))return kIOReturnBadArgument;
+    if(external!=(akm==AthSecurity::akmSAE) || enterprise!=AthSecurity::akmEnterprise(akm))return kIOReturnBadArgument;
+   } else if(external || pmfCapable || pmfRequired || enterprise || x[8] || x[9+x[8]])return kIOReturnBadArgument;
+   if(withMAC && ((x[2]&1) || !(x[2]|x[3]|x[4]|x[5]|x[6]|x[7])))return kIOReturnBadArgument;
+   const UInt8 xe=x[9+x[8]];
+   if(xe && (xe<3 || x[10+x[8]]!=244 || x[11+x[8]]+2u!=xe))return kIOReturnBadArgument;
+  }
+  s.regulatory=self->_regulatory;s.hiddenSSID=(r.index&1)!=0;
+  s.secure=r.data[1];s.ssidLength=r.data[0];bcopy(r.data+2,s.bssid,6);bcopy(r.data+8,s.ssid,s.ssidLength);bcopy(self->_vdevMAC,s.local,6);
+  s.akm=AthSecurity::akmPSK;s.pmfCapable=s.pmfRequired=s.pmf=s.externalAuth=s.enterprise=false;s.stationRSNLength=s.stationRSNXELength=0;
+  s.authDone=s.authTxPending=false;s.authCount=s.authRead=s.authWrite=0;s.macChange={};
+  if(extended){
+   if(r.data[1]){s.akm=x[1];s.externalAuth=(x[0]&1)!=0;s.pmfCapable=(x[0]&2)!=0;s.pmfRequired=(x[0]&4)!=0;s.enterprise=(x[0]&8)!=0;
+    s.stationRSNLength=x[8];bcopy(x+9,s.stationRSN,x[8]);s.stationRSNXELength=x[9+x[8]];bcopy(x+10+x[8],s.stationRSNXE,s.stationRSNXELength);}
+   if(x[0]&16){bcopy(x+2,s.local,6);s.macChange.pending=!Ath10k::sameMAC(s.local,self->_vdevMAC);}
+  }
   s.firmwareHT=self->_wmi.htCapability;s.firmwareVHT=self->_wmi.vhtCapability;
   s.rfChains=static_cast<UInt8>(self->_wmiInit.requestedChainMask==1?1:2);
   const char *error=Ath10k::selectOpenBSS(s,self->_wmiBSS);
@@ -187,6 +223,25 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   self->networkLink(false);self->publishConnection();return kIOReturnSuccess;
  }
  if(r.operation==Abort){self->endWMIRuntime("app-disconnected-reload-required");return kIOReturnSuccess;}
+#if AIRPORT_ATH10K_WPASEC
+ if(r.operation==SendAuth || r.operation==ReceiveAuth || r.operation==AuthResult){
+  // External authentication (SAE): only while the core waits in the Auth stage.
+  if(!s.externalAuth || s.stage!=Ath10k::LinkStage::Auth || s.authDone || s.cancelRequested)return kIOReturnNotReady;
+  if(r.operation==ReceiveAuth){
+   if(!s.authCount)return kIOReturnNotReady;
+   o.length=s.authLength[s.authRead];bcopy(s.authFrames[s.authRead],o.data,o.length);
+   AthSecurity::wipe(s.authFrames[s.authRead],512);s.authRead=(s.authRead+1)%2;--s.authCount;return kIOReturnSuccess;
+  }
+  if(r.operation==SendAuth){
+   if(r.length<6 || r.length>sizeof(s.authTx) || r.index)return kIOReturnBadArgument;
+   if(s.authTxPending || s.txOwned)return kIOReturnBusy;
+   bcopy(r.data,s.authTx,r.length);s.authTxLength=static_cast<UInt16>(r.length);s.authTxPending=true;return kIOReturnSuccess;
+  }
+  if(r.index>1)return kIOReturnBadArgument;
+  if(r.index==1){s.authDone=true;return kIOReturnSuccess;}
+  s.error="external-authentication-failed";s.stage=Ath10k::LinkStage::Failed;s.cancelRequested=true;self->publishConnection();return kIOReturnSuccess;
+ }
+#endif
  if(!s.secure || s.stage!=Ath10k::LinkStage::Connected)return kIOReturnNotReady;
  if(r.operation==ReceiveEAPOL){
   if(!s.eapolCount)return kIOReturnNotReady;
@@ -207,7 +262,8 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   return kIOReturnSuccess;
  }
  if(r.operation==RekeyGroup || r.operation==RekeyPair){
-  if(s.stats.step || s.maintenance.step || s.radio.step || s.csa.phase!=Ath10k::ChannelSwitchPhase::Idle || r.length!=56 || r.data[48]!=s.groupCipher || r.data[49]>3 || !s.portAuthorized || s.securityPhase!=5 || s.wmiOwned || s.rekeyKind)return kIOReturnBusy;
+  if(s.stats.step || s.maintenance.step || s.radio.step || s.csa.phase!=Ath10k::ChannelSwitchPhase::Idle || (r.length!=56 && (!AIRPORT_ATH10K_WPASEC || r.length!=81)) || r.data[48]!=s.groupCipher || r.data[49]>3 || !s.portAuthorized || s.securityPhase!=5 || s.wmiOwned || s.rekeyKind)return kIOReturnBusy;
+  if(r.length==81 && r.data[56]>1)return kIOReturnBadArgument;
   const UInt32 groupKeyLength=s.groupCipher==AthSecurity::cipherTKIP?32:16;
   if(groupKeyLength==16)for(unsigned i=16;i<32;++i)if(r.data[16+i])return kIOReturnBadArgument;
   const bool pair=r.operation==RekeyPair;
@@ -216,6 +272,7 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   for(unsigned i=0;i<4;++i)if(s.groupInstalled[i] && AthSecurity::equal(r.data+16,s.installedGroups[i],groupKeyLength) && i!=r.data[49])return kIOReturnBadArgument;
   if(sameGroup && (!pair || r.data[49]!=s.groupIndex))return kIOReturnBadArgument;
   bcopy(r.data,s.temporalKey,16);bcopy(r.data+16,s.groupKey,32);s.groupIndex=r.data[49];bcopy(r.data+50,s.groupRSC,6);
+  if(r.length==81 && r.data[56])Ath10k::installIGTK(s,r.data+57);
   if(!self->_wmiScan.completed)self->_wmiScan.cancelRequested=true;
   s.rekeyKind=pair?2:1;s.rekeySkipGroup=pair && sameGroup;s.securityPhase=pair?1:2;
   s.portAuthorized=false;s.submitted=false;s.authorizeRequested=false;s.securityAck=false;
@@ -223,9 +280,11 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   return kIOReturnSuccess;
  }
  if(r.operation==InstallKeys){
-  if(r.length!=56 || r.data[48]!=s.groupCipher || r.data[49]>3 || s.securityPhase || s.portAuthorized)return kIOReturnBadArgument;
+  if((r.length!=56 && (!AIRPORT_ATH10K_WPASEC || r.length!=81)) || r.data[48]!=s.groupCipher || r.data[49]>3 || s.securityPhase || s.portAuthorized)return kIOReturnBadArgument;
+  if(r.length==81 && r.data[56]>1)return kIOReturnBadArgument;
   if(s.groupCipher==AthSecurity::cipherCCMP)for(unsigned i=16;i<32;++i)if(r.data[16+i])return kIOReturnBadArgument;
   bcopy(r.data,s.temporalKey,16);bcopy(r.data+16,s.groupKey,32);s.groupIndex=r.data[49];bcopy(r.data+50,s.groupRSC,6);
+  if(r.length==81 && r.data[56])Ath10k::installIGTK(s,r.data+57);
   UInt64 pn=0;for(unsigned i=0;i<6;++i)pn|=UInt64(s.groupRSC[i])<<(8*i);
   for(auto &v:s.groupPN)v=pn;
   s.securityPhase=1;s.submitted=false;return kIOReturnSuccess;

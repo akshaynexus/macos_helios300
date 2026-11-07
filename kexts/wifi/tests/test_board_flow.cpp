@@ -310,7 +310,7 @@ public:
     Ath10k::WMIRuntimeState _wmiLive{};
     Ath10k::WMIInitState _wmiEvents{};
     Buffer _wmiTxBuffer;
-    Ath10k::WMIInitState _wmiInit{};
+    Ath10k::WMIInitState _wmiInit{};UInt8 _vdevMAC[6]{};
     Buffer _wmiHostMemory[Ath10k::kWMIHostMemoryMax];
     Buffer _wmiRxBuffer;
     Ath10k::WMIBootstrapState _wmi{};

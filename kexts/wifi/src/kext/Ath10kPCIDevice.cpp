@@ -2454,7 +2454,7 @@ const char *Ath10kPCIDevice::serviceWMIVdevCreate(UInt64 nowMs)
         return state.status;
     }
     if (state.txConsumed && state.creditReturned) {
-        state.completed=true;state.status="transport-complete-no-create-response";
+        state.completed=true;state.status="transport-complete-no-create-response";bcopy(_wmiInit.mac,_vdevMAC,6);
         // VDEV_CREATE has no semantic success response in this ath10k TLV path.
         IOLog("Ath10kMac: WMI VDEV_CREATE TRANSPORT PASS id=0 tx-consumed=yes credit-returned=yes elapsed=%llu ms; semantic creation not confirmed\n",
               static_cast<unsigned long long>(state.elapsedMs));
@@ -2730,7 +2730,7 @@ const char *Ath10kPCIDevice::drainWMIRuntime()
                 Ath10k::parseHTTSetup(raw,bytes,_htcHTTData.endpoint,_wmi.credits,_rxSetup,&_connection):
                 Ath10k::parseWMIInitResponse(raw,bytes,_htcWMIControl.endpoint,_wmi.credits,_wmiEvents,
                     (_connection.stats.step==2 || _connection.maintenance.step==8 || _connection.radio.step==8 || _connection.csa.phase==Ath10k::ChannelSwitchPhase::Barrier || _connection.disconnect==Ath10k::DisconnectStage::Barrier || _connection.stage==Ath10k::LinkStage::Barrier || (_connection.secure && _connection.securityPhase==4))?&_connectionEcho:((_rxSetup.attempted && _rxSetup.stage==2)?&_filterEcho:&_wmiEcho),&_wmiScan,&_wmiBSS,
-                    _rxSetup.attempted && (_rxSetup.stage>1 || (_rxSetup.stage==1 && _rxSetup.submitted)),&_connection);
+                    (_rxSetup.attempted && (_rxSetup.stage>1 || (_rxSetup.stage==1 && _rxSetup.submitted))) || _connection.macChange.step!=0,&_connection);
             const bool httMessage=isHTT && bytes>=12 && payload>=trailer+4;
             if(httMessage && !error && _rxSetup.messages<=16)
                 IOLog("Ath10kMac: HTT RX type=0x%x bytes=%u version=%u.%u\n",_rxSetup.lastType,bytes,_rxSetup.major,_rxSetup.minor);

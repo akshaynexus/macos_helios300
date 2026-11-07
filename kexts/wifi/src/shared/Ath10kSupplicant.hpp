@@ -160,7 +160,7 @@ public:
    uint8_t nz=0;for(unsigned i=0;i<32;++i)nz|=p[17+i];if(!nz)return Ignore;
    // Message 1 key data: optional PMKID KDE; with SAE/802.1X it must name our PMK.
    const size_t kd=be16(p+97);
-   if(kd){
+   if(kd && (havePMKID || sha256())){ // WPA2-PSK ignores message 1 key data as before
     if(kd!=22 || p[99]!=221 || p[100]!=20 || !suite(p+101,4))return Ignore;
     if(havePMKID && !equal(p+105,expectedPMKID,16))return fail("PMKID da mensagem 1 não corresponde à PMK.");
    }

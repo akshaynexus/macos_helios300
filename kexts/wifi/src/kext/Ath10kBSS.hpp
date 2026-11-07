@@ -9,6 +9,7 @@ struct WMIBSS {
     UInt8 ht[26]{},htOp[22]{},vht[12]{},vhtOp[5]{},wmm[16]{};
     UInt8 bssid[6]{}, ssid[32]{}, ssidLength=0, advertisedChannel=0;
     UInt8 rsn[257]{};UInt16 rsnLength=0;
+    UInt8 rsnxe[18]{},rsnxeLength=0; // RSNXE (id 244): SAE hash-to-element and other extended capabilities
     bool hidden=true, privacy=false, rsnPresent=false, wpaPresent=false;
     bool timPresent=false;UInt8 dtimCount=0,dtimPeriod=0;
     bool powerConstraintPresent=false;UInt8 powerConstraintDb=0;
@@ -133,6 +134,7 @@ inline void recordWMIBSS(WMIBSSCache &cache, const UInt8 *f, UInt32 bytes,
             candidate.rsnPresent=true;candidate.rsnLength=static_cast<UInt16>(len+2);
             for(UInt32 j=0;j<len+2;++j)candidate.rsn[j]=f[p-2+j];
         } else if(id==221 && len>=4 && f[p]==0 && f[p+1]==0x50 && f[p+2]==0xf2 && f[p+3]==1){candidate.wpaPresent=true;}
+        else if(id==244 && len>=1 && len<=16){candidate.rsnxeLength=static_cast<UInt8>(len+2);for(UInt32 j=0;j<len+2;++j)candidate.rsnxe[j]=f[p-2+j];}
         p+=len;
     }
     if(haveDS && haveHT && dsChannel!=htChannel){rejectBSS(cache,BSSChannelConflict);return;}

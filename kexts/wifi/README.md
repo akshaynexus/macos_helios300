@@ -48,6 +48,9 @@ as Wi-Fi in Network settings.
 - **AWDL / AirDrop / Continuity.** Needs a second (P2P) virtual interface and action-frame
   TX; not started.
 - **Private Wi-Fi Address.** See the table.
+- **Paused work.** SAE/PMF/802.1X and the private MAC are being implemented behind the build gate
+  `AIRPORT_ATH10K_WPASEC` (off in releases): status and resume plan in
+  [`docs/WIFI-SECURITY.md`](../../docs/WIFI-SECURITY.md).
 
 ## Layout
 

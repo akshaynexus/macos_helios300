@@ -143,7 +143,7 @@ int main(){
         assert(sink.count(W::AssocComplete)==1 && sink.count(W::LinkStatus)==1 && sink.count(W::FirstBeacon)==1 && sink.links.size()==1 && sink.links[0]);
         assert(core.eapolOut.size()==1 && core.eapolOut[0].size()==sizeof(v_m2) && !memcmp(core.eapolOut[0].data(),v_m2,sizeof(v_m2)));
         core.advance();s.poll(t+=100); // M3 -> keys installed, M4 queued until phase 3
-        assert(core.installedKeys.size()==81 && !core.installedKeys[56] && !memcmp(core.installedKeys.data(),v_ptk+32,16) && !memcmp(core.installedKeys.data()+16,v_gtk,16) && core.installedKeys[48]==4);
+        assert(core.installedKeys.size()==(AIRPORT_ATH10K_WPASEC?81u:56u) && !memcmp(core.installedKeys.data(),v_ptk+32,16) && !memcmp(core.installedKeys.data()+16,v_gtk,16) && core.installedKeys[48]==4);
         assert(core.eapolOut.size()==1);
         core.advance();s.poll(t+=100); // phase 3: M4 sent and Authorize requested
         assert(core.eapolOut.size()==2 && core.eapolOut[1].size()==sizeof(v_m4) && !memcmp(core.eapolOut[1].data(),v_m4,sizeof(v_m4)) && core.authorized);

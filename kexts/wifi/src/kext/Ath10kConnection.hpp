@@ -2,6 +2,7 @@
 #include "Ath10kHTC.hpp"
 #include "Ath10kBSS.hpp"
 #include "Ath10kMulticast.hpp"
+#include "../shared/Ath10kAES.hpp"
 
 namespace Ath10k {
 // Ethernet MTU excludes headers. Permit at most two in-band VLAN tags, not jumbo payloads.
@@ -201,6 +202,28 @@ struct ConnectionState {
     UInt64 pairPN[17]{},groupPN[17]{};
     UInt16 eapolLength[4]{};UInt8 eapolFrames[4][512]{};
     UInt32 eapolRead=0,eapolWrite=0,eapolCount=0;
+    // Security profile from the extended Connect (Ath10kControl.hpp): AKM,
+    // PMF (capable/required as asked, pmf = negotiated with the AP), external
+    // authentication (SAE frames carried by the front end), enterprise EAPOL
+    // pass-through, the station RSN element and RSNXE for the association.
+    UInt8 akm=2;bool pmfCapable=false,pmfRequired=false,pmf=false,externalAuth=false,enterprise=false;
+    bool authDone=false,authTxPending=false;
+    UInt8 stationRSN[64]{},stationRSNLength=0,stationRSNXE[18]{},stationRSNXELength=0;
+    UInt16 authLength[2]{},authTxLength=0;UInt8 authFrames[2][512]{},authTx[512]{};UInt32 authRead=0,authWrite=0,authCount=0;
+    // PMF: IGTK for BIP-CMAC-128 in software (Linux ath10k_set_key returns 1
+    // for AES_CMAC so mac80211 does BIP; the firmware encrypts/decrypts
+    // unicast robust frames with the PTK and marks them Protected), SA Query
+    // after an unprotected deauth/disassoc (wpa_supplicant sme.c: 201 TU
+    // retries, 1000 TU maximum), and the small protected-frame TX slot.
+    UInt8 igtk[16]{};UInt16 igtkIndex=0;UInt64 igtkIPN=0;bool igtkValid=false;
+    struct SAQuery { bool active=false;UInt16 tids[5]{};UInt8 sent=0;UInt64 startedMs=0,lastMs=0; } saQuery{};
+    struct PMFTx { UInt8 frame[64]{};UInt8 length=0;bool pending=false,inFlight=false; } pmfTx{};
+    bool lastTxPMF=false;UInt32 pmfDropped=0,bipFailures=0,saQueryCompleted=0,saQueryTimeouts=0;
+    // Station MAC change (Private Wi-Fi Address): VDEV_DELETE, VDEV_CREATE
+    // with the new address, ECHO barrier, before VDEV_START. Linux ath10k has
+    // no runtime MAC change either: mac80211 removes and re-adds the
+    // interface (ath10k_remove_interface/ath10k_add_interface).
+    struct MacChange { bool pending=false;UInt8 step=0; } macChange{};
     bool lastTxEAPOL=false,eapolTxFailed=false;
     RegulatoryPolicy regulatory{};
     WMIBSS ap{};
@@ -240,6 +263,9 @@ inline void wipeConnectionSecrets(ConnectionState &s){
     AthSecurity::wipe(s.installedPair,sizeof(s.installedPair));AthSecurity::wipe(s.installedGroups,sizeof(s.installedGroups));
     AthSecurity::wipe(s.eapolFrames,sizeof(s.eapolFrames));AthSecurity::wipe(s.eapolLength,sizeof(s.eapolLength));
     AthSecurity::wipe(s.groupRSC,sizeof(s.groupRSC));
+    AthSecurity::wipe(s.igtk,sizeof(s.igtk));s.igtkValid=false;s.igtkIPN=0;s.igtkIndex=0;
+    AthSecurity::wipe(s.authFrames,sizeof(s.authFrames));AthSecurity::wipe(s.authTx,sizeof(s.authTx));
+    s.authRead=s.authWrite=s.authCount=0;s.authTxLength=0;s.authTxPending=false;s.saQuery={};s.pmfTx={};
     s.pairInstalled=false;for(auto &installed:s.groupInstalled)installed=false;
     s.eapolRead=s.eapolWrite=s.eapolCount=0;s.rekeyKind=0;s.securityPhase=0;++s.securityGeneration;
 }
@@ -532,7 +558,14 @@ inline const char *selectOpenBSS(ConnectionState &s,const WMIBSSCache &cache) {
         if(!sameMAC(ap.bssid,s.bssid) || (!(s.hiddenSSID && ap.hidden) && ap.ssidLength!=s.ssidLength))continue;
         bool equal=true;for(UInt32 j=0;j<s.ssidLength;++j)if(ap.ssid[j]!=s.ssid[j])equal=false;
         if(!equal && !(s.hiddenSSID && ap.hidden))continue;
-        if(s.secure){if(!ap.privacy || !AthSecurity::supportsWPA2(ap.rsn,ap.rsnLength))return "wpa2-psk-ccmp-pairwise-required";}
+        if(s.secure){
+            if(!ap.privacy)return "wpa2-psk-ccmp-pairwise-required";
+            if(s.stationRSNLength){
+                AthSecurity::RSNInfo info;
+                if(!AthSecurity::parseRSN(ap.rsn,ap.rsnLength,info) || !AthSecurity::rsnAcceptable(info,s.akm,s.pmfCapable,s.pmfRequired))return "rsn-akm-or-pmf-not-acceptable";
+                s.pmf=s.pmfCapable && info.mfpc; // negotiated (12.6.3): both capable, or the AP requires it
+            } else if(!AthSecurity::supportsWPA2(ap.rsn,ap.rsnLength))return "wpa2-psk-ccmp-pairwise-required";
+        }
         else if(ap.privacy || ap.rsnPresent || ap.wpaPresent)return "protected-network-not-supported";
         if(!(ap.capabilities&1) || (ap.capabilities&2))return "not-infrastructure-bss";
         if(!ap.beaconInterval || !ap.rateCount || !ap.ratesValid)return "bss-missing-valid-rates";
@@ -606,6 +639,10 @@ inline UInt32 buildConnectionWMI(UInt8 *f,UInt32 capacity,UInt8 endpoint,const C
         bytes=120+rates+htRates;connTLV(f+12,101,76);
         for(UInt32 i=0;i<6;++i)p[i]=s.bssid[i];
         UInt32 flags=(s.secure?(5|(s.ap.wpaPresent?16:0)):1)|(s.ap.wmmPresent?2u:0)|(s.htEnabled?0x1000u:0)|(s.vhtEnabled?0x02000000u:0);
+        // WMI_TLV_PEER_PMF (wmi-tlv.h) as ath10k_peer_assoc_h_crypto sets it when the
+        // station negotiated MFP and the firmware has ATH10K_FW_FEATURE_MFP_SUPPORT
+        // (feature bit 12, present in WLAN.RM.4.4.1-00309 firmware-6.bin).
+        if(s.pmf)flags|=0x08000000u;
         if(r.width>=40)flags|=0x2000;
         if(r.width==80)flags|=0x04000000;
         // SMPS flags have the same meaning as Linux ath10k_peer_assoc_h_ht.
@@ -773,7 +810,7 @@ inline UInt32 buildStationManagement(UInt8 *f,UInt32 capacity,const ConnectionSt
     htcZero(f,s.htEnabled || spectrum?256:128);f[0]=s.stage==LinkStage::Auth?0xb0:0;
     for(UInt32 i=0;i<6;++i){f[4+i]=s.bssid[i];f[10+i]=s.local[i];f[16+i]=s.bssid[i];}
     htcWriteLE16(f+22,static_cast<UInt16>((s.sequence&4095)<<4));
-    if(s.stage==LinkStage::Auth){htcWriteLE16(f+26,1);return 30;}
+    if(s.stage==LinkStage::Auth){if(s.externalAuth)return 0;htcWriteLE16(f+26,1);return 30;}
     htcWriteLE16(f+24,static_cast<UInt16>(1|(s.ap.capabilities&0x420)|(s.secure?0x10:0)|(spectrum?0x100:0)));htcWriteLE16(f+26,1);
     UInt32 n=28;f[n++]=0;f[n++]=s.ssidLength;
     for(UInt32 i=0;i<s.ssidLength;++i)f[n++]=s.ssid[i];
@@ -787,9 +824,10 @@ inline UInt32 buildStationManagement(UInt8 *f,UInt32 capacity,const ConnectionSt
         }
         f[start+1]=static_cast<UInt8>(n-start-2);
     }
-    size_t stationRSNLength=0;const UInt8 *stationRSN=s.secure?AthSecurity::stationRSNForGroup(s.groupCipher,stationRSNLength):nullptr;
+    size_t stationRSNLength=0;const UInt8 *stationRSN=nullptr;
+    if(s.secure){if(s.stationRSNLength){stationRSN=s.stationRSN;stationRSNLength=s.stationRSNLength;}else stationRSN=AthSecurity::stationRSNForGroup(s.groupCipher,stationRSNLength);}
     if(s.secure&&!stationRSN)return 0;
-    const UInt32 tail=2+s.ap.rateCount+(s.ap.rateCount>8?2:0)+(s.secure?stationRSNLength:0)+
+    const UInt32 tail=2+s.ap.rateCount+(s.ap.rateCount>8?2:0)+(s.secure?stationRSNLength:0)+s.stationRSNXELength+
         (s.ap.wmmPresent?(s.ap.wmmVendor?9:3):0)+(s.htEnabled?28:0)+(s.vhtEnabled?17:0);
     if(tail>capacity-n)return 0;
     UInt32 first=s.ap.rateCount<8?s.ap.rateCount:8;f[n++]=1;f[n++]=static_cast<UInt8>(first);
@@ -815,7 +853,70 @@ inline UInt32 buildStationManagement(UInt8 *f,UInt32 capacity,const ConnectionSt
             // Operating Mode Notification: selected width and receive NSS.
             f[n++]=199;f[n++]=1;f[n++]=static_cast<UInt8>((s.negotiatedWidth==80?2:(s.negotiatedWidth==40?1:0))|((s.negotiatedNSS-1)<<4));}
     }
+    if(s.secure)for(UInt32 i=0;i<s.stationRSNXELength;++i)f[n++]=s.stationRSNXE[i]; // RSNXE after the PHY elements (Table 9-62)
     return n;
+}
+// External authentication (SAE): the front end's Authentication frame body
+// behind the 802.11 header this station owns.
+inline UInt32 buildExternalAuth(UInt8 *f,UInt32 capacity,ConnectionState &s){
+    if(!f || !s.externalAuth || s.stage!=LinkStage::Auth || !s.authTxPending || s.authTxLength<6 || capacity<24u+s.authTxLength)return 0;
+    htcZero(f,24);f[0]=0xb0;
+    for(UInt32 i=0;i<6;++i){f[4+i]=s.bssid[i];f[10+i]=s.local[i];f[16+i]=s.bssid[i];}
+    htcWriteLE16(f+22,static_cast<UInt16>((s.sequence&4095)<<4));
+    for(UInt32 i=0;i<s.authTxLength;++i)f[24+i]=s.authTx[i];
+    return 24+s.authTxLength;
+}
+// SA Query request/response (IEEE 802.11-2020 9.6.9): a protected action
+// frame; the firmware inserts the CCMP header and MIC (room reserved, as
+// ath10k_htt_tx does for protected action/deauth/disassoc frames).
+inline UInt32 buildSAQuery(UInt8 *f,UInt32 capacity,ConnectionState &s,bool request,UInt16 tid){
+    if(!f || capacity<36 || !s.pmf)return 0;
+    htcZero(f,36);f[0]=0xd0;f[1]=0x40; // Protected Frame
+    for(UInt32 i=0;i<6;++i){f[4+i]=s.bssid[i];f[10+i]=s.local[i];f[16+i]=s.bssid[i];}
+    htcWriteLE16(f+22,static_cast<UInt16>((s.sequence&4095)<<4));
+    f[24]=8;f[25]=request?0:1;htcWriteLE16(f+26,tid);
+    return 36; // 24 + 4 + 8 bytes of MIC room
+}
+// Station MAC change before VDEV_START: 1 VDEV_DELETE (0x5002, vdev 0), 2
+// VDEV_CREATE (0x5001, STA, the new address), 3 ECHO barrier 0xa7100058.
+static constexpr UInt32 kMacChangeEchoCookie=0xa7100058u;
+inline UInt32 buildMacChangeWMI(UInt8 *f,UInt32 capacity,UInt8 endpoint,const ConnectionState &s){
+    if(!f || capacity<64 || !endpoint || endpoint==255 || !s.macChange.step || s.macChange.step>3 || (s.local[0]&1))return 0;
+    htcZero(f,64);UInt32 bytes=20;
+    if(s.macChange.step==1){htcWriteLE32(f+8,0x5002);htcWriteLE16(f+12,4);htcWriteLE16(f+14,87);}
+    else if(s.macChange.step==2){bytes=36;htcWriteLE32(f+8,0x5001);htcWriteLE16(f+12,20);htcWriteLE16(f+14,86);htcWriteLE32(f+20,2);for(UInt32 i=0;i<6;++i)f[28+i]=s.local[i];}
+    else {htcWriteLE32(f+8,0x1d001);htcWriteLE16(f+12,4);htcWriteLE16(f+14,149);htcWriteLE32(f+16,kMacChangeEchoCookie);}
+    f[0]=endpoint;f[1]=1;f[5]=s.wmiSequence;htcWriteLE16(f+2,static_cast<UInt16>(bytes-8));return bytes;
+}
+// Robust management frames (mac80211 _ieee80211_is_robust_mgmt_frame): all
+// action categories except Public, HT, unprotected WNM, self-protected,
+// unprotected DMG, VHT, S1G and vendor-specific.
+inline bool robustActionCategory(UInt8 c){return !(c==4 || c==7 || c==11 || c==15 || c==20 || c==21 || c==22 || c==127);}
+// Verify the MMIE (id 76, 16 bytes) at the end of a broadcast robust frame
+// with the installed IGTK and advance the IPN (12.5.4.6).
+inline bool verifyBIP(ConnectionState &s,const UInt8 *f,UInt32 bytes){
+    if(!s.igtkValid || bytes<24+2+18)return false;
+    const UInt8 *mmie=f+bytes-18;
+    if(mmie[0]!=76 || mmie[1]!=16 || htcReadLE16(mmie+2)!=s.igtkIndex){++s.bipFailures;return false;}
+    UInt64 ipn=0;for(UInt32 i=0;i<6;++i)ipn|=UInt64(mmie[4+i])<<(8*i);
+    UInt8 mic[8];
+    if(ipn<=s.igtkIPN || !AthAES::bip(s.igtk,f,bytes,mic) || !AthSecurity::equal(mic,mmie+10,8)){++s.bipFailures;return false;}
+    s.igtkIPN=ipn;return true;
+}
+// IGTK block of InstallKeys/Rekey*: key id LE16, IPN (6, little-endian), IGTK.
+// Kept in the host only: BIP-CMAC-128 is software here as in Linux ath10k.
+inline void installIGTK(ConnectionState &s,const UInt8 *block){
+    s.igtkIndex=AthSecurity::le16(block);s.igtkIPN=0;
+    for(unsigned i=0;i<6;++i){s.igtkIPN|=UInt64(block[2+i])<<(8*i);}
+    for(unsigned i=0;i<16;++i){s.igtk[i]=block[8+i];}
+    s.igtkValid=true;
+}
+inline void startSAQuery(ConnectionState &s){if(s.saQuery.active)return;s.saQuery={};s.saQuery.active=true;}
+inline bool queueSAQueryResponse(ConnectionState &s,UInt16 tid){
+    if(s.pmfTx.pending || s.pmfTx.inFlight)return false;
+    const UInt32 n=buildSAQuery(s.pmfTx.frame,sizeof(s.pmfTx.frame),s,false,tid);
+    if(!n)return false;
+    s.pmfTx.length=static_cast<UInt8>(n);s.pmfTx.pending=true;return true;
 }
 // Same-band CSA preserves the peer and keys. Width changes update PHY before BW,
 // followed by peer rates with new_assoc=0, as in Linux ath10k_sta_rc_update_wk.
@@ -1102,11 +1203,38 @@ inline UInt32 buildChannelSwitchWMI(UInt8 *f,UInt32 capacity,UInt8 endpoint,Conn
 inline void receiveStationManagement(ConnectionState &s,const UInt8 *f,UInt32 bytes,UInt32 status,UInt32 rxChannel=0) {
     if(s.disconnect!=DisconnectStage::None || s.stage<LinkStage::Auth || s.stage==LinkStage::Failed || status&0x39u || bytes<24)return;
     UInt16 fc=htcReadLE16(f);
-    if((fc&0x470fu) || (htcReadLE16(f+22)&15) || !sameMAC(f+10,s.bssid) || !sameMAC(f+16,s.bssid))return;
+    // Protected (PMF) frames are accepted only with AIRPORT_ATH10K_WPASEC; the
+    // release build drops them as before (mask 0x470f).
+    if((fc&(AIRPORT_ATH10K_WPASEC?0x070fu:0x470fu)) || (htcReadLE16(f+22)&15) || !sameMAC(f+10,s.bssid) || !sameMAC(f+16,s.bssid))return;
     bool broadcast=true;for(UInt32 i=0;i<6;++i)if(f[4+i]!=255)broadcast=false;
     if(!sameMAC(f+4,s.local) && !broadcast)return;
     const UInt32 subtype=fc&0xf0u;
+    const bool isProtected=(fc&0x4000u)!=0;
+    const bool pmfActive=s.pmf && (s.pairInstalled || s.portAuthorized); // keys installed (mac80211: rx->key)
+    // Protected unicast robust frames arrive decrypted by the firmware with
+    // the Protected bit, CCMP header and MIC still in place (Linux
+    // ath10k_wmi_event_mgmt_rx keeps them for action/deauth/disassoc).
+    UInt8 plain[256];
+    if(isProtected){
+        if(!pmfActive || broadcast || !(subtype==0xc0 || subtype==0xa0 || subtype==0xd0) || bytes<24+8+2+8)return;
+        const UInt32 body=bytes-24-16;if(body>sizeof(plain)-24)return;
+        for(UInt32 i=0;i<24;++i)plain[i]=f[i];
+        plain[1]&=static_cast<UInt8>(~0x40);
+        for(UInt32 i=0;i<body;++i)plain[24+i]=f[32+i];
+        f=plain;bytes=24+body;
+    }
     if((subtype==0xc0 || subtype==0xa0) && bytes>=26){
+        if(pmfActive && !isProtected){
+            if(broadcast){if(!verifyBIP(s,f,bytes)){++s.pmfDropped;return;}}
+            else {
+                // 11.13: an unprotected deauth/disassoc with reason 6/7 may come
+                // from an AP that lost our state; SA Query settles it
+                // (wpa_supplicant sme_event_unprot_disconnect). Else ignore.
+                ++s.pmfDropped;const UInt16 reason=htcReadLE16(f+24);
+                if((reason==6 || reason==7) && s.stage==LinkStage::Connected)startSAQuery(s);
+                return;
+            }
+        }
         ++s.diagnostics.mlmeCount;s.diagnostics.mlmeSubtype=static_cast<UInt8>(subtype);
         s.diagnostics.mlmeReason=htcReadLE16(f+24);s.diagnostics.mlmeChannel=rxChannel;
         connectionFailure(s,"ap-disconnected");s.portAuthorized=false;s.cancelRequested=true;return;
@@ -1118,6 +1246,17 @@ inline void receiveStationManagement(ConnectionState &s,const UInt8 *f,UInt32 by
                 if(htcReadLE16(f+32))s.ap.beaconInterval=htcReadLE16(f+32);
                 s.ap.capabilities=htcReadLE16(f+34);
                 if(!s.maintenance.valid || !sameAPConfig(desiredAPConfig(s),s.maintenance.applied))s.maintenance.blocked=true;}}
+    }
+    if(subtype==0xd0 && bytes>=26 && pmfActive && !isProtected && robustActionCategory(f[24])){
+        if(!broadcast){++s.pmfDropped;return;} // mac80211 ieee80211_drop_unencrypted_mgmt
+        if(!verifyBIP(s,f,bytes)){++s.pmfDropped;return;}
+        bytes-=18; // the handlers below see the body without the MMIE
+    }
+    if(subtype==0xd0 && bytes>=28 && f[24]==8 && !broadcast){ // SA Query (9.6.9)
+        const UInt16 tid=htcReadLE16(f+26);
+        if(f[25]==0){if(pmfActive)queueSAQueryResponse(s,tid);return;}
+        if(f[25]==1 && s.saQuery.active)for(UInt32 i=0;i<s.saQuery.sent && i<5;++i)if(s.saQuery.tids[i]==tid){s.saQuery={};++s.saQueryCompleted;break;}
+        return;
     }
     if(subtype==0xd0 && bytes>=26 && f[24]==0 && f[25]==4){
         channelSwitchIEs(s,f+26,bytes-26,true);return;
@@ -1147,6 +1286,13 @@ inline void receiveStationManagement(ConnectionState &s,const UInt8 *f,UInt32 by
         if(f[25]==2 && bytes>=30){const UInt8 tid=htcReadLE16(f+26)>>12;s.baSSNValid[tid]=false;}
         return;
     }
+    if(subtype==0xb0 && s.externalAuth && s.stage==LinkStage::Auth){
+        // SAE and other external authentication: queue the body for the front end.
+        const UInt32 n=bytes-24;
+        if(n<6 || n>512 || s.authCount>=2)return;
+        for(UInt32 i=0;i<n;++i)s.authFrames[s.authWrite][i]=f[24+i];
+        s.authLength[s.authWrite]=static_cast<UInt16>(n);s.authWrite=(s.authWrite+1)%2;++s.authCount;return;
+    }
     if(subtype==0xb0 && s.stage==LinkStage::Auth && s.submitted && bytes>=30){
         if(htcReadLE16(f+24)!=0 || htcReadLE16(f+26)!=2)return;
         s.associationStatus=htcReadLE16(f+28);
@@ -1172,7 +1318,10 @@ inline void receiveStationManagement(ConnectionState &s,const UInt8 *f,UInt32 by
                         if(v[i]&128){s.error="association-unsupported-basic-rate";s.stage=LinkStage::Failed;return;}continue;}
                     responseRates[rateCount++]=v[i];}
             }
-            if(id==48){if(rsnSeen || (s.secure && !AthSecurity::supportsWPA2(f+p,len+2)))return;rsnSeen=true;}
+            if(id==48){if(rsnSeen)return;
+                if(s.secure){if(s.stationRSNLength){AthSecurity::RSNInfo info;if(!AthSecurity::parseRSN(f+p,len+2,info) || !AthSecurity::rsnAcceptable(info,s.akm,s.pmfCapable,s.pmfRequired))return;}
+                    else if(!AthSecurity::supportsWPA2(f+p,len+2))return;}
+                rsnSeen=true;}
             if(id==199){if(responseOM || len!=1)return;responseOM=true;operatingMode=v[0];}
             if(id==12){UInt8 ac[16]{},counter=0;
                 if(responseEDCA || !parseAPEDCA(v,len,ac,counter))return;

@@ -539,6 +539,7 @@ private:
     Ath10kDMABuffer _wmiRxBuffer;
     Ath10k::WMIBootstrapState _wmi{};
     Ath10k::WMIInitState _wmiInit{};
+    UInt8 _vdevMAC[6]{}; // the address of vdev 0 as created (hardware MAC, or the station MAC of the last Private Wi-Fi Address connection)
     Ath10kDMABuffer _wmiHostMemory[Ath10k::kWMIHostMemoryMax];
     Ath10kDMABuffer _wmiTxBuffer;
     Ath10k::BootState _boot{};

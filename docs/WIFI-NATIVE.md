@@ -90,6 +90,9 @@ reserved slot — expect the same sensitivity.
 
 ## Not implemented
 
+WPA3-SAE/PMF, Enterprise and the Private Wi-Fi Address are in progress behind the build gate
+`AIRPORT_ATH10K_WPASEC` (off in releases; paused by the owner): [`WIFI-SECURITY.md`](WIFI-SECURITY.md).
+
 WPA3-SAE / PMF, Enterprise, WEP, Private Wi-Fi Address (random MAC), AWDL/AirDrop/Continuity,
 P2P/hotspot, 6 GHz, 160 MHz, active/directed probing, roaming between BSSIDs of one SSID (WCL
 asks for a new join; the core disconnects and reconnects).

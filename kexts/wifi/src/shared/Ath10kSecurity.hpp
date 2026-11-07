@@ -1,6 +1,10 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
+// Gate of the paused security work; see Ath10kControl.hpp / docs/WIFI-SECURITY.md.
+#ifndef AIRPORT_ATH10K_WPASEC
+#define AIRPORT_ATH10K_WPASEC 0
+#endif
 namespace AthSecurity {
 inline void wipe(void *p,size_t n){volatile uint8_t *b=(volatile uint8_t *)p;while(n--)*b++=0;}
 inline bool equal(const uint8_t *a,const uint8_t *b,size_t n){uint8_t d=0;for(size_t i=0;i<n;++i)d|=a[i]^b[i];return d==0;}
