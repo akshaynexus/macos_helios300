@@ -1,0 +1,225 @@
+{
+  "about": "Static half of the release contract (docs/MANIFEST.md). tools/release.sh builds every artifact named here, then tools/release/make_manifest.py adds version, sha256, size, url and source commit and writes dist/manifest.json. Do not put hashes here.",
+  "schema": 1,
+  "repo": "akshaynexus/macos_helios300",
+  "url_template": "https://github.com/akshaynexus/macos_helios300/releases/download/v{version}/{file}",
+  "machine": {
+    "name": "Acer Predator Helios 300 G3-571",
+    "match": {
+      "dmi_product": ["Predator G3-571"],
+      "dmi_board": ["Sienta_KLS"],
+      "pci": [
+        {"vendor": "10de", "device": "1c20", "subsystem_vendor": "1025", "subsystem_device": "118b", "what": "GeForce GTX 1060 Mobile (GP106M)", "required": true},
+        {"vendor": "8086", "device": "591b", "subsystem_vendor": "1025", "subsystem_device": "118a", "what": "HD Graphics 630", "required": true},
+        {"vendor": "168c", "device": "003e", "subsystem_vendor": "11ad", "subsystem_device": "0807", "what": "Qualcomm Atheros QCA6174 (Lite-On, Acer board data)", "required": false}
+      ],
+      "usb": [
+        {"vendor": "04ca", "device": "3016", "what": "QCA Rome Bluetooth (Lite-On)", "required": false}
+      ],
+      "hda_codecs": [
+        {"vendor": "10ec", "device": "0255", "subsystem_vendor": "1025", "subsystem_device": "118a", "what": "Realtek ALC255", "required": false}
+      ]
+    }
+  },
+  "macos": {"min_kernel": "25.0.0", "max_kernel": "25.99.99", "names": ["macOS 26 Tahoe"]},
+  "artifacts": [
+    {
+      "name": "PG106.kext", "kind": "kext", "bundle_id": "org.helios300.pg106",
+      "source": {"tree": "driver", "path": "pascal/kext"},
+      "built_by": "cross", "licence": "GPL-2.0-only",
+      "licence_files": ["NVIDIA-firmware-LICENCE.txt"],
+      "contains_firmware": "14 NVIDIA GP106 firmware files from linux-firmware (NVIDIA licence) in Contents/Resources",
+      "status": "pre-release: bring-up proven on the Helios GP106 under Linux (pascal/core); the kext has not been loaded on macOS",
+      "install": "opencore",
+      "opencore": {"order": 100, "BundlePath": "PG106.kext", "ExecutablePath": "Contents/MacOS/PG106", "PlistPath": "Contents/Info.plist",
+                   "Arch": "x86_64", "MinKernel": "25.0.0", "MaxKernel": "", "Enabled": true, "Comment": "GTX 1060 Mobile (GP106) - macos_helios300"},
+      "requires": [],
+      "hardware": [{"bus": "pci", "vendor": "10de", "device": "1c20", "subsystem_vendor": "1025", "subsystem_device": "118b"}],
+      "boot_args_optional": [
+        {"arg": "pg106_stop_after=1", "what": "identify and read the VBIOS only; no GPU register is written (runbook step 1 safe mode)"},
+        {"arg": "pg106_d3cold=1", "what": "power the dGPU off through ACPI PG00._OFF when idle (never run under macOS)"},
+        {"arg": "pg106_render_users=0", "what": "render connections for administrators only"},
+        {"arg": "pg106_hda=0", "what": "do not enable the GPU's HDMI audio function"}
+      ]
+    },
+    {
+      "name": "PG106FB.kext", "kind": "kext", "bundle_id": "org.helios300.pg106fb",
+      "source": {"tree": "driver", "path": "pascal/fb"},
+      "built_by": "cross", "licence": "GPL-2.0-only",
+      "status": "pre-release: HDMI framebuffer, only run against the mock display engine",
+      "install": "opencore",
+      "opencore": {"order": 110, "BundlePath": "PG106FB.kext", "ExecutablePath": "Contents/MacOS/PG106FB", "PlistPath": "Contents/Info.plist",
+                   "Arch": "x86_64", "MinKernel": "25.0.0", "MaxKernel": "", "Enabled": true, "Comment": "GP106 HDMI framebuffer - macos_helios300"},
+      "requires": ["PG106.kext"],
+      "hardware": [{"bus": "pci", "vendor": "10de", "device": "1c20", "subsystem_vendor": "1025", "subsystem_device": "118b"}],
+      "boot_args_optional": [
+        {"arg": "pg106fb=0", "what": "PG106FB does not attach"},
+        {"arg": "pg106fb_accel=0", "what": "unaccelerated framebuffer, PG106Accel never pairs"},
+        {"arg": "pg106fb_tmds_khz=340000", "what": "no HDMI 2.0 (scrambled) modes"}
+      ]
+    },
+    {
+      "name": "NMHDA.kext", "kind": "kext", "bundle_id": "com.nullmoth.NMHDA",
+      "source": {"tree": "driver", "path": "kexts/NMHDA"},
+      "built_by": "cross", "licence": "PolyForm-Noncommercial-1.0.0",
+      "status": "pre-release: HDMI audio for the GP106 HDA function (10de:10f1), never run on this machine",
+      "install": "opencore",
+      "opencore": {"order": 120, "BundlePath": "NMHDA.kext", "ExecutablePath": "Contents/MacOS/NMHDA", "PlistPath": "Contents/Info.plist",
+                   "Arch": "x86_64", "MinKernel": "24.0.0", "MaxKernel": "", "Enabled": true, "Comment": "GP106 HDMI audio (Lilu plugin) - macos_helios300"},
+      "requires": ["Lilu.kext", "AppleALC.kext"],
+      "hardware": [{"bus": "pci", "vendor": "10de", "device": "10f1"}]
+    },
+    {
+      "name": "QCARomePatchRAM.kext", "kind": "kext", "bundle_id": "io.github.akshaynexus.helios300.QCARomePatchRAM",
+      "source": {"tree": "self", "path": "kexts/bluetooth"},
+      "built_by": "cross", "licence": "GPL-2.0-only",
+      "contains_firmware": "QCA6174 Rome rampatch + NVM from linux-firmware (Qualcomm licence)",
+      "status": "pre-release: matches Linux btusb's download transfer for transfer; not yet run on macOS",
+      "install": "opencore",
+      "opencore": {"order": 130, "BundlePath": "QCARomePatchRAM.kext", "ExecutablePath": "Contents/MacOS/QCARomePatchRAM", "PlistPath": "Contents/Info.plist",
+                   "Arch": "x86_64", "MinKernel": "21.0.0", "MaxKernel": "", "Enabled": true, "Comment": "QCA Rome Bluetooth firmware - macos_helios300"},
+      "requires": ["Lilu.kext", "BlueToolFixup.kext"],
+      "hardware": [{"bus": "usb", "vendor": "04ca", "device": "3016"}],
+      "boot_args_optional": [
+        {"arg": "-qcarpprobe", "what": "read-only probe, no firmware download"},
+        {"arg": "-qcarpoff", "what": "the kext does not attach"}
+      ]
+    },
+    {
+      "name": "Ath10kMac.kext", "kind": "kext", "bundle_id": "br.com.jonasw8.driver.ath10kmac",
+      "source": {"tree": "self", "path": "kexts/wifi"},
+      "built_by": "cross", "licence": "GPL-3.0-only",
+      "contains_firmware": "QCA6174 firmware, OTP and the Acer 11ad:0807 board data from linux-firmware (Qualcomm licence)",
+      "status": "pre-release: host-tested and cross-checked against Linux ath10k; not yet run on macOS",
+      "install": "opencore",
+      "opencore": {"order": 140, "BundlePath": "Ath10kMac.kext", "ExecutablePath": "Contents/MacOS/Ath10kMac", "PlistPath": "Contents/Info.plist",
+                   "Arch": "x86_64", "MinKernel": "25.0.0", "MaxKernel": "25.99.99", "Enabled": true, "Comment": "QCA6174 Wi-Fi - macos_helios300"},
+      "requires": [],
+      "conflicts": ["AirportItlwm.kext", "itlwm.kext", "AirPortAtheros40-Tahoe.kext"],
+      "hardware": [{"bus": "pci", "vendor": "168c", "device": "003e", "subsystem_vendor": "11ad", "subsystem_device": "0807"}]
+    },
+    {
+      "name": "AirportAth10k.kext", "kind": "kext",
+      "source": {"tree": "self", "path": "kexts/wifi/native"},
+      "built_by": "cross", "licence": "GPL-3.0-only",
+      "status": "pre-release: native macOS Wi-Fi front end (IO80211/Skywalk) over Ath10kMac; shipped only when the wifi tree builds it",
+      "install": "opencore",
+      "opencore": {"order": 145, "BundlePath": "AirportAth10k.kext", "ExecutablePath": "Contents/MacOS/AirportAth10k", "PlistPath": "Contents/Info.plist",
+                   "Arch": "x86_64", "MinKernel": "25.0.0", "MaxKernel": "25.99.99", "Enabled": true, "Comment": "QCA6174 native Wi-Fi front end - macos_helios300"},
+      "requires": ["Ath10kMac.kext"],
+      "optional": true,
+      "hardware": [{"bus": "pci", "vendor": "168c", "device": "003e", "subsystem_vendor": "11ad", "subsystem_device": "0807"}]
+    },
+    {
+      "name": "SSDT-PG106-HDAU.aml", "kind": "ssdt",
+      "source": {"tree": "driver", "path": "pascal/fb/acpi/SSDT-PG106-HDAU.dsl"},
+      "built_by": "iasl", "licence": "GPL-2.0-only",
+      "status": "pre-release: makes the GP106 HDA function 01:00.1 visible from boot (SSDT11 MLTF)",
+      "install": "opencore",
+      "acpi": {"order": 100, "Path": "SSDT-PG106-HDAU.aml", "Enabled": true, "Comment": "GP106 HDA function 01:00.1 visible from boot"},
+      "requires": [],
+      "hardware": [{"bus": "pci", "vendor": "10de", "device": "1c20", "subsystem_vendor": "1025", "subsystem_device": "118b"}]
+    },
+    {
+      "name": "PG106Accel.kext", "kind": "kext", "bundle_id": "com.nullmoth.PG106Accel",
+      "source": {"tree": "driver", "path": "kexts/PG106Accel"},
+      "built_by": "cross", "licence": "PolyForm-Noncommercial-1.0.0",
+      "status": "pre-release: links IOAcceleratorFamily2, so OpenCore cannot inject it; installed into /Library/Extensions after macOS is installed",
+      "install": "library-extensions",
+      "requires": ["PG106.kext"],
+      "hardware": [{"bus": "pci", "vendor": "10de", "device": "1c20", "subsystem_vendor": "1025", "subsystem_device": "118b"}],
+      "boot_args_optional": [
+        {"arg": "-pg106acceloff", "what": "PG106Accel does not attach"},
+        {"arg": "pg106accel_display=0", "what": "render offload only, no HDMI display pipe"}
+      ]
+    },
+    {
+      "name": "NVMTLDriver.bundle", "kind": "bundle", "bundle_id": "com.nullmoth.NVMTLDriver",
+      "source": {"tree": "driver", "path": "plugin"},
+      "built_by": "cross", "licence": "PolyForm-Noncommercial-1.0.0",
+      "status": "pre-release: Metal plugin (MTLDevice for the GP106 through NVK)",
+      "install": "gpu-bundles", "install_path": "/Library/GPUBundles/NVMTLDriver.bundle",
+      "requires": ["PG106Accel.kext", "libnvmtl_translate.dylib", "NVK-Pascal"],
+      "optional": true,
+      "hardware": [{"bus": "pci", "vendor": "10de", "device": "1c20"}]
+    },
+    {
+      "name": "libnvmtl_translate.dylib", "kind": "dylib",
+      "source": {"tree": "driver", "path": "translator"},
+      "built_by": "cross", "licence": "PolyForm-Noncommercial-1.0.0",
+      "status": "pre-release: AIR to SPIR-V shader translator the Metal plugin loads",
+      "install": "gpu-bundles", "install_path": "/Library/GPUBundles/nvmtl/libnvmtl_translate.dylib",
+      "requires": [],
+      "optional": true
+    },
+    {
+      "name": "NVK-Pascal", "kind": "dylib",
+      "source": {"tree": "driver", "path": "nvk/pascal"},
+      "built_by": "cross", "licence": "MIT",
+      "licence_files": ["Mesa-license.rst"],
+      "status": "pre-release: Mesa NVK + NAK with the GP106 backend (libvulkan_nouveau.dylib + nvk_icd.json)",
+      "install": "gpu-bundles", "install_path": "/Library/GPUBundles/nvmtl/",
+      "requires": [],
+      "optional": true
+    },
+    {
+      "name": "Ath10k Connectivity.app", "kind": "app",
+      "source": {"tree": "self", "path": "kexts/wifi/app"},
+      "built_by": "cross", "licence": "GPL-3.0-only",
+      "status": "pre-release: menu-bar app for Ath10kMac (join networks); no root, installs nothing system-wide",
+      "install": "applications", "install_path": "/Applications/Ath10k Connectivity.app",
+      "requires": ["Ath10kMac.kext"],
+      "optional": true
+    },
+    {
+      "name": "NVIDIA-firmware-LICENCE.txt", "kind": "firmware-licence",
+      "source": {"tree": "driver", "path": "licenses/NVIDIA-firmware-LICENCE.txt"},
+      "built_by": "copy", "licence": "NVIDIA firmware licence (linux-firmware LICENCE.nvidia)",
+      "status": "covers the GP106 firmware inside PG106.kext",
+      "install": "stick-only", "requires": []
+    },
+    {
+      "name": "Mesa-license.rst", "kind": "firmware-licence",
+      "source": {"tree": "driver", "path": "licenses/Mesa-license.rst"},
+      "built_by": "copy", "licence": "MIT (Mesa)",
+      "status": "covers NVK-Pascal",
+      "install": "stick-only", "requires": [], "optional": true
+    }
+  ],
+  "external_kexts": [
+    {"name": "Lilu.kext", "source": "acidanthera/Lilu", "min_version": "1.6.0", "why": "NMHDA and QCARomePatchRAM's BlueToolFixup are Lilu plugins"},
+    {"name": "AppleALC.kext", "source": "acidanthera/AppleALC", "min_version": "1.9.0", "why": "NMHDA pairs the GP106 HDMI audio through AppleALC/AppleHDA"},
+    {"name": "BlueToolFixup.kext", "source": "acidanthera/BrcmPatchRAM", "min_version": "2.7.2", "why": "2.7.2 added the bluetoothd patches for macOS 26; exactly one copy"}
+  ],
+  "config": {
+    "boot_args": [],
+    "nvram_add": {
+      "7C436110-AB2A-4BBB-A880-FE41995C9F82": {
+        "bluetoothExternalDongleFailed": {"data": "00"},
+        "bluetoothInternalControllerInfo": {"data": "0000000000000000000000000000"}
+      }
+    },
+    "nvram_delete": {
+      "7C436110-AB2A-4BBB-A880-FE41995C9F82": ["bluetoothExternalDongleFailed", "bluetoothInternalControllerInfo"]
+    },
+    "device_properties": {
+      "PciRoot(0x0)/Pci(0x1,0x0)/Pci(0x0,0x0)": {"hda-gfx": {"string": "onboard-2"}},
+      "PciRoot(0x0)/Pci(0x1,0x0)/Pci(0x0,0x1)": {"hda-gfx": {"string": "onboard-2"}}
+    },
+    "usb_ports": [
+      {"controller": "8086:a12f", "port": "HS07", "type": 255, "what": "internal Bluetooth (04ca:3016); without it macOS treats the controller as an external dongle"}
+    ],
+    "forbidden": {
+      "kexts": ["NVRM.kext", "NVRMFB.kext", "NVAccel.kext", "NVRMAGDC.kext", "BrcmPatchRAM3.kext", "BrcmBluetoothInjector.kext",
+                "BrcmFirmwareData.kext", "IntelBluetoothFirmware.kext", "IntelBTPatcher.kext", "IntelBluetoothInjector.kext"],
+      "boot_args": ["-wegnoegpu"],
+      "device_properties": {"PciRoot(0x0)/Pci(0x1,0x0)/Pci(0x0,0x0)": ["disable-gpu"]},
+      "acpi": ["SSDT-Disable_GPU_PEG0.aml"]
+    }
+  },
+  "post_install": [
+    {"step": "pg106accel", "what": "Copy PG106Accel.kext to /Library/Extensions (root:wheel), kmutil load, approve, restart", "artifacts": ["PG106Accel.kext"]},
+    {"step": "gpu-bundles", "what": "Copy NVMTLDriver.bundle and nvmtl/ (NVK, translator) to /Library/GPUBundles", "artifacts": ["NVMTLDriver.bundle", "libnvmtl_translate.dylib", "NVK-Pascal"]},
+    {"step": "wifi-app", "what": "Copy Ath10k Connectivity.app to /Applications, xattr -dr com.apple.quarantine", "artifacts": ["Ath10k Connectivity.app"]}
+  ]
+}
