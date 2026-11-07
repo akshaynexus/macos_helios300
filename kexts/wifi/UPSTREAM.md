@@ -1,6 +1,6 @@
 # Upstream
 
-`wifi/` starts from a snapshot of **Ath10kMac**, GPL-3.0 (see `LICENSE`):
+`kexts/wifi/` (originally `wifi/`) starts from a snapshot of **Ath10kMac**, GPL-3.0 (see `LICENSE`):
 
 | | |
 |---|---|
@@ -21,7 +21,7 @@ Not imported:
   (hashes of the upstream tree, which no longer applies after our changes).
 
 The snapshot is committed unchanged, apart from those exclusions, in the first `wifi:` commit,
-so `git log -p -- wifi/` shows every change made here on top of upstream.
+so `git log --follow -p -- kexts/wifi/` (or `-- wifi/` before the move) shows every change made here on top of upstream.
 
 Protocol details added or changed here cite the Linux ath10k driver (ISC licence),
 `drivers/net/wireless/ath/ath10k/` at torvalds/linux

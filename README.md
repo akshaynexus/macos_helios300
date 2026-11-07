@@ -9,7 +9,7 @@ This repo holds the machine-specific drivers that do not exist elsewhere:
 | Path | What | Licence | Status |
 |---|---|---|---|
 | `kexts/nvidia-macos-driver` (submodule, branch `pascal-gp106`) | `PG106.kext` (GTX 1060 Mobile, nouveau-derived) and `PG106Accel.kext` (Metal accelerator) | GPL-2.0 / PolyForm-NC (per tree) | cross-built, not yet run on macOS |
-| `wifi/` | QCA6174 (`168c:003e`) Wi-Fi driver | see `wifi/LICENSE` | in progress |
+| `kexts/wifi/` | QCA6174 (`168c:003e`) Wi-Fi driver | see `kexts/wifi/LICENSE` | in progress |
 | `kexts/bluetooth/` | QCA6174 Rome Bluetooth (`04ca:3016`) firmware uploader | see `kexts/bluetooth/LICENSE` | in progress |
 | `tools/` | cross-build helpers (Linux → macOS 26 kexts) | GPL-2.0-only | |
 | `docs/` | hardware inventory, kext list, OpenCore notes | CC-BY-4.0 | |
