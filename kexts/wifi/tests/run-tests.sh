@@ -92,6 +92,11 @@ if [ "$(uname -s)" != Darwin ]; then security_libs="-lcrypto"; fi
     tests/test_security.cpp $security_libs -o "$test_tmp_dir/security"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/security"
 echo 'WPA2 supplicant tests passed (independent crypto vectors, MIC, GTK unwrap, retries, RSN mismatch and no key reinstall).'
+# WPA3 crypto layer: SHA-256/HMAC/HKDF/KDF, AES/CMAC/BIP, P-256 and SAE (Annex J.10 vectors, two-station exchanges).
+"${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
+    tests/test_wpa3_crypto.cpp -o "$test_tmp_dir/wpa3-crypto"
+ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/wpa3-crypto"
+echo 'WPA3 crypto tests passed (FIPS 180-4/197, RFC 4231/4493/5869, NIST P-256 points, IEEE 802.11-2020 Annex J.10 SAE vectors).'
 # Native (IO80211/WCL) front end: kernel crypto policy and the bridge logic.
 "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
     -Isrc/kext native/tests/test_native_crypto.cpp -o "$test_tmp_dir/native-crypto"

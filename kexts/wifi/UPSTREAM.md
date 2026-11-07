@@ -53,3 +53,23 @@ Licence: those files carry "All rights reserved" inside a GPL-2.0 repository. Th
 **used with the author's permission per the repository owner (2026-11-08)**, who
 collaborates with laobamac; see `native/NOTICE`. Everything written here is GPL-3.0.
 
+
+## WPA3 supplicant: hostap (hostapd/wpa_supplicant)
+
+`src/shared/Ath10kSAE.hpp` (SAE, IEEE 802.11-2020 12.4), the AKM/KDF generalisation of
+`src/shared/Ath10kSupplicant.hpp` (KDF-SHA256 PTK, AES-128-CMAC key MIC, IGTK KDE, RSNXE)
+and the PMF rules in the core follow the structure, constant-time choices and test vectors of
+**hostap** (`src/common/sae.c`, `dragonfly.c`, `wpa_common.c`, `src/rsn_supp/wpa.c`,
+`wpa_supplicant/sme.c` for SA Query, `src/common/common_module_tests.c` for the Annex J.10
+vectors):
+
+| | |
+|---|---|
+| Upstream | https://w1.fi/hostap.git (Jouni Malinen and contributors) |
+| Licence | BSD-3-Clause (hostap `COPYING`/`README`) |
+| Used | 2026-11-08, as the reference for a fresh C++ implementation on the kernel-safe
+`Ath10kSHA256.hpp`/`Ath10kAES.hpp`/`Ath10kP256.hpp`; no hostap source is copied |
+
+The bignum/ECC code is our own (Montgomery arithmetic, Jacobian P-256, Montgomery ladder) and
+is checked against NIST points and an independent affine implementation in
+`tests/test_wpa3_crypto.cpp`.
