@@ -82,11 +82,28 @@ Can be done from Linux (done):
   to xnu-12377 KPIs or to a class/method declared in the family headers (836 imports for the
   front end). WCL request/event layouts are pinned by `static_assert`s in `AirportWCL.hpp`.
 
-Only macOS can verify (not done): that the macOS 26.x binaries match the reconstructed
-vtables (a mismatch panics at load or on the first command), that WCL accepts the capability
-bits and event sequence, DHCP over the Skywalk interface, sleep/wake, Settings details.
-laobamac's reports: loads on 26.7.1; a 26.2 report failed on a changed `IO80211Controller`
-reserved slot — expect the same sensitivity.
+- `tools/kc-audit.py` (run by the cross-build when `HELIOS_REAL_KC` points at the target
+  Mac's `BootKernelExtensions.kc`): every import must be exported by a collection kext the
+  plist depends on, and every vtable slot the kext inherits must name the symbol the real
+  parent vtable holds at that index, which is the rule kxld/OpenCore apply at injection.
+  Checked against macOS 26.7.2 (25G332, IO80211Family 1200.13.1, IOSkywalkFamily 1.0,
+  corecapture 1.0.4): 835 imports resolve, `AirportAth10k` (463 slots),
+  `AirportAth10kInterface` (668) and `AirportAth10kEthernetInterface` (340) match.
+
+First real boot (v0.1.0, 26.7.2): the core loaded, booted the firmware, set the regulatory
+domain and scanned; OpenCore refused the front end ("Failed to patch symbol
+`IO80211Controller::attachVirtualInterface` for vtable `AirportAth10k`"). Two causes, both
+caught by the audit now: laobamac's macOS 26 `IO80211ControllerV2.h` carried two asm-aliased
+`_RESERVEDIONetworkController6/7` declarations for a MacKernelSDK that lacked
+`allocatePacketNoWait`/`setHardwareAssists`; the 26.5 SDK declares both, so every
+IO80211Controller slot was shifted by two and `attachVirtualInterface` landed on the pad
+`_RESERVEDIO80211Controller0`. And `IONetworkInterface::setInterfaceSubType` (private SPI
+AirportItlwm calls) is not exported by 26.7.2's IONetworkingFamily.
+
+Only macOS can verify (not done): that WCL accepts the capability bits and event sequence,
+DHCP over the Skywalk interface, sleep/wake, Settings details. The reconstructed headers are
+now proven against 26.7.2; another point release can still move slots, so rerun the build
+with that release's collection before installing it.
 
 ## Not implemented
 

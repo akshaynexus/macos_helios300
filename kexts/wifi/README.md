@@ -91,8 +91,12 @@ the embedded payload, compiles with `clang -mkernel` against `MacOSX26.5.sdk`, l
 (`-kext`), and audits every import: the core's 513 against xnu-12377 KPIs and
 IONetworking/IOPCI headers; the front end's 836 against xnu, IONetworking and the reconstructed
 IO80211Family (218 symbols), IOSkywalkFamily (79) and corecapture (4) declarations plus the
-core's own exports (`native/scripts/native-families.allow`). The audit proves the symbols
-exist in the headers, not that the macOS 26.x binaries agree with the headers.
+core's own exports (`native/scripts/native-families.allow`). That audit proves the symbols
+exist in the headers. With `HELIOS_REAL_KC=/path/to/BootKernelExtensions.kc` (copied from
+the target Mac: `/System/Library/KernelCollections/BootKernelExtensions.kc`) the build also
+runs `tools/kc-audit.py`, which checks every import against the collection's exports and
+every inherited vtable slot against the real parent layout, i.e. what OpenCore's vtable
+patching will do at boot. Run it for the exact macOS build you will boot.
 
 `cross-build.sh --ethernet-debug` builds the developer variant (core as an Ethernet-style
 interface + the "Ath10k Connectivity" app, `build/release/`). It is a debugging aid for the
