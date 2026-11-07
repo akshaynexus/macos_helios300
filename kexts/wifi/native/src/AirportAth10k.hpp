@@ -12,6 +12,7 @@
 #include <Airport/macOS26/FaultReporter.h>
 #include <IOKit/network/IOGatedOutputQueue.h>
 #include <IOKit/IOCommandGate.h>
+#include <kern/thread_call.h>
 #include "AirportAth10kEthernetInterface.hpp"
 #include "AirportAth10kInterface.hpp"
 #include "Ath10kPCIDevice.hpp"
@@ -74,6 +75,11 @@ public:
     void postInterfaceMessage(unsigned int,void *,unsigned long);
     void nativeLink(bool up);
 private:
+    bool bringUp(IOService *);
+    static void deferredStart(thread_call_param_t,thread_call_param_t);
+    thread_call_t deferredCall=nullptr;
+    IOService *deferredProvider=nullptr;
+    bool broughtUp=false;
     bool initCCLogs();
     void releaseAll();
     Ath10kPCIDevice *ath10k=nullptr;

@@ -16,11 +16,11 @@ int AirportAth10kInterface::CoreAdapter::call(const AthControl::Request &r,AthCo
 }
 void AirportAth10kInterface::SinkAdapter::post(uint32_t message,const void *data,size_t length)
 {
-    if(owner && owner->controller && !owner->stopping)owner->controller->postInterfaceMessage(message,const_cast<void *>(data),length);
+    if(owner && owner->controller && owner->started && !owner->stopping)owner->controller->postInterfaceMessage(message,const_cast<void *>(data),length);
 }
 void AirportAth10kInterface::SinkAdapter::linkState(bool up)
 {
-    if(owner && owner->controller && !owner->stopping){owner->controller->nativeLink(up);owner->updateLinkQuality();}
+    if(owner && owner->controller && owner->started && !owner->stopping){owner->controller->nativeLink(up);owner->updateLinkQuality();}
 }
 
 bool AirportAth10kInterface::init(AirportAth10k *provider)
@@ -34,11 +34,22 @@ bool AirportAth10kInterface::init(AirportAth10k *provider)
     coreAdapter.owner=sinkAdapter.owner=this;
     session=new AirportAth10kSession(coreAdapter,sinkAdapter);
     if(!session)return false;
+    AIRPORT_STEP("interface init: family init done, MAC copied");
     timer=IOTimerEventSource::timerEventSource(this,pollTimer);
     IO80211WorkQueue *queue=controller->getWorkQueue();
     if(!timer || !queue || queue->addEventSource(timer)!=kIOReturnSuccess)return false;
-    timer->setTimeoutMS(100);
+    // Not armed here: the first poll must not post messages into the family
+    // while IO80211Controller::start/attachInterface/IO80211InfraInterface::start
+    // are still running on the config thread (startPolling, after registerService).
     return true;
+}
+
+void AirportAth10kInterface::startPolling()
+{
+    if(started || stopping || !timer)return;
+    AIRPORT_STEP("interface: polling armed (100 ms)");
+    started=true;
+    timer->setTimeoutMS(100);
 }
 
 void AirportAth10kInterface::stopSession()
@@ -68,7 +79,9 @@ uint64_t AirportAth10kInterface::nowMs() const
 void AirportAth10kInterface::pollTimer(OSObject *owner,IOTimerEventSource *)
 {
     auto *self=OSDynamicCast(AirportAth10kInterface,owner);
-    if(!self || self->stopping || !self->session)return;
+    if(!self || self->stopping || !self->started || !self->session)return;
+    static bool first=true;
+    if(first){first=false;AIRPORT_STEP("interface: first poll of the core");}
     // The timer runs on the IO80211 work queue, under the same gate as the
     // WCL commands below; the session is therefore single-threaded.
     const auto before=self->session->state();
@@ -136,7 +149,7 @@ IOReturn AirportAth10kInterface::countryCode(apple80211_country_code_data *cd){r
 // Link quality for WCL: 100/50/20 by RSSI while the port is up, -2 otherwise.
 void AirportAth10kInterface::updateLinkQuality()
 {
-    if(stopping || !session)return;
+    if(stopping || !started || !session)return;
     const int quality=static_cast<int>(session->lqmQuality());
     if(quality!=reportedQuality){setLQM(static_cast<unsigned long long>(static_cast<long long>(quality)));reportedQuality=quality;}
 }

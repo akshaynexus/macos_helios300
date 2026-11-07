@@ -25,6 +25,10 @@ class AirportAth10kInterface : public IO80211InfraProtocol {
 public:
     bool init(AirportAth10k *);
     void free() override;
+    // Polling (and with it every postMessage/setLQM) starts only after the
+    // controller has attached and started this interface and registered it.
+    void startPolling();
+    bool polling() const {return started;}
     void stopSession();
     IOReturn setWCL_LINK_STATE_UPDATE(apple80211_wcl_update_link_state *) override;
     IOReturn setMacAddress(mloAddrArray &) override;
@@ -247,7 +251,7 @@ private:
     CoreAdapter coreAdapter{};SinkAdapter sinkAdapter{};
     AirportAth10kSession *session=nullptr;
     uint8_t permanentMAC[6]{};
-    bool stopping=false;
+    bool stopping=false,started=false;
     int reportedQuality=-3;
     uint16_t scanHomeAwayMs=0;
 };

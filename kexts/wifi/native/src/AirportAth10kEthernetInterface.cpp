@@ -26,6 +26,7 @@ IOReturn AirportAth10kEthernetInterface::prepareBSDGated(OSObject *,void *arg0,v
 IOReturn AirportAth10kEthernetInterface::attachToDataLinkLayer(IOOptionBits options,void *parameter)
 {
     char name[IFNAMSIZ];
+    AIRPORT_STEP("bsd: attachToDataLinkLayer");
     // AirportItlwm calls the private IONetworkInterface::setInterfaceSubType(3)
     // here; macOS 26.7.2's IONetworkingFamily does not export it (kc-audit), and
     // the Wi-Fi sub-family is applied by IO80211InfraInterface::prepareBSDInterface.
@@ -48,7 +49,9 @@ IOReturn AirportAth10kEthernetInterface::attachToDataLinkLayer(IOOptionBits opti
         super::detachFromDataLinkLayer(options,parameter);attached=false;return ret;
     }
     attached=true;
+    AIRPORT_STEP("bsd: prepareBSDInterface done, registering the Skywalk interface");
     interface->registerService();
+    AIRPORT_STEP("bsd: attached");
     return kIOReturnSuccess;
 }
 

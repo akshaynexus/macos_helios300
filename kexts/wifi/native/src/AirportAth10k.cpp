@@ -12,6 +12,8 @@ static_assert(AirportBridge::kNotReady==kIOReturnNotReady && AirportBridge::kBus
               AirportBridge::kAborted==kIOReturnAborted && AirportBridge::kNotFound==kIOReturnNotFound && AirportBridge::kError==kIOReturnError &&
               AirportBridge::kExclusiveAccess==kIOReturnExclusiveAccess && AirportBridge::kNotAttached==kIOReturnNotAttached,"IOReturn mirror");
 
+volatile SInt32 gAirportAth10kStep=0;
+
 bool airportAth10kRandom(uint8_t *p,size_t n){if(!p || !n)return false;read_random(p,static_cast<u_int>(n));return true;}
 
 bool AirportAth10k::init(OSDictionary *properties)
@@ -22,6 +24,10 @@ bool AirportAth10k::init(OSDictionary *properties)
 
 IOService *AirportAth10k::probe(IOService *provider,SInt32 *score)
 {
+    // Kill switch: -airportath10k_off leaves the core up (Ath10kNativeReady,
+    // no interface) and never starts the front end.
+    if(PE_parse_boot_argn("-airportath10k_off",nullptr,0)){AIRPORT_LOG("disabled by -airportath10k_off");return nullptr;}
+    AIRPORT_STEP("probe");
     auto *device=OSDynamicCast(Ath10kPCIDevice,provider);
     if(!device || !device->nativeFrontEnd()){AIRPORT_LOG("provider is not an Ath10kPCIDevice in native mode");return nullptr;}
     IOEthernetAddress address;
@@ -98,22 +104,60 @@ void AirportAth10k::releaseAll()
     }
 }
 
+// ath10k_native_delay=<seconds>: start() returns at once and the whole
+// bring-up (IO80211Controller::start, interfaces, Skywalk, registerService)
+// runs from a thread call N seconds later, so the system reaches login and SSH
+// first and `log stream --predicate 'sender == "AirportAth10k"'` shows the
+// breadcrumbs while it initialises. Diagnostic only; the default is immediate.
 bool AirportAth10k::start(IOService *provider)
 {
+    AIRPORT_STEP("start");
     ath10k=OSDynamicCast(Ath10kPCIDevice,provider);
     if(!ath10k)return false;
+    UInt32 delay=0;
+    if(PE_parse_boot_argn("ath10k_native_delay",&delay,sizeof(delay)) && delay){
+        if(delay>600)delay=600;
+        deferredCall=thread_call_allocate(deferredStart,this);
+        if(!deferredCall)return false;
+        deferredProvider=provider;provider->retain();retain();
+        uint64_t deadline=0;clock_interval_to_deadline(delay,kSecondScale,&deadline);
+        AIRPORT_LOG("ath10k_native_delay=%u: bring-up deferred %u s (start returns now)",delay,delay);
+        AIRPORT_STEP("start: deferred");
+        thread_call_enter_delayed(deferredCall,deadline);
+        return true;
+    }
+    return bringUp(provider);
+}
+
+void AirportAth10k::deferredStart(thread_call_param_t self_,thread_call_param_t)
+{
+    auto *self=static_cast<AirportAth10k *>(self_);
+    AIRPORT_STEP("deferred bring-up begins");
+    if(self->isInactive())AIRPORT_LOG("deferred bring-up: already inactive");
+    else if(!self->bringUp(self->deferredProvider))AIRPORT_LOG("deferred bring-up FAILED (see the last step line)");
+    self->deferredProvider->release();self->deferredProvider=nullptr;
+    self->release();
+}
+
+bool AirportAth10k::bringUp(IOService *provider)
+{
     UInt8 builtIn=0;
     setProperty("built-in",OSData::withBytes(&builtIn,sizeof(builtIn)));
     setProperty("DriverKitDriver",kOSBooleanFalse);
     setProperty("AirportAth10kVersion",ATH10K_VERSION);
     // IO80211Controller::start consults createWorkQueue/getWorkQueue.
+    AIRPORT_STEP("work queue");
     workQueue=IO80211WorkQueue::workQueue();
     if(!workQueue){AIRPORT_LOG("no IO80211WorkQueue");return false;}
+    AIRPORT_STEP("corecapture pipes");
     if(!initCCLogs()){AIRPORT_LOG("corecapture pipes failed");releaseAll();return false;}
+    AIRPORT_STEP("IO80211Controller::start");
     if(!super::start(provider)){releaseAll();return false;}
+    AIRPORT_STEP("command gate");
     gate=IOCommandGate::commandGate(this);
     if(!gate || workQueue->addEventSource(gate)!=kIOReturnSuccess){AIRPORT_LOG("no command gate");super::stop(provider);releaseAll();return false;}
 
+    AIRPORT_STEP("medium tables");
     OSDictionary *media=OSDictionary::withCapacity(2);
     IONetworkMedium *medium=IONetworkMedium::medium(kIOMediumIEEE80211,54000000);
     IONetworkMedium *none=IONetworkMedium::medium(kIOMediumIEEE80211None,0);
@@ -123,13 +167,17 @@ bool AirportAth10k::start(IOService *provider)
     if(medium)medium->release();if(none)none->release();if(media)media->release();
     if(!ok){AIRPORT_LOG("medium tables failed");super::stop(provider);releaseAll();return false;}
 
+    AIRPORT_STEP("interface init");
     netif=new AirportAth10kInterface;
     if(!netif || !netif->init(this)){AIRPORT_LOG("interface init failed");if(netif){netif->release();netif=nullptr;}super::stop(provider);releaseAll();return false;}
     netif->setInterfaceRole(1);
     netif->setInterfaceId(1);
+    AIRPORT_STEP("interface attach + IO80211Controller::attachInterface");
     if(!netif->attach(this) || !attachInterface(netif,this)){AIRPORT_LOG("attachInterface failed");super::stop(provider);releaseAll();return false;}
     interfaceAttached=true;
+    AIRPORT_STEP("BSD interface (IONetworkController::attachInterface)");
     if(!IONetworkController::attachInterface(reinterpret_cast<IONetworkInterface **>(&bsd),false)){AIRPORT_LOG("BSD interface attach failed");super::stop(provider);releaseAll();return false;}
+    AIRPORT_STEP("Skywalk registration info");
     IOSkywalkEthernetInterface::RegistrationInfo info;memset(&info,0,sizeof(info));
     if(!netif->initRegistrationInfo(&info,1,sizeof(info))){AIRPORT_LOG("initRegistrationInfo failed");super::stop(provider);releaseAll();return false;}
     netif->mExpansionData->fRegistrationInfo=static_cast<IOSkywalkNetworkInterface::RegistrationInfo *>(IOMalloc(sizeof(IOSkywalkNetworkInterface::RegistrationInfo)));
@@ -138,19 +186,34 @@ bool AirportAth10k::start(IOService *provider)
     memcpy(netif->mExpansionData->fRegistrationInfo,&info,sizeof(info));
     memcpy(netif->mExpansionData2->fRegistrationInfo,&info,sizeof(info));
     if(netif->getInterfaceRole()==1)netif->deferBSDAttach(true);
+    AIRPORT_STEP("IO80211InfraInterface::start");
     if(!netif->start(this)){AIRPORT_LOG("Skywalk interface start failed");super::stop(provider);releaseAll();return false;}
+    AIRPORT_STEP("core nativeAttachInterface");
     IOReturn attach=ath10k->nativeAttachInterface(bsd,getOutputQueue());
     if(attach!=kIOReturnSuccess){AIRPORT_LOG("core refused the interface 0x%x",attach);super::stop(provider);releaseAll();return false;}
     coreAttached=true;
     IOEthernetController::setLinkStatus(kIONetworkLinkValid);
+    AIRPORT_STEP("registerService (BSD interface, controller)");
     bsd->registerService();
     registerService();
+    broughtUp=true;
+    AIRPORT_STEP("started; arming the core poll");
+    netif->startPolling();
     AIRPORT_LOG("started over %s (version %s)",ath10k->getName(),ATH10K_VERSION);
     return true;
 }
 
 void AirportAth10k::stop(IOService *provider)
 {
+    AIRPORT_STEP("stop");
+    if(deferredCall){
+        if(thread_call_cancel(deferredCall)){ // never ran: drop the references it held
+            if(deferredProvider){deferredProvider->release();deferredProvider=nullptr;}
+            release();
+        }
+        thread_call_free(deferredCall);deferredCall=nullptr;
+    }
+    if(!broughtUp){IOService::stop(provider);return;} // deferred bring-up never happened: IO80211Controller::start never ran
     if(netif)netif->stopSession();
     if(coreAttached && ath10k){ath10k->nativeDetachInterface();coreAttached=false;}
     super::stop(provider);
@@ -222,6 +285,7 @@ void AirportAth10k::postInterfaceMessage(unsigned int message,void *data,unsigne
 
 IOReturn AirportAth10k::enable(IONetworkInterface *)
 {
+    AIRPORT_STEP("enable(IONetworkInterface)");
     if(!ath10k)return kIOReturnNotReady;
     const IOReturn r=ath10k->nativeEnable(true);
     return r==kIOReturnNotReady?kIOReturnSuccess:r; // the core enables once its runtime is up
@@ -310,7 +374,7 @@ IOReturn AirportAth10k::setPOWER(IO80211SkywalkInterface *,apple80211_power_data
     if(!pd)return kIOReturnBadArgument;
     if(pd->num_radios>0){
         const bool on=pd->power_state[0]!=0;
-        AIRPORT_LOG("setPOWER %u",pd->power_state[0]);
+        AIRPORT_STEP(on?"setPOWER on":"setPOWER off");
         powerState=on?1:0;
         if(netif)netif->powerChanged(on);
         if(ath10k)ath10k->nativeEnable(on);
