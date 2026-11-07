@@ -97,6 +97,10 @@ echo 'WPA2 supplicant tests passed (independent crypto vectors, MIC, GTK unwrap,
     tests/test_wpa3_crypto.cpp -o "$test_tmp_dir/wpa3-crypto"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/wpa3-crypto"
 echo 'WPA3 crypto tests passed (FIPS 180-4/197, RFC 4231/4493/5869, NIST P-256 points, IEEE 802.11-2020 Annex J.10 SAE vectors).'
+"${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -Wno-deprecated-declarations -fsanitize=address,undefined \
+    tests/test_wpa3_supplicant.cpp $security_libs -o "$test_tmp_dir/wpa3-supplicant"
+ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/wpa3-supplicant"
+echo 'WPA3 supplicant tests passed (SAE/PSK-SHA256/802.1X-SHA256 AKMs against an OpenSSL authenticator: CMAC MIC, KDF-SHA256 PTK, PMKID, RSNXE, IGTK install and rekey).'
 # Native (IO80211/WCL) front end: kernel crypto policy and the bridge logic.
 "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
     -Isrc/kext native/tests/test_native_crypto.cpp -o "$test_tmp_dir/native-crypto"

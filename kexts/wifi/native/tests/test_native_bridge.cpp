@@ -62,7 +62,7 @@ struct FakeCore:B::Core{
         if(r.operation==Cancel){++cancels;stage=0;link=false;secure=false;return 0;}
         if(r.operation==ReceiveEAPOL){if(eapolIn.empty())return B::kNotReady;o.length=uint32_t(eapolIn.front().size());memcpy(o.data,eapolIn.front().data(),o.length);eapolIn.erase(eapolIn.begin());return 0;}
         if(r.operation==SendEAPOL){if(phase && phase!=3 && phase!=5)return B::kNotReady;eapolOut.push_back({r.data,r.data+r.length});return 0;}
-        if(r.operation==InstallKeys){if(r.length!=56 || phase)return B::kBadArgument;installedKeys.assign(r.data,r.data+56);phase=1;return 0;}
+        if(r.operation==InstallKeys){if((r.length!=56 && r.length!=81) || phase)return B::kBadArgument;installedKeys.assign(r.data,r.data+r.length);phase=1;return 0;}
         if(r.operation==Authorize){if(phase!=3)return B::kNotReady;authorized=true;return 0;}
         return B::kUnsupported;
     }
@@ -143,7 +143,7 @@ int main(){
         assert(sink.count(W::AssocComplete)==1 && sink.count(W::LinkStatus)==1 && sink.count(W::FirstBeacon)==1 && sink.links.size()==1 && sink.links[0]);
         assert(core.eapolOut.size()==1 && core.eapolOut[0].size()==sizeof(v_m2) && !memcmp(core.eapolOut[0].data(),v_m2,sizeof(v_m2)));
         core.advance();s.poll(t+=100); // M3 -> keys installed, M4 queued until phase 3
-        assert(core.installedKeys.size()==56 && !memcmp(core.installedKeys.data(),v_ptk+32,16) && !memcmp(core.installedKeys.data()+16,v_gtk,16) && core.installedKeys[48]==4);
+        assert(core.installedKeys.size()==81 && !core.installedKeys[56] && !memcmp(core.installedKeys.data(),v_ptk+32,16) && !memcmp(core.installedKeys.data()+16,v_gtk,16) && core.installedKeys[48]==4);
         assert(core.eapolOut.size()==1);
         core.advance();s.poll(t+=100); // phase 3: M4 sent and Authorize requested
         assert(core.eapolOut.size()==2 && core.eapolOut[1].size()==sizeof(v_m4) && !memcmp(core.eapolOut[1].data(),v_m4,sizeof(v_m4)) && core.authorized);
