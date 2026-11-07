@@ -265,6 +265,12 @@ qca_err qca_rome_setup(const qca_transport *t, const qca_firmware *rampatch,
          ver.patch_version, ver.ram_version);
 
     info = qca_lookup_device(ver.rom_version);
+    if (info && qca_board_id(&ver) != 0) {
+        /* Linux would load nvm_usb_<rom>_<board>.bin; only the generic NVM
+         * is embedded, so refuse rather than send the wrong calibration. */
+        r->actual_len = qca_board_id(&ver);
+        return fail(r, QCA_STAGE_GET_VERSION, QCA_ERR_UNSUPPORTED_BOARD);
+    }
     if (!info) {
         /* Deliberately stricter than Linux: we never "assume no patch
          * needed" for unknown high ROM versions; we only drive Rome 3.2. */
@@ -333,6 +339,32 @@ qca_err qca_rome_setup(const qca_transport *t, const qca_firmware *rampatch,
     return QCA_OK;
 }
 
+uint16_t qca_board_id(const qca_version *ver)
+{
+    uint16_t id = 0;
+    if (((ver->flag >> 8) & 0xffu) == QCA_FLAG_MULTI_NVM)
+        id = (uint16_t)(((uint16_t)ver->chip_id << 8) | ver->platform_id);
+    return id == 0xffffu ? 0 : id;
+}
+
+int qca_err_is_transient(qca_err err)
+{
+    switch (err) {
+    case QCA_ERR_GET_VERSION_IO:
+    case QCA_ERR_GET_VERSION_SHORT:
+    case QCA_ERR_CHECK_STATUS_IO:
+    case QCA_ERR_CHECK_STATUS_SHORT:
+    case QCA_ERR_HEADER_IO:
+    case QCA_ERR_HEADER_SHORT:
+    case QCA_ERR_BODY_IO:
+    case QCA_ERR_BODY_SHORT:
+    case QCA_ERR_FINAL_STATUS:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 const char *qca_strerror(qca_err err)
 {
     switch (err) {
@@ -355,6 +387,7 @@ const char *qca_strerror(qca_err err)
     case QCA_ERR_BODY_SHORT:           return "DFU body short write";
     case QCA_ERR_ROM_CHANGED:          return "rom_version changed after rampatch";
     case QCA_ERR_FINAL_STATUS:         return "final status lacks 0xc0";
+    case QCA_ERR_UNSUPPORTED_BOARD:    return "board-specific NVM required (only generic NVM embedded)";
     case QCA_ERR__COUNT:               break;
     }
     return "unknown error";

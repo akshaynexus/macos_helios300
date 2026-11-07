@@ -41,6 +41,7 @@ extern "C" {
 #define QCA_ROME32_NVM_HDR          4u
 #define QCA_ROME32_VER_OFFSET       16u
 #define QCA_RAMPATCH_VER_SIZE       6u
+#define QCA_FLAG_MULTI_NVM          0x80u /* flag >> 8: board-specific NVM  */
 
 /* Decoded struct qca_version (wire format is packed little-endian). */
 typedef struct qca_version {
@@ -87,6 +88,7 @@ typedef enum qca_err {
     QCA_ERR_BODY_SHORT,
     QCA_ERR_ROM_CHANGED,
     QCA_ERR_FINAL_STATUS,
+    QCA_ERR_UNSUPPORTED_BOARD,
     QCA_ERR__COUNT
 } qca_err;
 
@@ -157,6 +159,16 @@ int qca_decode_rampatch_version(const qca_firmware *fw,
 qca_err qca_rome_setup(const qca_transport *t, const qca_firmware *rampatch,
                        const qca_firmware *nvm, const qca_options *opt,
                        qca_result *result);
+
+/* Board ID Linux appends to the NVM file name (qca_extract_board_id());
+ * 0 = generic nvm_usb_<rom>.bin. */
+uint16_t qca_board_id(const qca_version *ver);
+
+/* 1 if retrying the whole setup later can succeed (USB I/O failures, short
+ * transfers, a final status that is not done yet); 0 for errors that will
+ * repeat on every attempt (unsupported chip, firmware/ROM mismatch, bad
+ * arguments). */
+int qca_err_is_transient(qca_err err);
 
 const char *qca_strerror(qca_err err);
 const char *qca_stage_name(qca_stage stage);
