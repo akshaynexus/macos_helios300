@@ -89,6 +89,7 @@ typedef enum qca_err {
     QCA_ERR_ROM_CHANGED,
     QCA_ERR_FINAL_STATUS,
     QCA_ERR_UNSUPPORTED_BOARD,
+    QCA_ERR_PREPARE_DOWNLOAD,
     QCA_ERR__COUNT
 } qca_err;
 
@@ -109,6 +110,11 @@ typedef struct qca_transport {
     /* Optional, may be NULL. Receives a fully formatted-free message plus
      * up to three integer arguments to keep the core printf-free. */
     void (*log)(void *ctx, const char *msg, uint32_t a, uint32_t b, uint32_t c);
+    /* Optional, may be NULL. Called once before each download's DFU header
+     * is sent: acquire whatever bulk_out needs (interface, pipe, buffer).
+     * Nonzero = fail the download before anything is written, so EP2 is
+     * never left switched to DFU with no body following. */
+    int (*prepare_download)(void *ctx);
 } qca_transport;
 
 typedef struct qca_firmware {

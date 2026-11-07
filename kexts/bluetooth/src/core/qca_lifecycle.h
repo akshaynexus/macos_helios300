@@ -38,7 +38,7 @@ typedef enum qca_life_state {
     QCA_LS_READY,        /* last run succeeded                                */
     QCA_LS_SLEEPING,     /* powered off; re-check on wake                     */
     QCA_LS_FAILED,       /* gave up until the next wake                       */
-    QCA_LS_DEAD,         /* permanent error: never retry on this device       */
+    QCA_LS_DEAD,         /* permanent error: one attempt per wake, else none  */
     QCA_LS_GONE          /* terminated (unplug / unload): ignore everything   */
 } qca_life_state;
 

@@ -429,6 +429,47 @@ void test_board_id() {
     }
 }
 
+int g_prepare_calls = 0;
+int g_prepare_rc = 0;
+int prepare_hook(void *) { ++g_prepare_calls; return g_prepare_rc; }
+
+void test_prepare_download() {
+    std::puts("[prepare_download runs before each DFU header; failure writes nothing]");
+    Fixture f;
+    {
+        SizedDevice d; d.rp_size = f.rp.size(); d.nvm_size = f.nvm.size();
+        qca_transport t = d.transport();
+        t.prepare_download = prepare_hook;
+        g_prepare_calls = 0; g_prepare_rc = 0;
+        qca_result r;
+        CHECK_EQ(qca_rome_setup(&t, &f.rpf, &f.nvf, nullptr, &r), QCA_OK);
+        CHECK_EQ(g_prepare_calls, 2); // rampatch + NVM
+    }
+    {
+        SizedDevice d; d.status = 0xc0;
+        qca_transport t = d.transport();
+        t.prepare_download = prepare_hook;
+        g_prepare_calls = 0;
+        qca_result r;
+        CHECK_EQ(qca_rome_setup(&t, &f.rpf, &f.nvf, nullptr, &r), QCA_OK);
+        CHECK_EQ(g_prepare_calls, 0); // patched chip: never touches the bulk pipe
+    }
+    {
+        SizedDevice d;
+        qca_transport t = d.transport();
+        t.prepare_download = prepare_hook;
+        g_prepare_calls = 0; g_prepare_rc = int(0xe00002cd); // kIOReturnNotOpen
+        qca_result r;
+        CHECK_EQ(qca_rome_setup(&t, &f.rpf, &f.nvf, nullptr, &r), QCA_ERR_PREPARE_DOWNLOAD);
+        CHECK_EQ(r.stage, QCA_STAGE_RAMPATCH);
+        CHECK_EQ((uint32_t)r.transport_rc, 0xe00002cdu);
+        CHECK_EQ(d.count(Op::CtrlOut), 0u); // no DFU header went out
+        CHECK_EQ(d.count(Op::Bulk), 0u);
+        CHECK(qca_err_is_transient(QCA_ERR_PREPARE_DOWNLOAD));
+        g_prepare_rc = 0;
+    }
+}
+
 void test_rampatch_version_mismatch() {
     std::puts("[rampatch header version checks]");
     Fixture f;
@@ -723,6 +764,7 @@ int main() {
     test_only_rampatch();
     test_unsupported_rom();
     test_board_id();
+    test_prepare_download();
     test_rampatch_version_mismatch();
     test_short_writes_and_errors();
     test_final_status_mismatch();

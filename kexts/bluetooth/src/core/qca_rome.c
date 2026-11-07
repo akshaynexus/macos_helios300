@@ -141,6 +141,15 @@ static qca_err download_fw(const qca_transport *t, qca_result *r,
     uint32_t actual = 0;
     int rc;
 
+    if (t->prepare_download) {
+        rc = t->prepare_download(t->ctx);
+        if (rc != 0) {
+            r->transport_rc = rc;
+            r->fail_offset = 0;
+            return fail(r, stage, QCA_ERR_PREPARE_DOWNLOAD);
+        }
+    }
+
     rc = t->control_out(t->ctx, QCA_REQ_DFU_DOWNLOAD, fw->data,
                         (uint16_t)hdr_size, &actual, QCA_CTRL_TIMEOUT_MS);
     if (rc != 0) {
@@ -359,6 +368,7 @@ int qca_err_is_transient(qca_err err)
     case QCA_ERR_BODY_IO:
     case QCA_ERR_BODY_SHORT:
     case QCA_ERR_FINAL_STATUS:
+    case QCA_ERR_PREPARE_DOWNLOAD:
         return 1;
     default:
         return 0;
@@ -388,6 +398,7 @@ const char *qca_strerror(qca_err err)
     case QCA_ERR_ROM_CHANGED:          return "rom_version changed after rampatch";
     case QCA_ERR_FINAL_STATUS:         return "final status lacks 0xc0";
     case QCA_ERR_UNSUPPORTED_BOARD:    return "board-specific NVM required (only generic NVM embedded)";
+    case QCA_ERR_PREPARE_DOWNLOAD:     return "bulk pipe for the download not available";
     case QCA_ERR__COUNT:               break;
     }
     return "unknown error";

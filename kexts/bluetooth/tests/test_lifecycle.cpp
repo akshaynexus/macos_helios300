@@ -100,7 +100,7 @@ void test_retry_backoff()
 
 void test_permanent_errors()
 {
-    std::puts("[policy: permanent errors never retry, not even on wake]");
+    std::puts("[policy: permanent errors: no retry in the round, exactly one attempt per wake]");
     const qca_err perm[] = {QCA_ERR_UNSUPPORTED_ROM, QCA_ERR_UNSUPPORTED_BOARD,
                             QCA_ERR_RAMPATCH_ROM_MISMATCH, QCA_ERR_RAMPATCH_PATCH_OLDER,
                             QCA_ERR_RAMPATCH_MISSING, QCA_ERR_NVM_TOO_SHORT,
@@ -114,15 +114,39 @@ void test_permanent_errors()
         qca_life_action a = qca_life_on_result(&l, e);
         CHECK(!a.arm_timer_ms);
         CHECK_EQ(l.state, QCA_LS_DEAD);
+        CHECK(!qca_life_on_event(&l, QCA_EV_TIMER).run_setup);
         qca_life_on_event(&l, QCA_EV_POWER_OFF);
         a = qca_life_on_event(&l, QCA_EV_POWER_ON);
-        CHECK(!a.arm_timer_ms && !a.run_setup);
+        CHECK_EQ(a.arm_timer_ms, QCA_LIFE_WAKE_DELAY_MS);
+        CHECK(qca_life_on_event(&l, QCA_EV_TIMER).run_setup);
+        a = qca_life_on_result(&l, QCA_ERR_GET_VERSION_IO); // even a transient one: no 2nd try
+        CHECK(!a.arm_timer_ms);
+        CHECK_EQ(l.state, QCA_LS_FAILED);
+        qca_life_on_event(&l, QCA_EV_POWER_OFF);
+        qca_life_on_event(&l, QCA_EV_POWER_ON);
+        CHECK(qca_life_on_event(&l, QCA_EV_TIMER).run_setup);
+        qca_life_on_result(&l, e); // real mismatch: dead again
         CHECK_EQ(l.state, QCA_LS_DEAD);
+        CHECK_EQ(l.runs, 3u);
+    }
+    {
+        // A one-off garbage read (e.g. zeros -> unsupported ROM) recovers on wake.
+        qca_life l;
+        qca_life_init(&l);
+        qca_life_on_event(&l, QCA_EV_START);
+        qca_life_on_event(&l, QCA_EV_TIMER);
+        qca_life_on_result(&l, QCA_ERR_UNSUPPORTED_ROM);
+        qca_life_on_event(&l, QCA_EV_POWER_OFF);
+        qca_life_on_event(&l, QCA_EV_POWER_ON);
+        qca_life_on_event(&l, QCA_EV_TIMER);
+        qca_life_on_result(&l, QCA_OK);
+        CHECK_EQ(l.state, QCA_LS_READY);
     }
     const qca_err trans[] = {QCA_ERR_GET_VERSION_IO, QCA_ERR_GET_VERSION_SHORT,
                              QCA_ERR_CHECK_STATUS_IO, QCA_ERR_CHECK_STATUS_SHORT,
                              QCA_ERR_HEADER_IO, QCA_ERR_HEADER_SHORT, QCA_ERR_BODY_IO,
-                             QCA_ERR_BODY_SHORT, QCA_ERR_FINAL_STATUS};
+                             QCA_ERR_BODY_SHORT, QCA_ERR_FINAL_STATUS,
+                             QCA_ERR_PREPARE_DOWNLOAD};
     for (qca_err e : trans)
         CHECK(qca_err_is_transient(e));
     CHECK(!qca_err_is_transient(QCA_OK));

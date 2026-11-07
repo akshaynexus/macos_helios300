@@ -4,6 +4,8 @@
 
 #include <IOKit/IOService.h>
 #include <IOKit/IOBufferMemoryDescriptor.h>
+#include <IOKit/IOInterruptEventSource.h>
+#include <IOKit/IOLocks.h>
 #include <IOKit/IOTimerEventSource.h>
 #include <IOKit/IOWorkLoop.h>
 #include <IOKit/usb/IOUSBHostDevice.h>
@@ -36,12 +38,16 @@ public:
     int xferControlOut(uint8_t req, const void *buf, uint16_t len, uint32_t *actual, uint32_t timeoutMs);
     int xferBulkOut(uint8_t ep, const void *buf, uint32_t len, uint32_t *actual, uint32_t timeoutMs);
 
+    int prepareDownload();
+
     /* Workloop-gated entry points (static trampolines in the .cpp). */
     void gatedEvent(qca_life_event ev);
     void timerFired();
+    void postedEventsFired();
 
 private:
     void apply(qca_life_action a);
+    void post(UInt32 bit);
     qca_err runSetup();
     bool openDevice();
     bool ensureConfigured();
@@ -57,6 +63,10 @@ private:
     IOBufferMemoryDescriptor *fBulkBuffer = nullptr;
     IOWorkLoop               *fWorkLoop   = nullptr;
     IOTimerEventSource       *fTimer      = nullptr;
+    IOInterruptEventSource   *fPostSrc    = nullptr; /* events from PM/terminate threads */
+    IOLock                   *fPipeLock   = nullptr; /* fBulkOut vs willTerminate abort  */
+    volatile UInt32           fPending    = 0;       /* kPost* bits                      */
+    volatile bool             fWantPowerOn = true;
     bool                      fDeviceOpen = false;
     bool                      fIfaceOpen  = false;
     bool                      fPMStarted  = false;

@@ -73,8 +73,15 @@ qca_life_action qca_life_on_event(qca_life *l, qca_life_event ev)
         if (l->powered)
             return a; /* initial PM "on" or duplicate: nothing changed */
         l->powered = 1;
-        if (l->state == QCA_LS_DEAD)
-            return a;
+        if (l->state == QCA_LS_DEAD) {
+            /* A "permanent" error can come from one garbage read (e.g. a
+             * version of zeros). Allow a single attempt per wake; a real
+             * mismatch fails the same way and stays dead. */
+            l->wakes++;
+            l->state = QCA_LS_PENDING;
+            l->attempts = QCA_LIFE_MAX_ATTEMPTS - 1u;
+            return arm(QCA_LIFE_WAKE_DELAY_MS);
+        }
         if (l->state == QCA_LS_RUNNING) {
             /* The run straddled a sleep: its result says nothing about the
              * chip after wake, so check again once it is done. */

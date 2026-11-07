@@ -13,18 +13,23 @@
 //           power tree, and schedules a setup run on its own workloop.
 //   setup   open the device, make sure it is configured, run the portable
 //           qca_rome state machine (it downloads only what CHECK_STATUS says
-//           is missing; the bulk pipe is opened only if a download is
-//           needed), close everything. On success rename the device to
+//           is missing; the interface/bulk pipe are opened only when a
+//           download is due, and before its DFU header), close everything. On success rename the device to
 //           "Bluetooth USB Host Controller" (macOS 12+, as
 //           IntelBluetoothFirmware does) and re-register it so bluetoothd
 //           (patched by BlueToolFixup) picks it up.
-//   wake    setPowerState(on) after an off: run the setup again 800 ms later
+//   power   setPowerState only records and posts the event to the workloop
+//           (the PM thread never waits for a run).
+//   wake    power on after an off: run the setup again 800 ms later
 //           (four control reads if the chip kept its patch; a full download
 //           if it lost power without re-enumerating).
 //   retry   transient USB failures: up to 4 attempts, 250/500/1000 ms apart;
-//           again on every wake. Permanent errors (wrong chip/firmware) stop.
-//   unplug  willTerminate aborts outstanding control requests and waits for a
-//           run in progress; a re-enumerated device gets a new instance.
+//           again on every wake. Permanent errors (wrong chip/firmware): no
+//           retry, one attempt per wake (in case it was a garbage read).
+//           If bluetoothd holds the device during a wake check, it is skipped.
+//   unplug  willTerminate (terminate thread, never waits) aborts control
+//           requests and the bulk pipe; the run ends fast and closes the
+//           device; stop() then tears down. Re-enumeration = new instance.
 // Decisions live in src/core/qca_lifecycle.c (host-tested).
 //
 // No Apple transport personality is injected: on macOS 12+ the USB HCI
@@ -53,6 +58,7 @@ OSDefineMetaClassAndStructors(QCARomePatchRAM, IOService)
 namespace {
 
 enum { kPowerOff = 0, kPowerOn = 1, kPowerStates = 2 };
+enum : UInt32 { kPostPowerOff = 1u << 0, kPostPowerOn = 1u << 1, kPostTerminate = 1u << 2 };
 
 IOPMPowerState gPowerStates[kPowerStates] = {
     {kIOPMPowerStateVersion1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -72,6 +78,11 @@ int trCtrlOut(void *ctx, uint8_t req, const void *buf, uint16_t len, uint32_t *a
 int trBulkOut(void *ctx, uint8_t ep, const void *buf, uint32_t len, uint32_t *actual, uint32_t to)
 {
     return static_cast<QCARomePatchRAM *>(ctx)->xferBulkOut(ep, buf, len, actual, to);
+}
+
+int trPrepare(void *ctx)
+{
+    return static_cast<QCARomePatchRAM *>(ctx)->prepareDownload();
 }
 
 void trSleep(void *, uint32_t ms)
@@ -105,6 +116,11 @@ IOReturn gatedEventAction(OSObject *owner, void *arg0, void *, void *, void *)
 void timerAction(OSObject *owner, IOTimerEventSource *)
 {
     static_cast<QCARomePatchRAM *>(owner)->timerFired();
+}
+
+void postedAction(OSObject *owner, IOInterruptEventSource *, int)
+{
+    static_cast<QCARomePatchRAM *>(owner)->postedEventsFired();
 }
 
 } // namespace
@@ -141,20 +157,35 @@ bool QCARomePatchRAM::start(IOService *provider)
     fDevice->retain();
     qca_life_init(&fLife);
 
+    fPipeLock = IOLockAlloc();
     fWorkLoop = IOWorkLoop::workLoop();
     fTimer = fWorkLoop ? IOTimerEventSource::timerEventSource(this, timerAction) : nullptr;
-    if (!fTimer || fWorkLoop->addEventSource(fTimer) != kIOReturnSuccess) {
-        LOG("start: cannot create workloop/timer");
+    fPostSrc = fWorkLoop ? IOInterruptEventSource::interruptEventSource(this, postedAction) : nullptr;
+    bool timerAdded = fTimer && fWorkLoop->addEventSource(fTimer) == kIOReturnSuccess;
+    bool postAdded = timerAdded && fPostSrc && fWorkLoop->addEventSource(fPostSrc) == kIOReturnSuccess;
+    if (!fPipeLock || !postAdded) {
+        LOG("start: cannot create workloop/event sources");
+        if (timerAdded)
+            fWorkLoop->removeEventSource(fTimer);
         OSSafeReleaseNULL(fTimer);
+        OSSafeReleaseNULL(fPostSrc);
         OSSafeReleaseNULL(fWorkLoop);
+        if (fPipeLock) {
+            IOLockFree(fPipeLock);
+            fPipeLock = nullptr;
+        }
         OSSafeReleaseNULL(fDevice);
         super::stop(provider);
         return false;
     }
 
+    // As BrcmPatchRAM3 and IntelBluetoothFirmware: join the power tree as a
+    // child of the device and declare we want it on (makeUsable), so system
+    // sleep/wake is delivered as setPowerState(off)/(on).
     PMinit();
     registerPowerDriver(this, gPowerStates, kPowerStates);
     provider->joinPMtree(this);
+    makeUsable();
     fPMStarted = true;
 
     fWorkLoop->runAction(gatedEventAction, this, reinterpret_cast<void *>(QCA_EV_START));
@@ -164,44 +195,82 @@ bool QCARomePatchRAM::start(IOService *provider)
 
 bool QCARomePatchRAM::willTerminate(IOService *provider, IOOptionBits options)
 {
-    // Unplug or unload: fail every outstanding and future transfer fast, then
-    // wait (gate) for a run in progress to finish before stop() tears down.
+    // Unplug or unload, on the global terminate thread: do not wait here.
+    // Fail every outstanding and future transfer fast; a run in progress then
+    // finishes quickly and closes the device, which lets IOKit go on to stop().
     fTerminating = true;
     if (fDevice)
         fDevice->abortDeviceRequests(this, IOUSBHostIOSource::kAbortAsynchronous, kIOReturnAborted);
-    if (fWorkLoop)
-        fWorkLoop->runAction(gatedEventAction, this, reinterpret_cast<void *>(QCA_EV_TERMINATE));
+    if (fPipeLock) {
+        IOLockLock(fPipeLock);
+        if (fBulkOut)
+            fBulkOut->abort(IOUSBHostIOSource::kAbortAsynchronous, kIOReturnAborted);
+        IOLockUnlock(fPipeLock);
+    }
+    post(kPostTerminate);
     return super::willTerminate(provider, options);
 }
 
 void QCARomePatchRAM::stop(IOService *provider)
 {
     fTerminating = true;
+    // PMstop first (as both reference drivers do): it waits for a PM call in
+    // flight, so setPowerState can no longer touch the event sources.
+    if (fPMStarted) {
+        PMstop();
+        fPMStarted = false;
+    }
     if (fWorkLoop) {
         fWorkLoop->runAction(gatedEventAction, this, reinterpret_cast<void *>(QCA_EV_TERMINATE));
         if (fTimer) {
             fTimer->cancelTimeout();
             fWorkLoop->removeEventSource(fTimer); // waits for a running action
         }
+        if (fPostSrc)
+            fWorkLoop->removeEventSource(fPostSrc);
     }
     OSSafeReleaseNULL(fTimer);
+    OSSafeReleaseNULL(fPostSrc);
     OSSafeReleaseNULL(fWorkLoop);
-    if (fPMStarted) {
-        PMstop();
-        fPMStarted = false;
-    }
     closeAll();
+    if (fPipeLock) {
+        IOLockFree(fPipeLock);
+        fPipeLock = nullptr;
+    }
     OSSafeReleaseNULL(fDevice);
     super::stop(provider);
 }
 
+void QCARomePatchRAM::post(UInt32 bit)
+{
+    OSBitOrAtomic(bit, &fPending);
+    if (fPostSrc)
+        fPostSrc->interruptOccurred(nullptr, this, 0);
+}
+
 IOReturn QCARomePatchRAM::setPowerState(unsigned long state, IOService *)
 {
-    if (fWorkLoop && !fTerminating)
-        fWorkLoop->runAction(gatedEventAction, this,
-                             reinterpret_cast<void *>(state == kPowerOff ? QCA_EV_POWER_OFF
-                                                                         : QCA_EV_POWER_ON));
+    // Never block the PM thread on a run: record and post to the workloop.
+    if (!fTerminating) {
+        fWantPowerOn = (state != kPowerOff);
+        post(state == kPowerOff ? kPostPowerOff : kPostPowerOn);
+    }
     return IOPMAckImplied;
+}
+
+void QCARomePatchRAM::postedEventsFired()
+{
+    UInt32 bits = OSBitAndAtomic(0u, &fPending);
+    if (bits & kPostTerminate) {
+        gatedEvent(QCA_EV_TERMINATE);
+        return;
+    }
+    // Collapsed sequences: an "off" seen at all is delivered first; "on" is
+    // delivered if it is the current wish (off->on = wake, on->off = net off).
+    if (bits & kPostPowerOff)
+        gatedEvent(QCA_EV_POWER_OFF);
+    if ((bits & kPostPowerOn) && fWantPowerOn)
+        gatedEvent(QCA_EV_POWER_ON);
 }
 
 void QCARomePatchRAM::gatedEvent(qca_life_event ev)
@@ -243,7 +312,8 @@ bool QCARomePatchRAM::openDevice()
 {
     if (fDeviceOpen)
         return true;
-    if (fTerminating || isInactive() || !fDevice || !fDevice->open(this)) {
+    if (fTerminating || isInactive() || !fDevice || fDevice->isInactive() ||
+        !fDevice->open(this)) {
         LOG("cannot open IOUSBHostDevice (owned by another client or going away)");
         return false;
     }
@@ -296,7 +366,7 @@ IOUSBHostInterface *QCARomePatchRAM::findInterface0(int attempts)
         if (it) {
             while (OSObject *o = it->getNextObject()) {
                 IOUSBHostInterface *intf = OSDynamicCast(IOUSBHostInterface, o);
-                if (!intf)
+                if (!intf || intf->isInactive())
                     continue;
                 const StandardUSB::InterfaceDescriptor *id = intf->getInterfaceDescriptor();
                 if (id && id->bInterfaceNumber == 0 && id->bAlternateSetting == 0) {
@@ -345,16 +415,16 @@ bool QCARomePatchRAM::acquireBulkPipe()
         }
         fIfaceOpen = true;
     }
-    fBulkOut = fInterface->copyPipe(QCA_DFU_BULK_EP);
-    if (!fBulkOut) {
+    IOUSBHostPipe *pipe = fInterface->copyPipe(QCA_DFU_BULK_EP);
+    if (!pipe) {
         LOG("copyPipe(0x%02x) failed", QCA_DFU_BULK_EP);
         return false;
     }
-    const StandardUSB::EndpointDescriptor *ed = fBulkOut->getEndpointDescriptor();
+    const StandardUSB::EndpointDescriptor *ed = pipe->getEndpointDescriptor();
     if (!ed || StandardUSB::getEndpointType(ed) != kEndpointTypeBulk ||
         StandardUSB::getEndpointDirection(ed) != kEndpointDirectionOut) {
         LOG("endpoint 0x%02x is not bulk OUT", QCA_DFU_BULK_EP);
-        OSSafeReleaseNULL(fBulkOut);
+        pipe->release();
         return false;
     }
     fBulkBuffer = IOBufferMemoryDescriptor::inTaskWithOptions(kernel_task, kIODirectionOut,
@@ -362,9 +432,12 @@ bool QCARomePatchRAM::acquireBulkPipe()
     if (!fBulkBuffer || fBulkBuffer->prepare(kIODirectionOut) != kIOReturnSuccess) {
         LOG("bulk buffer allocation failed");
         OSSafeReleaseNULL(fBulkBuffer);
-        OSSafeReleaseNULL(fBulkOut);
+        pipe->release();
         return false;
     }
+    IOLockLock(fPipeLock);
+    fBulkOut = pipe;
+    IOLockUnlock(fPipeLock);
     return true;
 }
 
@@ -374,9 +447,16 @@ void QCARomePatchRAM::closeAll()
         fBulkBuffer->complete(kIODirectionOut);
         OSSafeReleaseNULL(fBulkBuffer);
     }
-    if (fBulkOut) {
-        fBulkOut->abort();
-        OSSafeReleaseNULL(fBulkOut);
+    IOUSBHostPipe *pipe = nullptr;
+    if (fPipeLock)
+        IOLockLock(fPipeLock);
+    pipe = fBulkOut;
+    fBulkOut = nullptr;
+    if (fPipeLock)
+        IOLockUnlock(fPipeLock);
+    if (pipe) {
+        pipe->abort();
+        pipe->release();
     }
     if (fInterface) {
         if (fIfaceOpen)
@@ -444,8 +524,8 @@ int QCARomePatchRAM::xferBulkOut(uint8_t ep, const void *buf, uint32_t len, uint
         return (int)kIOReturnAborted;
     if (ep != QCA_DFU_BULK_EP || len > QCA_DFU_PACKET_LEN)
         return (int)kIOReturnBadArgument;
-    if (!acquireBulkPipe())
-        return (int)kIOReturnNotOpen;
+    if (!fBulkOut || !fBulkBuffer)
+        return (int)kIOReturnNotOpen; // prepareDownload() was not called or failed
     memcpy(fBulkBuffer->getBytesNoCopy(), buf, len);
     uint32_t sent = 0;
     IOReturn rc = fBulkOut->io(fBulkBuffer, len, sent, timeoutMs);
@@ -458,6 +538,16 @@ int QCARomePatchRAM::xferBulkOut(uint8_t ep, const void *buf, uint32_t len, uint
     return (int)rc;
 }
 
+int QCARomePatchRAM::prepareDownload()
+{
+    // Called by the core before each DFU header: interface and bulk pipe must
+    // be ready first, so a failure never leaves EP2 switched to DFU with no
+    // body following (Linux sends the body 20 ms after the header).
+    if (fTerminating)
+        return (int)kIOReturnAborted;
+    return acquireBulkPipe() ? 0 : (int)kIOReturnNotOpen;
+}
+
 qca_err QCARomePatchRAM::runSetup()
 {
     uint64_t t0 = 0, t1 = 0, ns = 0;
@@ -467,11 +557,21 @@ qca_err QCARomePatchRAM::runSetup()
     qca_result r;
     bzero(&r, sizeof(r));
     qca_err e;
+    bool skipped = false;
     if (!openDevice()) {
-        // Busy or going away: transient, retried by the policy.
-        r.err = e = QCA_ERR_GET_VERSION_IO;
-        r.stage = QCA_STAGE_GET_VERSION;
-        r.transport_rc = (int)kIOReturnExclusiveAccess;
+        if (fLife.successes > 0 && !fTerminating) {
+            // Wake check while another client (bluetoothd) holds the device:
+            // it is in use, so do not fight over it or count a failure. A
+            // chip that lost power re-enumerates and gets a new instance.
+            skipped = true;
+            r.err = e = QCA_OK;
+            r.stage = QCA_STAGE_DONE;
+        } else {
+            // First run, busy or going away: transient, retried by the policy.
+            r.err = e = QCA_ERR_GET_VERSION_IO;
+            r.stage = QCA_STAGE_GET_VERSION;
+            r.transport_rc = (int)kIOReturnExclusiveAccess;
+        }
     } else if (!ensureConfigured()) {
         r.err = e = QCA_ERR_GET_VERSION_IO;
         r.stage = QCA_STAGE_GET_VERSION;
@@ -484,6 +584,7 @@ qca_err QCARomePatchRAM::runSetup()
         t.bulk_out = trBulkOut;
         t.sleep_ms = trSleep;
         t.log = trLog;
+        t.prepare_download = trPrepare;
         const qca_firmware rampatch = {qca_rampatch_usb_00000302, qca_rampatch_usb_00000302_len};
         const qca_firmware nvm = {qca_nvm_usb_00000302, qca_nvm_usb_00000302_len};
         qca_options opt;
@@ -494,6 +595,12 @@ qca_err QCARomePatchRAM::runSetup()
 
     clock_get_uptime(&t1);
     absolutetime_to_nanoseconds(t1 - t0, &ns);
+    if (skipped) {
+        LOG("wake check skipped: device in use by another client (run %u)", fLife.runs);
+        if (!fTerminating && !fDevice->isInactive())
+            fDevice->setProperty("QCARomePatchRAM-LastCheck", "skipped (device in use)");
+        return e;
+    }
     if (e == QCA_OK) {
         LOG("%s in %llu ms: rom 0x%08x patch 0x%x->0x%x status 0x%02x->0x%02x "
             "(rampatch=%d nvm=%d, %u bulk packets, run %u)",
@@ -506,18 +613,19 @@ qca_err QCARomePatchRAM::runSetup()
             fLife.runs, qca_stage_name(r.stage), qca_strerror(e), (uint32_t)r.transport_rc,
             r.fail_offset, r.expected_len, r.actual_len);
     }
-    if (!fTerminating && !isInactive()) {
+    if (!fTerminating && !isInactive() && !fDevice->isInactive()) {
         publishResult(r, probeOnly);
-        bool reregister = r.rampatch_downloaded || r.nvm_downloaded;
+        fDevice->setProperty("QCARomePatchRAM-LastCheck", e == QCA_OK ? "ok" : "failed");
+        // Rename and re-publish once, after the first success, so bluetoothd
+        // adopts the controller. Later (wake) runs never re-publish a device
+        // bluetoothd already uses.
         if (e == QCA_OK && !probeOnly && !fRenamed && version_major >= 21 &&
             !bootFlag("-qcarpnoname")) {
             fDevice->setName(QCAROME_BT_DEVICE_NAME);
             fRenamed = true;
-            reregister = true;
             LOG("device named \"%s\" for bluetoothd", QCAROME_BT_DEVICE_NAME);
-        }
-        if (e == QCA_OK && reregister)
             fDevice->registerService(kIOServiceAsynchronous);
+        }
     }
     return e;
 }

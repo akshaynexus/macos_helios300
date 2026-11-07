@@ -20,7 +20,7 @@ resident, to survive sleep and unplug, and to be tested against the real chip.
 | Which events lose the patch | Helios, Linux | kept: warm reboot, USB port reset, deauthorize/authorize, USB port power-off. Lost: cold boot (power-off), firmware crash. Suspend-to-RAM: not measured (Linux S3 was blocked by the NVIDIA driver) |
 | Firmware = what Linux loads | Helios `/usr/lib/firmware/qca/` | byte-identical (`evidence/firmware-hashes.txt`) |
 | Lifecycle (start, retries, sleep/wake, unplug) | host tests with a simulated chip | pass (ASan/UBSan, gcc + clang) |
-| Kext builds for macOS 26 x86_64 | Linux cross-build: MacOSX26.5 SDK, Apple ld64, KPI audit against xnu-12377 | MH_KEXT_BUNDLE; all 306 imports resolve |
+| Kext builds for macOS 26 x86_64 | Linux cross-build: MacOSX26.5 SDK, Apple ld64, KPI audit against xnu-12377 | MH_KEXT_BUNDLE; all 314 imports resolve |
 | **Loads on macOS; controller in System Settings; pairing, audio, sleep/wake** | **macOS only** | **not tested yet**; see [Owner test steps](#owner-test-steps-macos-26) |
 
 ## How it works
@@ -45,7 +45,8 @@ resident, to survive sleep and unplug, and to be tested against the real chip.
      - If the NVM bit `0x40` is clear, it sends `nvm_usb_00000302.bin` the
        same way (4-byte header).
      - The final status must show `0xc0`.
-   - The bulk pipe is opened only if a download is due.
+   - The interface and bulk pipe are opened only if a download is due, and
+     before its DFU header, so a failure can't leave EP2 switched to DFU.
 3. **Hand-over.** After a successful run on macOS 12+:
    - The kext renames the device to `Bluetooth USB Host Controller` and
      re-registers it. bluetoothd uses that name to choose the USB transport.
@@ -59,11 +60,16 @@ resident, to survive sleep and unplug, and to be tested against the real chip.
      later. If the chip kept its patch, that run is four control reads with
      no writes. If the chip lost power without re-enumerating, the run does a
      full download.
+     Power events are only posted to the kext's workloop, so the PM thread
+     never waits for a run. If bluetoothd holds the device during a wake
+     check, the check is skipped.
    - **Retries.** Transient USB failures are retried up to 4 times, with
      250/500/1000 ms between attempts, and again on every wake. Permanent
-     errors (wrong chip, firmware mismatch) are never retried.
-   - **Unplug or unload.** `willTerminate` aborts outstanding requests and
-     waits for any run in progress. A re-enumerated device gets a new
+     errors (wrong chip, firmware mismatch) are not retried, except for one
+     attempt per wake in case the error came from a garbage read.
+   - **Unplug or unload.** `willTerminate` (which never waits) aborts the
+     control requests and the bulk pipe; the run ends quickly and closes the
+     device, and `stop()` then tears down. A re-enumerated device gets a new
      instance.
 
    These decisions live in `src/core/qca_lifecycle.c` and are host-tested.
