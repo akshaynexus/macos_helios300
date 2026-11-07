@@ -1,0 +1,2 @@
+# NMHDA (tools/release/cross-nmhda.sh): families it declares besides xnu KPIs and Lilu
+hdr com.apple.iokit.IOPCIFamily IOKit/pci/IOPCIDevice.h
