@@ -45,7 +45,7 @@ class Doc(unittest.TestCase):
             if a["install"] == "opencore":
                 self.assertNotIn(f"`{a['name']}", table, a["name"])
             else:
-                self.assertRegex(table, r"\| `" + re.escape(a["name"]) + r"(\.zip)?` \|", a["name"])
+                self.assertRegex(table, r"\| `" + re.escape(a["name"].replace(" ", "-")) + r"(\.zip)?` \|", a["name"])
 
     def test_gpu_apps_ships_with_the_gpu_step(self):
         gpu = next(s for s in SPEC["post_install"] if s["step"] == "gpu")

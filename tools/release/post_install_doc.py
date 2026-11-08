@@ -51,9 +51,13 @@ def render(spec, version):
             head += f" (option {st['choice']}{', recommended' if st.get('recommended') else ''})"
         out += [head, "", st["what"] + ".", ""]
         run = st.get("run") or {}
-        if st.get("script"):
+        if st.get("script") or run:
             if st.get("cwd"):
                 out += [f"Run in: {st['cwd']}.", ""]
+            if not st.get("script"):
+                out += ["Helios 300 Setup.app does this step; the same in Terminal"
+                        + (" (`helios-setup` is `\"Helios 300 Setup.app/Contents/MacOS/helios-setup\"`)"
+                           if any(v.startswith("helios-setup ") for v in run.values()) else "") + ":", ""]
             out.append("```sh")
             for k in ("check", "install", "revert", "status"):
                 if run.get(k):

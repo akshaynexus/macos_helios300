@@ -76,6 +76,7 @@ release is a contract.
 | | `NVK-Pascal`: `libvulkan_nouveau.dylib` + `nvk_icd.json` (optional) | gpu-bundles `nvmtl/` | | |
 | | `NVIDIA-firmware-LICENCE.txt`, `Mesa-license.rst` | stick-only | | |
 | | `audio-voodoohda.sh`, `audio-applehda.sh`, `install-gpu.sh`, from `tools/macos/`; `gpu-apps.sh` from the driver's `tools/macos/` | stick-only (`EFI/Helios300`) | | |
+| | `Helios 300 Setup.app` (`apps/HeliosSetup`, `tools/release/cross-setup-app.sh`): the post-install app and its `helios-setup` CLI, carrying the scripts above; ad-hoc signed (the nested CLI, then the bundle) | applications (`EFI/Helios300` on the stick, extracted by 1401) | | |
 | | `POST-INSTALL.md`: every `post_install` step in order with its commands, and every file on the stick (`tools/release/post_install_doc.py`) | stick-only (`EFI/Helios300`) | | |
 
 ## `post_install[]`
@@ -112,6 +113,25 @@ Values that are not JSON types are written `{"data": "<hex>"}`, `{"string": …}
 | `device_properties` | `hda-gfx` = `onboard-2` on `PciRoot(0x0)/Pci(0x1,0x0)/Pci(0x0,0x0)` (GP106) and `/Pci(0x0,0x1)` (its HDA). WhateverGreen gives the HD 630 `onboard-1`. `applbkl` = `01000000` on `PciRoot(0x0)/Pci(0x2,0x0)` (HD 630): WhateverGreen skips its AppleBacklight panel patch while a discrete GPU is visible, so without it there is no brightness slider (docs/HARDWARE.md "Brightness"; 1401 4b9a322 writes the same). |
 | `usb_ports` | informational: HS07 internal (255) for the Bluetooth. `SSDT-HS07-UPC.aml` implements it, since the DSDT has a `_UPC` only on HS09. A full UTBMap needs a USBToolBox mapping run on the machine. |
 | `forbidden` | kexts `NVRM` `NVRMFB` `NVAccel` `NVRMAGDC` (the Turing+ NullMoth stack) and the other Bluetooth stacks; boot-arg `-wegnoegpu`; `disable-gpu` on the GP106 path; `SSDT-Disable_GPU_PEG0.aml`. PG106 drives the GTX 1060, so nothing may hide or power it off. |
+
+## What Helios 300 Setup.app reads
+
+`Helios 300 Setup.app` (`apps/HeliosSetup`, artifact kind `app`) is the post-install front end. Everything it shows
+and does comes from the manifest, so a new step or artifact needs only a spec change (`apps/HeliosSetup/README.md`).
+
+| key | meaning |
+|---|---|
+| `post_install[].app` | `title`; `driver_change` (counts against one driver change per restart; default `reboot`); `undo_note`; `parts[]` for a step installed one part per boot (`id`, `title`, `env` added to the step's `run` lines, `artifacts`, `reboot`, `driver_change`, `detect`); `detect`: probe lists `installed` (all true = installed), `active` (all true = in effect now, e.g. the kext loaded), `available` (each false one makes the step Not available, with its `why_not`), and `failed_hint` |
+| probe | `{"probe": kind, ...}`: kinds `file` (`path`), `kext` (`bundle_id`), `ioreg` (`class`, `key`), `pmset` (`key`), `bootarg` (`arg`), `nvram` (`var`), `profiler` (`type` + `key` or `items`), `filevault-off`, `boot-source` (internal / usb / other / unknown, from OpenCore's `boot-path`), `ip` / `ssid` (`port`), `build`; with `equals`, `contains`, `negate`, `format` (`band`, `info`), `private`, `label`, `why_not` |
+| `health[]` | the Status page: `id`, `title`, `probes` |
+| `update_groups[]` | `name`, `members`, `together`: `always` (Ath10kMac + AirportAth10k) or `abi-change` (PG106 + PG106FB + PG106Accel when `abi` differs; make_manifest reads `abi` = "MAJOR.MINOR" from `abi_from` in the driver tree, `pascal/bridge/include/pg106_kif.h`) |
+| artifact `requires_restart`, `update_group` | written by make_manifest: the spec's value, else true for `opencore` and `library-extensions` installs; the group that lists the artifact |
+| `config_delta` | computed by make_manifest: `kernel_add` (the `opencore` entries in order, each with its `requires`), `acpi_add`, `device_properties`, `nvram_add`, `nvram_delete`, `boot_args_required` (= `config.boot_args`), `forbidden`. The app merges it into the internal `config.plist`: the user's own keys and entries are never dropped, existing entries keep the user's `Enabled`/`Comment`, and `forbidden` is only reported |
+| `app_help` | the Help sheet (`sections[]`: `title`, `lines`) |
+| `third_party_kexts` | optional updates from Dortania's build repo: `source` (its `latest.json`) and `products` (product -> `[{bundle, id}]`) |
+
+Post-install steps without a script (`opencore`, `sleep`) are run by the app; their `run` lines are the same
+commands for Terminal (`helios-setup` is `Helios 300 Setup.app/Contents/MacOS/helios-setup`).
 
 ## How a release is built (`tools/release.sh`)
 

@@ -22,6 +22,12 @@ IOKitPersonalities, which must agree across personalities (Ath10kMac's Ath10kCou
 --wifi-country; --wifi-country here cross-checks it). --kc-audit is tools/release/kc_gate.py's result and becomes
 release.kc_audit; without it the manifest says kc_audit "skipped". Every post_install step may only name spec
 artifacts, and its script must be one of them.
+
+For Helios 300 Setup.app (apps/HeliosSetup; docs/MANIFEST.md "What the app reads"): every artifact gets
+`requires_restart` (the spec's value, else true for opencore and library-extensions installs) and `update_group`
+(the spec's update_groups entry that lists it); an `abi-change` group gets `abi` = "MAJOR.MINOR" read from its
+`abi_from` header in the driver tree (--driver-tree, pg106_kif.h's PG106_KIF_ABI_MAJOR/MINOR); and `config_delta`
+is computed here from the built artifacts' opencore/acpi entries and `config`, so the app never derives it again.
 """
 import argparse
 import datetime
@@ -29,6 +35,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import plistlib
 import shutil
 import stat
@@ -136,10 +143,63 @@ def check_post_install(spec):
     names = {a["name"] for a in spec["artifacts"]}
     for st in spec.get("post_install") or []:
         bad = [x for x in st["artifacts"] if x not in names]
+        bad += [x for part in (st.get("app") or {}).get("parts") or [] for x in part.get("artifacts") or [] if x not in names]
         if bad:
             raise SystemExit(f"make_manifest: post_install step {st['step']} names {bad}, which are not spec artifacts")
         if st.get("script") and st["script"] not in st["artifacts"]:
             raise SystemExit(f"make_manifest: post_install step {st['step']}: its script {st['script']} is not in its artifacts")
+
+
+def requires_restart(art):
+    """The spec's requires_restart, else: OpenCore and /Library/Extensions changes need a restart."""
+    return art.get("requires_restart", art["install"] in ("opencore", "library-extensions"))
+
+
+def group_abi(header):
+    """'MAJOR.MINOR' from a header's <NAME>_ABI_MAJOR / _ABI_MINOR defines (pg106_kif.h: PG106_KIF_ABI_MAJOR 1u)."""
+    with open(header) as fh:
+        text = fh.read()
+    major = re.search(r"#define\s+\w+_ABI_MAJOR\s+(\d+)", text)
+    minor = re.search(r"#define\s+\w+_ABI_MINOR\s+(\d+)", text)
+    if not (major and minor):
+        raise SystemExit(f"make_manifest: no *_ABI_MAJOR/_ABI_MINOR in {header}")
+    return f"{major.group(1)}.{minor.group(1)}"
+
+
+def update_groups(spec, built, driver_tree):
+    """spec update_groups, members limited to built artifacts, with `abi` for abi-change groups."""
+    out = []
+    for g in spec.get("update_groups") or []:
+        g = dict(g)
+        unknown = [m for m in g["members"] if m not in {a["name"] for a in spec["artifacts"]}]
+        if unknown:
+            raise SystemExit(f"make_manifest: update group {g['name']} names {unknown}, which are not spec artifacts")
+        g["members"] = [m for m in g["members"] if m in built]
+        if len(g["members"]) < 2:
+            continue
+        if g.get("abi_from"):
+            if not driver_tree:
+                raise SystemExit(f"make_manifest: update group {g['name']} reads its ABI from the driver tree: pass --driver-tree")
+            g["abi"] = group_abi(os.path.join(driver_tree, g["abi_from"]))
+        out.append(g)
+    return out
+
+
+def config_delta(spec, artifacts):
+    """What the release changes in config.plist: Kernel > Add (OpenCore order, with each kext's requires), ACPI > Add,
+    DeviceProperties, NVRAM Add/Delete, the boot-args the release requires, and the forbidden list."""
+    cfg = spec["config"]
+    kexts = sorted((a for a in artifacts if a.get("opencore")), key=lambda a: a["opencore"]["order"])
+    ssdts = sorted((a for a in artifacts if a.get("acpi")), key=lambda a: a["acpi"]["order"])
+    return {
+        "kernel_add": [dict(a["opencore"], requires=list(a.get("requires") or [])) for a in kexts],
+        "acpi_add": [dict(a["acpi"]) for a in ssdts],
+        "device_properties": cfg.get("device_properties") or {},
+        "nvram_add": cfg.get("nvram_add") or {},
+        "nvram_delete": cfg.get("nvram_delete") or {},
+        "boot_args_required": list(cfg.get("boot_args") or []),
+        "forbidden": cfg.get("forbidden") or {},
+    }
 
 
 def main(argv=None):
@@ -159,6 +219,7 @@ def main(argv=None):
     ap.add_argument("--missing-why", action="append", default=[], help="NAME=reason for an artifact release.sh could not build")
     ap.add_argument("--kc-audit", help="tools/release/kc_gate.py result JSON (release.sh --real-kc)")
     ap.add_argument("--wifi-country", help="the country release.sh baked into Ath10kMac (cross-checked)")
+    ap.add_argument("--driver-tree", help="the nvidia-macos-driver export (update_groups abi_from headers)")
     a = ap.parse_args(argv)
 
     with open(a.spec) as fh:
@@ -183,6 +244,7 @@ def main(argv=None):
             missing.append({"name": name, "why": reason})
             continue
         out = {k: v for k, v in art.items() if k not in ART_SPEC_ONLY}
+        out["requires_restart"] = requires_restart(art)
         if art.get("personality_keys"):
             if not os.path.isdir(src):
                 raise SystemExit(f"make_manifest: {name} has personality_keys but is not a bundle")
@@ -239,6 +301,13 @@ def main(argv=None):
     else:
         manifest["release"]["kc_audit"] = {"status": "skipped", "why": "release.sh ran without --real-kc: no kext was "
                                            "checked against the target Mac's kernel collections"}
+    built = {a["name"] for a in artifacts}
+    manifest["update_groups"] = update_groups(spec, built, a.driver_tree)
+    for g in manifest["update_groups"]:
+        for art in artifacts:
+            if art["name"] in g["members"]:
+                art["update_group"] = g["name"]
+    manifest["config_delta"] = config_delta(spec, artifacts)
     manifest["artifacts"] = artifacts
     with open(a.schema) as fh:
         errors = schema_check.check(json.load(fh), manifest)
