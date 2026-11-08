@@ -2,15 +2,15 @@
 # make test         host tests (ASan/UBSan): core, lifecycle, golden replay
 # make test-nofw    same without fetching firmware (download goldens skipped)
 # make linux-tools  build/qca-rome-usb, build/usbmon-pcap (static, for the laptop)
-# make kext         cross-build build/cross/QCARomePatchRAM.kext (Linux -> macOS 26)
+# make kext         cross-build build/cross/QCARomePatchRAM.kext and QCARomeHCIFix.kext (Linux -> macOS 26)
 # make kext-macos   native build on macOS with Xcode + MacKernelSDK (upstream script)
 CC ?= cc
 CXX ?= c++
 SAN := -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
 WARN := -Wall -Wextra -Werror
 GEN := build/gen/qca_rome_firmware.h
-CORE := src/core/qca_rome.c src/core/qca_lifecycle.c
-CORE_H := src/core/qca_rome.h src/core/qca_lifecycle.h
+CORE := src/core/qca_rome.c src/core/qca_lifecycle.c src/core/qca_hci_filter.c
+CORE_H := src/core/qca_rome.h src/core/qca_lifecycle.h src/core/qca_hci_filter.h
 SHA := tests/support/sha256.c
 GOLDEN := $(wildcard tests/golden/*.trace)
 INC := -Isrc/core -Itests/support
@@ -36,14 +36,17 @@ build/test_core_fw: tests/test_qca_rome.cpp $(OBJ_FW) $(GEN)
 	$(CXX) -std=c++17 $(WARN) $(SAN) -g -DQCA_HAVE_FIRMWARE $(INC) -Ibuild/gen tests/test_qca_rome.cpp $(OBJ_FW) -o $@
 build/test_lifecycle: tests/test_lifecycle.cpp $(OBJ_NOFW)
 	$(CXX) -std=c++17 $(WARN) $(SAN) -g $(INC) $^ -o $@
+build/test_hci_filter: tests/test_hci_filter.cpp $(OBJ_NOFW)
+	$(CXX) -std=c++17 $(WARN) $(SAN) -g $(INC) $^ -o $@
 build/test_golden_nofw: tests/test_golden.cpp $(OBJ_NOFW)
 	$(CXX) -std=c++17 $(WARN) $(SAN) -g $(INC) $^ -o $@
 build/test_golden_fw: tests/test_golden.cpp $(OBJ_FW) $(GEN)
 	$(CXX) -std=c++17 $(WARN) $(SAN) -g -DQCA_HAVE_FIRMWARE $(INC) -Ibuild/gen tests/test_golden.cpp $(OBJ_FW) -o $@
 
-test-nofw: build/test_core_nofw build/test_lifecycle build/test_golden_nofw
+test-nofw: build/test_core_nofw build/test_lifecycle build/test_hci_filter build/test_golden_nofw
 	./build/test_core_nofw
 	./build/test_lifecycle
+	./build/test_hci_filter
 	./build/test_golden_nofw $(GOLDEN)
 	@if ./build/test_golden_nofw tests/golden-negative/*.trace >/dev/null 2>&1; then \
 		echo "FAIL: golden replay accepted a tampered trace"; exit 1; \
