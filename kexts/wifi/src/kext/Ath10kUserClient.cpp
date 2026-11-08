@@ -50,7 +50,7 @@ IOReturn Ath10kPCIDevice::newUserClient(task_t task,void *security,UInt32 type,O
  *out=client;return kIOReturnSuccess;
 }
 bool Ath10kPCIDevice::requestDeviceRestart(){
- if(_systemSuspended || _reprobeRequested || !_pci || (powerIOBlocked() && !powerRestartAllowed()))return false;
+ if(_systemSuspended || _reprobeRequested || !_pci || _power.reinitRunning || (powerIOBlocked() && !powerRestartAllowed()))return false;
  if(_wmiLive.active)endWMIRuntime("app-restart-requested");
  if(_dmaQuarantine)return false;
  _reprobeRequested=true;
@@ -67,7 +67,8 @@ void Ath10kPCIDevice::fillControlInfo(AthControl::Response &o){
  Ath10k::htcWriteLE32(o.data+12,static_cast<UInt32>(_connection.signalDbm));
  Ath10k::htcWriteLE32(o.data+16,_connection.width);Ath10k::htcWriteLE32(o.data+20,_connection.nss);
  Ath10k::htcWriteLE32(o.data+24,_connection.securityGeneration);
- Ath10k::htcWriteLE32(o.data+28,(_systemSuspended?1u:0u)|(_dmaQuarantine?2u:0u)|(_power.needsRestart?4u:0u));
+ // 8: the firmware is being reloaded in place after a wake; no restart wanted.
+ Ath10k::htcWriteLE32(o.data+28,(_systemSuspended?1u:0u)|(_dmaQuarantine?2u:0u)|(_power.needsRestart?4u:0u)|(_power.reinitRunning?8u:0u));
  o.data[32]=_connection.ssidLength;bcopy(_connection.ssid,o.data+33,_connection.ssidLength);
  strlcpy(reinterpret_cast<char *>(o.data+68),ATH10K_VERSION,16);o.length=112;
  const auto &r=_connection.radio;
@@ -113,7 +114,7 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
  const auto &r=*static_cast<const Request *>(input);auto &o=*static_cast<Response *>(output);
  if(r.version!=version || r.length>512 || r.operation>=(AIRPORT_ATH10K_WPASEC?OperationCount:UInt32(SendAuth)))return kIOReturnBadArgument;
  bzero(&o,sizeof(o));o.version=version;o.stage=static_cast<UInt32>(s.stage);o.phase=s.securityPhase;
- o.flags=128|512|((self->_wmiScan.attempted && !self->_wmiScan.completed)?256:0)|(s.disconnect!=Ath10k::DisconnectStage::None?64:0)|(self->_wmiLive.active?1:0)|(self->_wmiScan.completed?2:0)|(self->_networkLinkUp?4:0)|(s.txOwned?8:0)|(s.secure?16:0)|(s.eapolTxFailed?32:0);
+ o.flags=128|512|((self->_wmiScan.attempted && !self->_wmiScan.completed)?256:0)|(s.disconnect!=Ath10k::DisconnectStage::None?64:0)|(self->_wmiLive.active && !self->_power.reinitRunning?1:0)|(self->_wmiScan.completed?2:0)|(self->_networkLinkUp?4:0)|(s.txOwned?8:0)|(s.secure?16:0)|(s.eapolTxFailed?32:0);
  o.count=self->_wmiBSS.count;bcopy(s.local,o.local,6);bcopy(s.bssid,o.bssid,6);
  if(s.stage==Ath10k::LinkStage::Disabled)bcopy(self->_vdevMAC,o.local,6);
  strlcpy(o.error,s.error,sizeof(o.error));
@@ -145,6 +146,8 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   return self->requestDeviceRestart()?kIOReturnSuccess:kIOReturnNotReady;
  }
  if(!self->_wmiLive.active)return kIOReturnNotReady;
+ // Sleep quiesce or wake re-initialisation: no new radio work.
+ if(self->_suspending || self->_power.reinitRunning)return kIOReturnNotReady;
  if(s.disconnect!=Ath10k::DisconnectStage::None)return kIOReturnBusy;
  if(r.operation==RadioOptions){
   if(self->_controlOwner && self->_controlOwner!=who)return kIOReturnNotPermitted;

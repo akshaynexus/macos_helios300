@@ -20,6 +20,7 @@ struct IOTimerEventSource {
     int setTimeoutMS(unsigned ms) {assert(ms==1||ms==10||ms==100);if(scheduleFail)return 1;armed=true;return 0;}
     void cancelTimeout(){armed=false;}
     void disable(){enabled=false;}
+    void enable(){enabled=true;}
     void release(){assert(!armed);delete this;}
 };
 struct IOFilterInterruptEventSource {void disable(){}void release(){};};

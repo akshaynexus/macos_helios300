@@ -197,6 +197,8 @@ public:
     void requestPowerEvent(Ath10k::PowerEvent);
     void publishPowerState();
     static IOReturn controlPowerState(OSObject *,void *,void *,void *,void *);
+    // Wake re-initialisation is exercised by test_wake_reinit.cpp; here the legacy restart path.
+    bool _suspending=false;void waitForWakeReinit(){}bool queueWakeReinit(){return false;}void quiesceForSleep(){}
     const char *serviceRuntime();
     const char *startRuntimeWorkerIRQ(){return nullptr;}
     bool prepareRuntimePower(){return true;}

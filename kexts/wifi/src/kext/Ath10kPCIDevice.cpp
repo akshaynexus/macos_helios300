@@ -66,6 +66,13 @@ IOService *Ath10kPCIDevice::probe(IOService *provider, SInt32 *score)
         IOLog("Ath10kMac: safe mode (-x): not attaching\n");
         return nullptr;
     }
+    // Kill switch for the whole Wi-Fi stack: no core, no firmware, no sleep
+    // notification, no front end (isolates Wi-Fi from sleep/wake problems).
+    // -airportath10k_frontoff keeps the core and stops only the front end.
+    if (PE_parse_boot_argn("-airportath10k_off", nullptr, 0)) {
+        IOLog("Ath10kMac: disabled by -airportath10k_off: not attaching\n");
+        return nullptr;
+    }
 
     const UInt16 vendor = pci->configRead16(kIOPCIConfigVendorID);
     const UInt16 device = pci->configRead16(kIOPCIConfigDeviceID);
@@ -115,6 +122,12 @@ bool Ath10kPCIDevice::start(IOService *provider)
               _regulatory.ceilingHalfDbm,bootDbm,propertyDbm);
     }
     if(auto *dfs=OSDynamicCast(OSBoolean,getProperty("Ath10kStationDFS")))_regulatory.stationDFS=dfs->isTrue();
+    {
+        // ath10k_wake_reinit=0: after wake use the guarded restart (terminate +
+        // rematch) instead of reloading the firmware in place.
+        UInt32 reinit=1;
+        if(PE_parse_boot_argn("ath10k_wake_reinit",&reinit,sizeof(reinit)))_power.reinitEnabled=reinit!=0;
+    }
     if(auto *timeout=OSDynamicCast(OSNumber,getProperty("Ath10kBeaconTimeoutMs"))){
         const UInt32 value=timeout->unsigned32BitValue();_connection.beaconTimeoutMs=value>=10000 && value<=120000?value:30000;
     }
@@ -194,7 +207,11 @@ void Ath10kPCIDevice::deferredProbeCall(thread_call_param_t param0, thread_call_
     if (!self)
         return;
     OSCompareAndSwap(0, 1, &self->_deferredProbeState);
-    self->runDeferredProbe();
+    // The same worker reloads the firmware in place after a wake (Ath10kPower.cpp).
+    if (self->_wakeReinitRequested)
+        self->runWakeReinit();
+    else
+        self->runDeferredProbe();
     // Last access to self: cancelDeferredProbe() may release it right after.
     OSCompareAndSwap(1, 2, &self->_deferredProbeState);
 }
@@ -984,14 +1001,20 @@ bool Ath10kPCIDevice::prepareWMIRuntime()
     _runtimeCE1Armed=true;
     _runtimeStatus="wmi-polling";
     _wmiLive.status="runtime-worker-allocation";
-    _wmiWorkLoop=getWorkLoop();
-    if(_wmiWorkLoop)_wmiWorkLoop->retain();
+    // Idempotent: a wake re-initialisation reuses the work loop and timer of
+    // the first start (endWMIRuntime only disabled the timer).
+    if(!_wmiWorkLoop){_wmiWorkLoop=getWorkLoop();if(_wmiWorkLoop)_wmiWorkLoop->retain();}
     if (!_wmiWorkLoop) return false;
-    _wmiTimer=IOTimerEventSource::timerEventSource(
-        kIOTimerEventSourceOptionsPriorityWorkLoop,this,wmiTimerFired);
-    if (!_wmiTimer) return false;
-    if (_wmiWorkLoop->addEventSource(_wmiTimer)!=kIOReturnSuccess) return false;
-    _wmiTimerAdded=true;
+    if(!_wmiTimer){
+        _wmiTimer=IOTimerEventSource::timerEventSource(
+            kIOTimerEventSourceOptionsPriorityWorkLoop,this,wmiTimerFired);
+        if (!_wmiTimer) return false;
+    }
+    if (!_wmiTimerAdded){
+        if (_wmiWorkLoop->addEventSource(_wmiTimer)!=kIOReturnSuccess) return false;
+        _wmiTimerAdded=true;
+    }
+    _wmiTimer->enable();
     _wmiLive.active=true;
     _wmiLive.status="prepared";
     return true; // start() arms only after probeTarget finishes ownership transfer.

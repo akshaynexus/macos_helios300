@@ -322,5 +322,31 @@ int main(){
         assert(p.startScan(scan,t)==B::kNotReady);c2.advance();p.poll(t+=100);
         assert(p.setPower(true,t)==B::kSuccess && p.startScan(scan,t)==B::kSuccess);
     }
+    { // System sleep/wake with the core's in-place firmware reload: no Restart while state bit 8
+      // is set, driver-available again when the runtime returns, the registry mirror's result.
+        FakeCore core;FakeSink sink;Session s(core,sink);core.bss={open};uint64_t t=60000;s.poll(t);
+        assert(s.startJoin(join(open,false),t)==B::kSuccess);
+        for(int i=0;i<12 && !s.linkUp();++i){s.poll(t+=20);core.advance();}
+        assert(s.linkUp());
+        s.pmSleep(t);assert(s.setPower(false,t)==B::kSuccess && sink.links.back()==false && !strcmp(s.wakeResult,"sleeping"));
+        core.runtime=false;core.stateBits=1;core.link=false;core.stage=0;s.poll(t+=100); // suspended
+        assert(s.state()==Session::State::Offline && core.restarts==0 && reinterpret_cast<const W::DriverAvailability *>(sink.last(W::DriverAvailable)->data.data())->available==0);
+        s.pmWake(t+=60000);s.setPower(true,t);core.stateBits=8;                         // firmware reload running
+        for(int i=0;i<30;++i)s.poll(t+=100);
+        assert(core.restarts==0 && s.state()==Session::State::Offline && !strcmp(s.wakeResult,"pending"));
+        const size_t available=sink.count(W::DriverAvailable),resets=sink.count(W::ResetInterface);
+        core.runtime=true;core.stateBits=0;s.poll(t+=100);                               // reload done
+        assert(s.state()==Session::State::Ready && sink.count(W::DriverAvailable)==available+1 && sink.count(W::ResetInterface)==resets+1);
+        assert(!strcmp(s.wakeResult,"reinit") && s.wakeMs==3100 && s.lastWakeMs>s.lastSleepMs);
+        // WCL rescans and auto-joins.
+        W::ScanRequest scan{};scan.type=1;assert(s.startScan(scan,t)==B::kSuccess);s.poll(t+=20);core.advance();s.poll(t+=20);
+        assert(s.startJoin(join(open,false),t)==B::kSuccess);
+        for(int i=0;i<12 && !s.linkUp();++i){s.poll(t+=20);core.advance();}
+        assert(s.linkUp());
+        // A failed reload falls back to the guarded restart.
+        s.pmSleep(t);s.setPower(false,t);core.runtime=false;core.stateBits=1;core.link=false;core.stage=0;s.poll(t+=100);
+        s.pmWake(t+=1000);s.setPower(true,t);core.stateBits=4;s.poll(t+=100);
+        assert(core.restarts==1 && !strcmp(s.wakeResult,"restart-requested"));
+    }
     puts("Native bridge tests passed (WCL request mapping, scan-result conversion, cache-first/merged/directed/passive scans, in-kernel WPA2 join with BSS info during the handshake, key install, link events, leave, rescans, rejection, timeout, abort, offline/restart, power).");
 }

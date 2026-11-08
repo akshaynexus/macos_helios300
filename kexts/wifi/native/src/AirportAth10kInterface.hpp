@@ -242,6 +242,7 @@ public:
     // Controller-level queries served from the session.
     IOReturn countryCode(apple80211_country_code_data *);
     void powerChanged(bool on);
+    void systemPowerChanged(bool on); // PM sleep/wake (registry mirror, fast poll)
     void stationMACChanged(const uint8_t *mac,bool permanent);
     uint32_t sessionState() const;
 private:
@@ -264,7 +265,7 @@ private:
     bool stopping=false,started=false;
     AirportRegistration::Blocks registration{};
     uint32_t mirroredState=~0u,mirroredReason=~0u,mirroredErrorSerial=~0u;
-    uint32_t mirroredScanMs=~0u,mirroredJoinMs=~0u,mirroredScans=~0u,mirroredNetworks=~0u;
+    uint32_t mirroredScanMs=~0u,mirroredJoinMs=~0u,mirroredScans=~0u,mirroredNetworks=~0u,mirroredWake=~0u;
     int reportedQuality=-3;
     uint16_t scanHomeAwayMs=0;
 };

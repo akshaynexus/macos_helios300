@@ -20,7 +20,7 @@ struct IOTimerEventSource {
     bool enabled=true,armed=false;
     template<class... T>static IOTimerEventSource *timerEventSource(T...){return new IOTimerEventSource;}
     int setTimeoutMS(unsigned ms){assert(ms==1 || ms==10);armed=true;return 0;}
-    void cancelTimeout(){armed=false;}void disable(){enabled=false;}void release(){assert(!armed);delete this;}
+    void cancelTimeout(){armed=false;}void disable(){enabled=false;}void enable(){enabled=true;}void release(){assert(!armed);delete this;}
 };
 struct IOWorkLoop {
     static IOWorkLoop *workLoop(){return new IOWorkLoop;}

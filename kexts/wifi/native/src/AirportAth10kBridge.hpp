@@ -296,6 +296,10 @@ public:
         return kSuccess;
     }
     int setPowerSave(bool on){powerSave=on;powerSaveSynced=false;return kSuccess;}
+    // System sleep/wake (the controller's PM state, not the user's Wi-Fi
+    // switch): timestamps and the outcome for the registry mirror.
+    void pmSleep(uint64_t nowMs){lastSleepMs=nowMs;waking=false;wakeResult="sleeping";++wakeSerial;}
+    void pmWake(uint64_t nowMs){lastWakeMs=nowMs;waking=true;wakeResult="pending";++wakeSerial;}
     // Private Wi-Fi Address from WCL (nullptr = back to the permanent address);
     // applied to the firmware vdev by the next join (extended Connect, flags 16).
     void setStationMAC(const uint8_t *mac){stationMACSet=mac!=nullptr;if(mac)memcpy(stationMAC,mac,6);else memset(stationMAC,0,6);}
@@ -309,7 +313,10 @@ public:
         readStatus();
         if(!status.reachable || !status.runtime){
             if(was)goOffline(nowMs);
-            if(status.reachable && state_!=State::Restarting && !(status.stateBits&1))requestRestart(nowMs);
+            // 1: suspended, 8: the core reloads its firmware in place after a
+            // wake (it comes back by itself); otherwise ask for the guarded restart.
+            if(status.reachable && state_!=State::Restarting && !(status.stateBits&(1|8)))requestRestart(nowMs);
+            if(waking && (status.stateBits&2)){wakeResult="dma-quarantine";++wakeSerial;}
             return;
         }
         if(!was){ // the core became ready (first time or after a restart)
@@ -318,6 +325,7 @@ public:
             AirportWCL::DriverAvailability a{};a.version=3;a.available=1;a.reason=0xe0821803;
             sink.post(AirportWCL::DriverAvailable,&a,sizeof(a));
             if(status.scanDone)loadNetworks(nowMs,false);
+            if(waking){waking=false;wakeMs=uint32_t(nowMs-lastWakeMs);if(strcmp(wakeResult,"restart-requested"))wakeResult="reinit";++wakeSerial;}
         }
         if(status.stateBits&4){requestRestart(nowMs);return;} // wake: restart required
         trackScans(nowMs);
@@ -352,6 +360,10 @@ public:
     const char *lastError="none";uint32_t errorSerial=0;
     uint32_t lastDisconnectReason=0; // 802.11 reason of the last link-down/deauth we reported (255 = driver-initiated)
     uint32_t lastScanMs=0,lastJoinMs=0,scanCount=0; // registry mirror: duration of the last core scan and of the last successful join
+    // Last system sleep/wake (uptime ms), wake to driver-available (ms) and how
+    // the core came back: reinit (firmware reloaded in place), restart-requested
+    // (guarded terminate + rematch), dma-quarantine, pending, sleeping.
+    uint64_t lastSleepMs=0,lastWakeMs=0;uint32_t wakeMs=0,wakeSerial=0;const char *wakeResult="none";bool waking=false;
     uint32_t lqmQuality() const { // 100/50/20 like AirportItlwm, -2 when down
         if(!linkUp() || status.rssi==INT32_MIN)return uint32_t(-2);
         return status.rssi>=-70?100:(status.rssi>=-85?50:20);
@@ -430,6 +442,7 @@ private:
             state_=State::Restarting;
         }
         restartRequestedMs=nowMs;++restartRequests;
+        if(waking){wakeResult="restart-requested";++wakeSerial;}
         call(AthControl::Restart); // on success the core terminates and rematches; this front end goes with it
     }
     void requestDisconnect(){if(call(AthControl::Disconnect)!=kSuccess)call(AthControl::Cancel);}

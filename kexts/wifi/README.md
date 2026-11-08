@@ -30,7 +30,7 @@ as Wi-Fi in Network settings.
 | Link state, RSSI, channel/width, NSS, TX power, country in the menu and `wdutil`/`airport` style tools | code | macOS only |
 | DHCP / IP, VPN, IPv6 | macOS networking over the Wi-Fi interface | macOS only |
 | Station power save | requested after each association; Settings "power mode" is mirrored | macOS only |
-| Sleep/wake | the association is not kept; after wake the core reports "restart required", the front end asks for the guarded restart and macOS rejoins the saved network | macOS only |
+| Sleep/wake | Linux ath10k's power-off suspend: before sleep the connection and scan are taken down (bounded 0.5 s), the target is reset and DMA-quiesced before D3; on wake the core reloads the firmware in place (PCI D0 + bus mastering, rings rebuilt, BMI/firmware/HTC/WMI, vdev) while the front end and its IO80211 interface stay attached; WCL gets driver-unavailable, then driver-available, rescans and auto-joins. A failed reload falls back to the guarded restart (terminate + rematch); `ath10k_wake_reinit=0` always uses it | host tests (`test_wake_reinit`: 10 cycles, DMA model; `test_power`; bridge); macOS only for the hardware |
 | TX power | regulatory limit per channel from wireless-regdb (US 5.15-5.25 GHz: 23 dBm), firmware clamps to the board calibration; cap with `ath10k_txpower=<dBm>` | host tests |
 | Regulatory | EEPROM regdomain `0x6c` (world) as on Linux; `ath10k_cc=XX` or `Ath10kCountryCode` picks the country | host tests |
 | Private Wi-Fi Address (per-network MAC) | done: WCL sets the address before each join; the BSD interface takes it at once and the core recreates vdev 0 with it (VDEV_DELETE/CREATE + ECHO barrier) before VDEV_START, as Linux ath10k does for a MAC change | host tests (`test_connection`, `test_control`, bridge); macOS only for the join |
@@ -124,8 +124,11 @@ Keep Ethernet (RTL8111) or a USB adapter available.
    - Safe mode (`-x`, macOS safe boot / OpenCore Shift+Enter): `Ath10kMac`, `AirportAth10k`
      (nub and controller) and `QCARomePatchRAM` each log one line and do not attach, so a
      bad build is always bypassed from the boot menu. No boot-arg of ours is needed for it.
-   - Diagnostics for the front end: `-airportath10k_off` skips AirportAth10k entirely (the
-     core still loads and scans; no Wi-Fi interface). `ath10k_native_delay=<seconds>`
+   - Kill switches: `-airportath10k_off` disables the whole Wi-Fi stack (Ath10kMac declines in
+     probe: no firmware, no sleep notification, no front end; use it to tell whether a sleep or
+     boot problem is Wi-Fi). `-airportath10k_frontoff` keeps the core and skips only AirportAth10k.
+     `ath10k_wake_reinit=0`: after wake use the guarded restart instead of the in-place reload.
+   - Diagnostics for the front end: `ath10k_native_delay=<seconds>`
      makes AirportAth10k return from start() at once and run its whole bring-up N seconds
      later, so the system reaches login and SSH first; every bring-up stage logs one
      `AirportAth10k: step N …` line (`log stream --predicate 'sender == "AirportAth10k"'`),
@@ -177,8 +180,10 @@ properties and network status; remove SSIDs and MACs before sharing) and
    at the join; `ifconfig en1` shows that address while associated.
 5. **Join a 2.4 GHz network** (phone hotspot, WPA2) and an **open** network if available;
    switch between networks from the menu.
-6. **Sleep/wake.** Close the lid for 1 minute, open it: within about 30 s the card restarts
-   and rejoins the saved network. Repeat 3 times.
+6. **Sleep/wake.** Close the lid for 1 minute, open it: within about 10 s the firmware is
+   reloaded in place and macOS rejoins the saved network. `ioreg -l -w0 | grep -E
+   'AirportAth10k(LastSleep|LastWake|WakeMs|WakeResult)|Ath10kPowerWake'` shows
+   `AirportAth10kWakeResult = "reinit"`. Repeat 3 times.
 7. **Power save.** While connected, `ioreg -l | grep Ath10kStationPowerSave` shows the request
    applied. A 10-minute `ping -i 1` should show no drops.
 8. **Reboot twice** and check that both kexts load and the saved network joins automatically.

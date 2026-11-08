@@ -55,7 +55,8 @@ struct Response {
 // RekeyGroup/RekeyPair: same 56-byte layout as InstallKeys. Same keys are rejected.
 // Info data: [0] capabilities u32, [4] scan generation u32, [8] last channel u32,
 // [12] RSSI signed u32 (INT32_MIN unavailable), [16] width u32, [20] NSS u32,
-// [24] security generation u32, [28] state bits (1 suspended,2 quarantined,4 wake restart required),
+// [24] security generation u32, [28] state bits (1 suspended,2 quarantined,4 wake restart required,
+// 8 firmware reload in place after wake running: do not request Restart),
 // [32] SSID length + [33..64] raw SSID, [68..83] driver version.
 // BSS extensions after RSN: SNR u32, estimate RSSI = SNR - 95 dBm (Linux convention).
 // After SNR, optional BSS flags u32: bit 1 (value 2) means hidden SSID.

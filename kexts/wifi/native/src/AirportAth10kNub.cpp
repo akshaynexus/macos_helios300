@@ -41,9 +41,12 @@ IOService *AirportAth10kNub::probe(IOService *provider,SInt32 *score)
     // declines in the same way, so this is reached only when the core was
     // forced in; it still refuses.
     if(PE_parse_boot_argn("-x",nullptr,0)){IOLog("AirportAth10k: safe mode (-x): not attaching\n");return nullptr;}
-    // Kill switch: -airportath10k_off leaves the core up (Ath10kNativeReady,
-    // no interface) and never starts the front end.
+    // Kill switches: -airportath10k_off disables the whole stack (the core
+    // declines too, so this is only reached if it was forced in);
+    // -airportath10k_frontoff leaves the core up (Ath10kNativeReady, no
+    // interface) and never starts the front end.
     if(PE_parse_boot_argn("-airportath10k_off",nullptr,0)){AIRPORT_LOG("disabled by -airportath10k_off");return nullptr;}
+    if(PE_parse_boot_argn("-airportath10k_frontoff",nullptr,0)){AIRPORT_LOG("disabled by -airportath10k_frontoff");return nullptr;}
     AIRPORT_STEP("nub probe");
     auto *device=OSDynamicCast(Ath10kPCIDevice,provider);
     if(!device || !device->nativeFrontEnd()){AIRPORT_LOG("provider is not an Ath10kPCIDevice in native mode");return nullptr;}

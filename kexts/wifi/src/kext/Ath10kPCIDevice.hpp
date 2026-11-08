@@ -87,6 +87,18 @@ private:
     void requestPowerEvent(Ath10k::PowerEvent);
     void publishPowerState();
     static IOReturn controlPowerState(OSObject *,void *,void *,void *,void *);
+    // Sleep quiesce and in-place wake re-initialisation (Ath10kPower.cpp).
+    static constexpr UInt32 kSleepQuiesceMs=500,kWakeReinitWaitMs=30000;
+    bool _suspending=false;               // control ops that start radio work are refused
+    volatile bool _wakeReinitRequested=false; // the probe thread runs runWakeReinit
+    void quiesceForSleep();
+    static IOReturn controlSleepQuiesce(OSObject *,void *,void *,void *,void *);
+    void waitForWakeReinit();
+    bool queueWakeReinit();
+    bool wakeDMAIdle() const;
+    void resetRuntimeServices();
+    static IOReturn controlWakeReinit(OSObject *,void *,void *,void *,void *);
+    void runWakeReinit();
     static IOReturn powerNotification(void *,void *,UInt32,IOService *,void *,vm_size_t);
     void fillControlInfo(AthControl::Response &);
     static IOReturn controlAction(OSObject *,void *,void *,void *,void *);

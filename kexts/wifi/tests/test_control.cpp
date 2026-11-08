@@ -21,6 +21,7 @@ public:
  Ath10k::WMIScanState _wmiScan{};
  Ath10k::WMIScanChannelsState _wmiScanChannels{};Ath10k::WMIScanOptions _scanOptions{};UInt64 _scanProbeMask=0;bool _scanChannelsResend=false;
  Ath10k::WMIInitState _wmiEvents{};
+ bool _suspending=false;struct {bool reinitRunning=false;} _power;
  struct {UInt8 mac[6]{2,1,2,3,4,5};UInt32 requestedChainMask=3;} _wmiInit;UInt8 _vdevMAC[6]{2,1,2,3,4,5};
  struct {UInt32 htCapability=1,vhtCapability=0,rfChains=1;Ath10k::HTCCreditState credits{};} _wmi;
  bool _networkLinkUp=false,_networkEnabled=true;
@@ -39,6 +40,9 @@ public:
 static void extensionTests(){
  using namespace AthControl;Ath10kPCIDevice d;IOUserClient a,b;Request r{};Response o{};
  auto call=[&](Operation op,IOUserClient *who=nullptr){r.operation=op;return d.controlAction(&d,who?who:&a,&r,&o,nullptr);};
+ // Sleep quiesce / wake re-initialisation: no new radio work, Status still answers.
+ d._suspending=true;assert(call(Scan)==kIOReturnNotReady && call(Status)==0);d._suspending=false;
+ d._power.reinitRunning=true;assert(call(Scan)==kIOReturnNotReady && call(Connect)==kIOReturnNotReady);d._power.reinitRunning=false;
  r.index=1;assert(call(Scan)==0 && !d._wmiScan.cancelRequested);r.index=0;
  assert(call(Scan)==0 && d._wmiScan.generation==1 && d._wmiScan.id==0xa037);
  assert(call(Scan)==kIOReturnBusy);d._wmiScan.attempted=true;

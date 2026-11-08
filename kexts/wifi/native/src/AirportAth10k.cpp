@@ -475,16 +475,25 @@ IOReturn AirportAth10k::registerWithPolicyMaker(IOService *policyMaker)
 // Ath10kPower.cpp) and back to 1 on wake. Off tells the session the radio is
 // gone: it drops the join and posts link-down/deauth to WCL, so the family
 // never waits on a dead link. On tells it the radio may be used again; the
-// core then reports "restart required" and the session asks for the guarded
-// restart (terminate + rematch; AirportAth10kInterface::stop takes the
-// registration blocks back so that teardown is clean). The user's Wi-Fi
-// on/off switch (setPOWER) is kept separate in powerState.
+// core reloads its firmware in place (Info state bit 8 meanwhile) and comes
+// back as driver-available. Only if that fails does it report "restart
+// required" and the session asks for the guarded restart (terminate + rematch;
+// AirportAth10kInterface::stop takes the registration blocks back so that
+// teardown is clean). The user's Wi-Fi on/off switch (setPOWER) is kept
+// separate in powerState.
 IOReturn AirportAth10k::setPowerState(unsigned long state,IOService *)
 {
     if(state==pmState)return IOPMAckImplied;
     pmState=state;
     AIRPORT_STEP(state?"PM: on":"PM: off");
     if(broughtUp && netif){
+        // As AirportItlwm's power off/on: at sleep WCL gets link-down and the
+        // join is dropped (the core has already quiesced and reset the target in
+        // its priority sleep notification; the session then reports the driver
+        // unavailable). At wake the core reloads its firmware in place and the
+        // session posts ResetInterface + DriverAvailable, after which WCL
+        // rescans and auto-joins. The controller and nub stay attached.
+        netif->systemPowerChanged(state!=0);
         if(!state)netif->powerChanged(false);
         else if(powerState)netif->powerChanged(true);
     }

@@ -47,7 +47,9 @@ end = s.index('bool Ath10kPCIDevice::htcRepostRuntimeReceive(', start)
 power = Path('src/kext/Ath10kPower.cpp').read_text()
 power_methods = power[power.index('bool Ath10kPCIDevice::powerIOBlocked('):power.index('IOReturn Ath10kPCIDevice::powerNotification(')]
 Path(sys.argv[1]).with_name('wmi_runtime_methods.inc').write_text(power_methods + s[start:end])
-Path(sys.argv[1]).with_name('power_methods.inc').write_text(power[power.index('bool Ath10kPCIDevice::preparePowerNotifications('):])
+marker='// --- Sleep quiesce and in-place wake re-initialisation'
+Path(sys.argv[1]).with_name('power_methods.inc').write_text(power[power.index('bool Ath10kPCIDevice::preparePowerNotifications('):power.index(marker)])
+Path(sys.argv[1]).with_name('wake_reinit_methods.inc').write_text(power[power.index(marker):])
 dma = Path('src/kext/Ath10kDMA.hpp').read_text()
 Path(sys.argv[1]).with_name('dma_methods.inc').write_text(dma[dma.index('class Ath10kDMABuffer'):])
 runtime = Path('src/kext/Ath10kRuntime.cpp').read_text()

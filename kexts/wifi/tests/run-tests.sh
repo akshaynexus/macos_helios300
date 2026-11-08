@@ -52,6 +52,9 @@ echo 'Recovery/Info API regression passed (actual methods, host mocks; native te
 "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
     -I"$test_tmp_dir" -Isrc/kext -Ibuild/gen/test tests/test_power.cpp -o "$test_tmp_dir/power"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/power"
+"${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
+    -I"$test_tmp_dir" -Isrc/kext -Ibuild/gen/test tests/test_wake_reinit.cpp -o "$test_tmp_dir/wake-reinit"
+ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/wake-reinit"
 echo 'Power notification/gate regression passed (actual methods, sleep before PCI off, both wake orders, duplicate events, cancellation, quarantine and notifier removal).'
 
 for target in runtime_irq rx_reserve dma_policy rx_rate irq_fallback target_init_irq pll pll_memory; do

@@ -22,8 +22,12 @@ struct Gate{
  bool inside=false;
  template<class F> int runAction(F fn,Ath10kPCIDevice *d,void *p){inside=true;int r=fn(d,p,nullptr,nullptr,nullptr);inside=false;return r;}
 };
+namespace Ath10k{static UInt64 uptimeNS(){static UInt64 t=0;return t+=1000000;}}
 class Ath10kPCIDevice{
 public:
+ bool _suspending=false;unsigned quiesces=0,reinitQueued=0;bool reinitOK=false;
+ void waitForWakeReinit(){}void quiesceForSleep(){++quiesces;}
+ bool queueWakeReinit(){if(!reinitOK)return false;++reinitQueued;_power.reinitRunning=true;_power.needsRestart=false;return true;}
  Gate loop;Gate *_wmiWorkLoop=&loop;
  Ath10k::PowerState _power{};volatile UInt32 _powerIOBlock=0;
  IONotifier *_powerNotifier=nullptr;bool _systemSuspended=false,_dmaQuarantine=false;
@@ -88,5 +92,17 @@ int main(){
  Ath10kPCIDevice fail;fail.resetQuarantines=true;fail.requestPowerEvent(PowerEvent::SystemSleep);
  fail.requestPowerEvent(PowerEvent::SystemWake);
  assert(fail._dmaQuarantine && fail.powerIOBlocked() && !strcmp(fail._power.status,"wake-dma-quarantined"));
+ // In-place wake re-initialisation: the wake hands over to the probe thread, I/O stays
+ // blocked (no Restart allowed), the front end is told (Info bit 8) not to restart.
+ Ath10kPCIDevice inplace;inplace.reinitOK=true;
+ IOPowerStateChangeNotification n2;n2.powerRef=&inplace;
+ inplace.powerNotification(&inplace,nullptr,kIOMessageSystemWillSleep,nullptr,&n2,sizeof(n2));
+ assert(inplace.quiesces==1 && inplace.resets==1 && inplace._power.lastSleepMs);
+ inplace.powerNotification(&inplace,nullptr,kIOMessageSystemHasPoweredOn,nullptr,nullptr,0);
+ assert(inplace.reinitQueued==1 && inplace._power.reinitRunning && !inplace._power.needsRestart && inplace._power.lastWakeMs>inplace._power.lastSleepMs);
+ assert(inplace.powerIOBlocked() && !inplace.powerRestartAllowed() && !strcmp(inplace._power.status,"wake-reinit-queued"));
+ // Quarantined DMA never re-initialises in place.
+ Ath10kPCIDevice q;q.reinitOK=true;q.resetQuarantines=true;q.requestPowerEvent(PowerEvent::SystemSleep);q.requestPowerEvent(PowerEvent::SystemWake);
+ assert(!q.reinitQueued && q._power.wakeResult==Ath10k::WakeResult::Quarantined);
  registrationFail=true;Ath10kPCIDevice alloc;assert(!alloc.preparePowerNotifications() && !alloc._powerNotifier);
 }

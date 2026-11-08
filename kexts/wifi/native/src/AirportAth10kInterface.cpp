@@ -6,7 +6,7 @@
 #define super IO80211InfraProtocol
 OSDefineMetaClassAndStructors(AirportAth10kInterface, IO80211InfraProtocol)
 
-enum : uintptr_t { OpScan, OpScanAbort, OpJoin, OpJoinAbort, OpLeave, OpPoll, OpStop, OpPower, OpQuery, OpBeacon, OpBssInfo, OpExtendedBss, OpPowerSave, OpCountry, OpStationMAC };
+enum : uintptr_t { OpScan, OpScanAbort, OpJoin, OpJoinAbort, OpLeave, OpPoll, OpStop, OpPower, OpQuery, OpBeacon, OpBssInfo, OpExtendedBss, OpPowerSave, OpCountry, OpStationMAC, OpSystemPower };
 
 int AirportAth10kInterface::CoreAdapter::call(const AthControl::Request &r,AthControl::Response &o)
 {
@@ -143,6 +143,15 @@ void AirportAth10kInterface::mirrorState()
     if(session->lastScanMs!=mirroredScanMs){mirroredScanMs=session->lastScanMs;controller->setProperty("AirportAth10kLastScanMs",mirroredScanMs,32);}
     if(session->lastJoinMs!=mirroredJoinMs){mirroredJoinMs=session->lastJoinMs;controller->setProperty("AirportAth10kLastJoinMs",mirroredJoinMs,32);}
     if(session->scanCount!=mirroredScans){mirroredScans=session->scanCount;controller->setProperty("AirportAth10kScanCount",mirroredScans,32);}
+    // System sleep/wake: AirportAth10kLastSleep/LastWake (uptime ms),
+    // AirportAth10kWakeMs (wake to driver-available), AirportAth10kWakeResult.
+    if(session->wakeSerial!=mirroredWake){
+        mirroredWake=session->wakeSerial;
+        controller->setProperty("AirportAth10kLastSleep",session->lastSleepMs,64);
+        controller->setProperty("AirportAth10kLastWake",session->lastWakeMs,64);
+        controller->setProperty("AirportAth10kWakeMs",session->wakeMs,32);
+        controller->setProperty("AirportAth10kWakeResult",session->wakeResult);
+    }
     if(session->networkCount()!=mirroredNetworks){mirroredNetworks=session->networkCount();controller->setProperty("AirportAth10kCachedNetworks",mirroredNetworks,32);}
 }
 
@@ -178,6 +187,9 @@ IOReturn AirportAth10kInterface::command(OSObject *,void *a0,void *a1,void *a2,v
     case OpStop:self->session->stop();return kIOReturnSuccess;
     case OpPower:return self->session->setPower(a2!=nullptr,now);
     case OpPowerSave:return self->session->setPowerSave(a2!=nullptr);
+    case OpSystemPower:
+        if(a2)self->session->pmWake(now);else self->session->pmSleep(now);
+        self->mirrorState();self->kick();return kIOReturnSuccess;
     case OpBeacon:{
         auto *out=static_cast<uint8_t *>(a2);
         return self->session->beaconInfo(out,0x808,now)?kIOReturnSuccess:kIOReturnNotReady;}
@@ -211,6 +223,7 @@ void AirportAth10kInterface::stationMACChanged(const uint8_t *mac,bool)
 }
 uint32_t AirportAth10kInterface::sessionState() const {return session?static_cast<uint32_t>(session->state()):0;}
 void AirportAth10kInterface::powerChanged(bool on){gated(OpPower,on?this:nullptr);}
+void AirportAth10kInterface::systemPowerChanged(bool on){gated(OpSystemPower,on?this:nullptr);}
 IOReturn AirportAth10kInterface::countryCode(apple80211_country_code_data *cd){return gated(OpCountry,cd);}
 
 // Link quality for WCL: 100/50/20 by RSSI while the port is up, -2 otherwise.

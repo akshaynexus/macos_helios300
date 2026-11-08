@@ -57,12 +57,28 @@ Decisions:
    raw beacons): SSID, rates, DS, HT/VHT, RSN, power constraint. Transition-mode RSN IEs are
    rewritten to plain WPA2-PSK for WCL, as AirportItlwm does. `BEACON_INFO` polls get a
    synthesized beacon with an advancing timestamp.
-5. **Sleep/wake** stays the core's: the priority sleep notification quiesces the firmware
-   (Ath10kPower.cpp), then PM takes the controller to state 0 and `AirportAth10k::setPowerState`
-   tells the session the radio is gone (link-down/deauth to WCL, join dropped). After wake
-   the core reports "restart required"; the session posts driver-unavailable, asks for the
-   guarded restart, and the rematched core brings a fresh front end which WCL re-enumerates.
-   That restart terminates the old interface, so it depends on the clean teardown below.
+5. **Sleep/wake** follows Linux ath10k's power-off suspend/resume (no WoWLAN) and AirportItlwm's
+   IO80211 power handling, without terminating anything. Before sleep the core's priority
+   notification takes the connection down (disconnect/cancel: vdev down, keys, peer delete,
+   vdev stop, barrier) and stops the scan on the normal runtime, bounded to 0.5 s, refusing
+   new radio work meanwhile; then it stops HTC/WMI/CE, masks IRQs and resets the target with
+   bus mastering off (`endWMIRuntime` → `quiesceTargetAfterBMI`), so nothing can DMA in D3.
+   PM takes the controller to state 0: the session posts link-down and driver-unavailable.
+   On wake (`kIOMessageSystemHasPoweredOn` with the device on) the probe thread reloads in
+   place (`runWakeReinit`): only if every DMA owner the release path trusts is clear and no
+   quarantine is set, it re-enables memory decode and bus mastering (the config space
+   IOPCIFamily restored has them off), drops the runtime IRQ source, unhooks MMIO, resets
+   every runtime service state (connection with keys wiped, scan keeping its generation, BSS
+   cache keeping beacon hints, RX setup, echo/vdev/radio/channel-list/scan, WMI events and
+   runtime, runtime power, IRQ flags, control owner), frees and reallocates the CE rings, then
+   `probeTarget` (cold reset, BMI, board/OTP/firmware, HTC, WMI, regulatory) exactly as at the
+   first start; the runtime timer then recreates the vdev (hardware MAC; a Private Wi-Fi
+   Address is reapplied at the next join) and scans. Info state bit 8 tells the front end not
+   to request a restart meanwhile; when the runtime returns the session posts ResetInterface +
+   DriverAvailable and WCL rescans and auto-joins. Any failure ends the partial runtime and
+   leaves "restart required" for the guarded restart (terminate + rematch, which still
+   depends on the clean teardown below); an unverified reset leaves the DMA quarantine
+   (no free, no restart). `ath10k_wake_reinit=0` restores the old restart-on-wake.
 6. **The Skywalk registration blocks are the driver's** (`AirportAth10kRegistration.hpp`).
    IOSkywalkFamily 1.0 dereferences `mExpansionData->fRegistrationInfo` and
    `mExpansionData2->fRegistrationInfo` during the BSD attach without a NULL check, allocates
@@ -192,12 +208,16 @@ run 7 pending):
 - Registry: `AirportAth10kLastScanMs`, `AirportAth10kLastJoinMs`, `AirportAth10kScanCount`,
   `AirportAth10kCachedNetworks`.
 
-Sleep/wake is unchanged in this build: after wake the core still asks for the guarded restart
-(terminate + rematch), which takes the controller with it. The teardown panic of that path is
-fixed (ac7d33a); whether the black screen after wake was that panic, the GPU, or something else
-is unknown (no log survived). Reloading the firmware in place on wake (Linux ath10k
-`ath10k_pci_resume` → `hif_power_up` + core restart) needs every runtime service state of the
-core reset without terminating it; that is the next step once a wake log exists.
+Sleep/wake (the build after d39e247): in-place firmware reload on wake, decision 5 above.
+`tests/test_wake_reinit.cpp` runs the actual power and reload methods through 10 sleep/wake
+cycles with a join before each, against a device model whose DMA engine aborts if any ring
+or buffer is freed or reallocated while the target still holds it; it covers a failed
+reload (guarded-restart fallback, then a clean reload on the next wake), a teardown that
+does not finish before the reset, a double wake, a sleep during a reload and a quarantine.
+Registry: `AirportAth10kLastSleep`, `AirportAth10kLastWake`, `AirportAth10kWakeMs`,
+`AirportAth10kWakeResult` on the controller; `Ath10kPowerWakeResult`/`WakeDetail`/`WakeMs`/
+`WakeReinits`/`WakeReinitFailures` on the core. `-airportath10k_off` now disables the core
+too (whole stack), so a sleep problem can be attributed with one boot-arg.
 
 Only macOS can verify (not done): that WCL accepts the capability bits and event sequence,
 DHCP over the Skywalk interface, sleep/wake, Settings details. The reconstructed headers are
