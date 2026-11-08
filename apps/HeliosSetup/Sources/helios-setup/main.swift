@@ -61,8 +61,8 @@ func fail(_ message: String, _ code: Int32 = 1) -> Never {
     exit(code)
 }
 
-func printStatus(_ engine: Engine, json: Bool, showSSID: Bool) {
-    let o = engine.overview()
+func printStatus(_ engine: Engine, json: Bool, showSSID: Bool, release: String?) {
+    let o = engine.overview(explicit: release)
     let rows = Health.rows(o.release.manifest, ctx: engine.probes())
     if json {
         let steps = o.items.map { i -> [String: Any] in
@@ -91,7 +91,7 @@ func printStatus(_ engine: Engine, json: Bool, showSSID: Bool) {
         "release: \(o.release.manifest.release?.tag ?? "none") (\(o.release.source.rawValue)\(o.release.dir.map { ", \($0)" } ?? ""))"
     )
     if let p = o.release.problem { print("  ! \(p)") }
-    for (name, ok) in o.scripts where !ok { print("  ! \(name) in this app does not match the release manifest") }
+    for (name, ok) in o.scripts where !ok { print("  ! \(name) in this app is missing or is not the release's copy (sha256)") }
     print("macOS \(o.build); this boot came from: \(o.bootSource)")
     if let r = o.restartPending { print("restart pending: \(r)") }
     print("\nSetup:")
@@ -111,8 +111,8 @@ func printStatus(_ engine: Engine, json: Bool, showSSID: Bool) {
     }
 }
 
-func printPlan(_ engine: Engine) {
-    let o = engine.overview()
+func printPlan(_ engine: Engine, release: String?) {
+    let o = engine.overview(explicit: release)
     if let r = o.restartPending { print("Restart first: \(r)."); return }
     guard let n = o.next else { print("Nothing to do: every step is installed or not available here."); return }
     print("Next: \(n.id) - \(n.title)")
@@ -224,8 +224,9 @@ let engine = Engine(env: .live(gui: false, executable: CommandLine.arguments[0])
 let release = args.options["--release"]
 
 switch args.word(0) {
-case "status": printStatus(engine, json: args.flags.contains("--json"), showSSID: args.flags.contains("--show-ssid"))
-case "plan": printPlan(engine)
+case "status":
+    printStatus(engine, json: args.flags.contains("--json"), showSSID: args.flags.contains("--show-ssid"), release: release)
+case "plan": printPlan(engine, release: release)
 case "check": exit(step(engine, args.word(1), "check", release: release))
 case "install": exit(step(engine, args.word(1), "install", release: release))
 case "undo", "revert": exit(step(engine, args.word(1), "revert", release: release))

@@ -17,7 +17,8 @@
         var status: StatusPage?
         var gpu: GPUAppsPage?
         var updates: UpdatesPage?
-        lazy var engine = Engine(env: .live(gui: true, executable: Bundle.main.executablePath ?? CommandLine.arguments[0]))
+        /// Created once, on the main thread, before any page uses it from a background queue.
+        let engine = Engine(env: .live(gui: true, executable: Bundle.main.executablePath ?? CommandLine.arguments[0]))
 
         var appVersion: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev" }
         var bundleId: String { Bundle.main.bundleIdentifier ?? "org.helios300.setup" }
