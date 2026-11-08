@@ -2,6 +2,7 @@
 #include "Ath10kHTC.hpp"
 #include "Ath10kBSS.hpp"
 #include "Ath10kConnection.hpp"
+#include "Ath10kAwdl.hpp"
 #include "Ath10kFirmwareStats.hpp"
 
 namespace Ath10k {
@@ -458,7 +459,11 @@ struct WMIRuntimeState {
 // Accept READY on the negotiated WMI endpoint and trailer-only reports on
 // endpoint 0 or WMI. Credits are committed only after the entire frame validates.
 inline const char *parseWMIInitResponse(const UInt8 *f, UInt32 bytes, UInt8 endpoint,
-                                      HTCCreditState &credits, WMIInitState &out, WMIEchoState *echo=nullptr, WMIScanState *scan=nullptr, WMIBSSCache *bss=nullptr, bool allowVdevDelete=false, ConnectionState *connection=nullptr) {
+                                      HTCCreditState &credits, WMIInitState &out, WMIEchoState *echo=nullptr, WMIScanState *scan=nullptr, WMIBSSCache *bss=nullptr, bool allowVdevDelete=false, ConnectionState *connection=nullptr
+#if AIRPORT_ATH10K_AWDL
+                                      , AwdlRadio *awdl=nullptr, UInt64 nowUs=0
+#endif
+                                      ) {
     if (!f || bytes < 8 || bytes > kWMIRxBytes) return "wmi-init-rx-size";
     if (f[0] != 0 && f[0] != endpoint) return "wmi-init-rx-endpoint";
     if (f[1] & ~(kHTCTrailerPresent | kHTCMoreBlock)) return "wmi-init-rx-flags";
@@ -493,6 +498,11 @@ inline const char *parseWMIInitResponse(const UInt8 *f, UInt32 bytes, UInt8 endp
     if (end>8) {
         if (f[0]!=endpoint || end<12) return "wmi-init-unexpected-event";
         eventId=wmiReadLE32(f+8)&0xffffffu;
+#if AIRPORT_ATH10K_AWDL
+        // Start/stop/delete of the AWDL monitor vdev (id 1): the station path below
+        // would reject these as unsolicited, so they end here.
+        if(awdl && awdlConsumeVdevEvent(*awdl,f,end,eventId,nowUs/1000u)){out.lastEventId=eventId;out.creditReturned=credits.outstanding==0;return nullptr;}
+#endif
         pauseEvent=eventId==0x4005; // WMI_TLV_TX_PAUSE_EVENTID
         kickout=eventId==0x6001;temperatureEvent=eventId==0x4008;rfKillEvent=eventId==0x1e004;
         roamEvent=eventId==0xb001;
@@ -786,6 +796,9 @@ inline const char *parseWMIInitResponse(const UInt8 *f, UInt32 bytes, UInt8 endp
     }
     if(scanEvent || mgmt || channelInfo)*scan=scanNext;
     if(mgmt && bss)recordWMIBSS(*bss,mgmtData,mgmtLen,mgmtChannel,mgmtSnr,mgmtStatus);
+#if AIRPORT_ATH10K_AWDL
+    if(mgmt && awdl)awdlRxManagement(*awdl,mgmtData,mgmtLen,mgmtChannel,mgmtSnr,mgmtStatus,nowUs);
+#endif
     if (echoEvent && !rollbackEcho) echo->replyReceived=true;
     if (rollbackEcho) connection->rollback.echoPending=false;
     out.lastEventId=eventId;

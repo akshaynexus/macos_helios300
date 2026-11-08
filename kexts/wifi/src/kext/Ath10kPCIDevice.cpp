@@ -419,6 +419,9 @@ void Ath10kPCIDevice::stop(IOService *provider)
 void Ath10kPCIDevice::free()
 {
     cancelDeferredProbe();
+#if AIRPORT_ATH10K_AWDL
+    if(_awdl){IOFree(_awdl,sizeof(*_awdl));_awdl=nullptr;}
+#endif
     releasePowerNotifications();
     if (_powerManaged) { PMstop(); _powerManaged=false; }
     releaseWMIRuntime();
@@ -1062,6 +1065,9 @@ const char *Ath10kPCIDevice::serviceRuntime()
         if (!error && _wmiScanChannels.completed) error=serviceWMIScan(ns/1000000u);
     }
     if (!error) {uint64_t t=0,n=0;clock_get_uptime(&t);absolutetime_to_nanoseconds(t,&n);error=serviceConnection(n/1000000u);}
+#if AIRPORT_ATH10K_AWDL
+    if (!error && _awdl) {uint64_t t=0,n=0;clock_get_uptime(&t);absolutetime_to_nanoseconds(t,&n);error=serviceAwdl(n/1000000u);}
+#endif
     const UInt64 rxStarted=Ath10k::uptimeNS();
     if (!error && tickMs>=_nextRxDoneRetryMs) {
         error=serviceHTTRx();
@@ -2779,7 +2785,11 @@ const char *Ath10kPCIDevice::drainWMIRuntime()
                 Ath10k::parseHTTSetup(raw,bytes,_htcHTTData.endpoint,_wmi.credits,_rxSetup,&_connection):
                 Ath10k::parseWMIInitResponse(raw,bytes,_htcWMIControl.endpoint,_wmi.credits,_wmiEvents,
                     (_connection.stats.step==2 || _connection.maintenance.step==8 || _connection.radio.step==8 || _connection.csa.phase==Ath10k::ChannelSwitchPhase::Barrier || _connection.disconnect==Ath10k::DisconnectStage::Barrier || _connection.stage==Ath10k::LinkStage::Barrier || (_connection.secure && _connection.securityPhase==4) || (_connection.stage==Ath10k::LinkStage::Scan && _connection.macChange.step==3))?&_connectionEcho:((_rxSetup.attempted && _rxSetup.stage==2)?&_filterEcho:&_wmiEcho),&_wmiScan,&_wmiBSS,
-                    (_rxSetup.attempted && (_rxSetup.stage>1 || (_rxSetup.stage==1 && _rxSetup.submitted))) || _connection.macChange.step!=0,&_connection);
+                    (_rxSetup.attempted && (_rxSetup.stage>1 || (_rxSetup.stage==1 && _rxSetup.submitted))) || _connection.macChange.step!=0,&_connection
+#if AIRPORT_ATH10K_AWDL
+                    ,_awdl,Ath10k::uptimeNS()/1000u
+#endif
+                    );
             const bool httMessage=isHTT && bytes>=12 && payload>=trailer+4;
             if(httMessage && !error && _rxSetup.messages<=16)
                 IOLog("Ath10kMac: HTT RX type=0x%x bytes=%u version=%u.%u\n",_rxSetup.lastType,bytes,_rxSetup.major,_rxSetup.minor);

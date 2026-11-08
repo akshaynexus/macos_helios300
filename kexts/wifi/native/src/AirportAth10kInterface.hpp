@@ -134,7 +134,11 @@ public:
     IOReturn setAP_MODE(apple80211_apmode_data*) override { return kIOReturnUnsupported; }
     IOReturn setIE(apple80211_ie_data*) override { return kIOReturnUnsupported; }
     IOReturn setWOW_TEST(apple80211_wow_test_data*) override { return kIOReturnUnsupported; }
+#if AIRPORT_ATH10K_AWDL
+    IOReturn setVIRTUAL_IF_CREATE(apple80211_virt_if_create_data*) override;
+#else
     IOReturn setVIRTUAL_IF_CREATE(apple80211_virt_if_create_data*) override { return kIOReturnUnsupported; }
+#endif
     IOReturn setHT_CAPABILITY(apple80211_ht_capability*) override { return kIOReturnUnsupported; }
     IOReturn setOFFLOAD_ARP(apple80211_offload_arp_data*) override { return kIOReturnUnsupported; }
     IOReturn setOFFLOAD_NDP(apple80211_offload_ndp_data*) override { return kIOReturnUnsupported; }

@@ -375,6 +375,6 @@ WPA3-SAE/PMF and Enterprise are in progress behind the build gate `AIRPORT_ATH10
 in releases; paused by the owner): [`WIFI-SECURITY.md`](WIFI-SECURITY.md). The Private Wi-Fi
 Address is shipped (run 5 fix).
 
-WPA3-SAE / PMF, Enterprise, WEP, WPA1/TKIP-only pairwise (refused with an 802.11 status), AWDL/AirDrop/Continuity,
+WPA3-SAE / PMF, Enterprise, WEP, WPA1/TKIP-only pairwise (refused with an 802.11 status), AWDL/AirDrop/Continuity (research build only, off by default: [`WIFI-AWDL.md`](WIFI-AWDL.md)),
 P2P/hotspot, 6 GHz, 160 MHz, reassociation-based roaming between BSSIDs of one SSID (WCL
 asks for a new join; the core disconnects and reconnects).

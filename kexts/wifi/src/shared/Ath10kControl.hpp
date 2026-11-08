@@ -8,12 +8,24 @@
 #ifndef AIRPORT_ATH10K_WPASEC
 #define AIRPORT_ATH10K_WPASEC 0
 #endif
+// AIRPORT_ATH10K_AWDL gates the AWDL/AirDrop research path (docs/WIFI-AWDL.md):
+// 0 (default) compiles none of it in either kext, 1 adds the radio binding and the
+// awdl0 interface. With 1 the boot-arg ath10k_awdl=1 enables it at run time.
+#ifndef AIRPORT_ATH10K_AWDL
+#define AIRPORT_ATH10K_AWDL 0
+#endif
 namespace AthControl {
 constexpr uint32_t version=1, clientType=0xa7100057;
 enum Operation:uint32_t { Status, BSS, Connect, ReceiveEAPOL, SendEAPOL, InstallKeys, Authorize, Abort, Disconnect, Scan, Cancel, RekeyGroup, RekeyPair, Info, Restart, SecurityHold, RadioOptions,
  SendAuth, ReceiveAuth, AuthResult, OperationCount };
-// Operations 32..47 are reserved for the AWDL front end (AwdlRadioStart/Stop/SetChannel/Tx/RxPoll).
+// Operations 32..47 belong to the AWDL front end (AIRPORT_ATH10K_AWDL builds only).
+// AwdlRadioStart: index 0, data = MAC[6], channel u8 (6/44/149, regulatory-checked).
+// AwdlRadioStop, AwdlSetChannel (data[0] channel). AwdlStatus returns data: step u8,
+// channel u8, error length u8, then 9 u32 counters (AwdlCounters order), then the
+// error text. Frames travel through typed gated calls on the core, not here, because
+// a Request carries at most 512 bytes (Ath10kPCIDevice::nativeAwdlTx/nativeAwdlRx).
 constexpr uint32_t awdlOperationBase=32;
+enum AwdlOperation:uint32_t { AwdlRadioStart=awdlOperationBase,AwdlRadioStop,AwdlSetChannel,AwdlStatus,AwdlOperationEnd };
 struct Request {
  uint32_t version=AthControl::version,operation=0,index=0,length=0;
  uint8_t data[512]{};

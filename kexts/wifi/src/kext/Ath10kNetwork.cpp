@@ -493,6 +493,10 @@ UInt32 Ath10kPCIDevice::outputPacket(mbuf_t packet,void *)
 }
 void Ath10kPCIDevice::deliverNetworkRX(const UInt8 *data,UInt8 status,UInt16 peer,UInt16 indicatedLength,UInt32 availableBytes)
 {
+#if AIRPORT_ATH10K_AWDL
+    // Monitor-vdev frames on the AWDL BSSID never reach the station RX path.
+    if(_awdl && _awdl->running() && data && Ath10k::awdlRxHtt(*_awdl,data,availableBytes,indicatedLength,status,Ath10k::uptimeNS()/1000u))return;
+#endif
     if(_connection.disconnect!=Ath10k::DisconnectStage::None || !_networkEnabled || !_networkInterface || _connection.stage!=Ath10k::LinkStage::Connected)return;
     if(!data || availableBytes<300){_rxBatch.failed=true;Ath10k::rxDrop(_connection,Ath10k::ConnectionState::Length);return;}
     const UInt32 mode=(Ath10k::connLE32(data+32)>>8)&3;

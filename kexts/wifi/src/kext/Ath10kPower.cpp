@@ -233,6 +233,9 @@ void Ath10kPCIDevice::resetRuntimeServices()
     Ath10k::resetInPlace(_connection);
     _connection.beaconTimeoutMs=beaconTimeout;_connection.radio.requestedPS=requestedPS;_connection.multicast=multicast;
     _connection.regulatory=_regulatory;
+#if AIRPORT_ATH10K_AWDL
+    if(_awdl)_awdl->reset(); // the vdev did not survive the firmware reload; the front end asks again
+#endif
     const UInt32 generation=_wmiScan.generation;
     Ath10k::resetInPlace(_wmiScan);_wmiScan.generation=generation;_wmiScan.id=0xa000|((0x36+generation)&0xfff);
     const UInt64 hints=_wmiBSS.onChannelMask;Ath10k::resetInPlace(_wmiBSS);_wmiBSS.onChannelMask=hints;

@@ -23,7 +23,10 @@ python3 scripts/prepare-firmware.py --set kext
 DEFS=(-D ATH10K_PAYLOAD_CACHE=1 -D ATH10K_RUNTIME_IRQ=1 -D ATH10K_RX_BATCH=1 -D ATH10K_RX_RESERVE=1
       -D ATH10K_MAX_WIDTH=80 -D ATH10K_MAX_NSS=2 -D ATH10K_AMPDU_LIMIT=64 -D ATH10K_AMSDU_LIMIT=3
       -D ATH10K_HT_VHT=1 -D ATH10K_DATA_TX_SLOTS=64
-      -D AIRPORT_ATH10K_WPASEC="${WPASEC:-0}") # WPASEC=1 enables the paused security work (docs/WIFI-SECURITY.md)
+      -D AIRPORT_ATH10K_WPASEC="${WPASEC:-0}" # WPASEC=1 enables the paused security work (docs/WIFI-SECURITY.md)
+      -D AIRPORT_ATH10K_AWDL="${AWDL:-0}") # AWDL=1 compiles the AWDL/AirDrop research path (docs/WIFI-AWDL.md), off by default
+AWDL_CORE_SRC=();AWDL_FRONT_SRC=()
+if [ "${AWDL:-0}" = 1 ]; then AWDL_CORE_SRC=(src/kext/Ath10kAwdlService.cpp);AWDL_FRONT_SRC=(native/src/AirportAth10kAwdlDriver.cpp);fi
 CFLAGS="-fno-stack-check -Wframe-larger-than=4096 -Werror=frame-larger-than -Wno-nullability-completeness"
 RES="$ROOT/build/kext-resources"
 rm -rf "$RES"; mkdir -p "$RES"
@@ -42,7 +45,7 @@ PY
 	-I "$ROOT/build/gen/kext" -I "$ROOT/src/kext" "${DEFS[@]}" --cflags "$CFLAGS" \
 	--allow "$ROOT/scripts/kext-families.allow" --resources "$RES" \
 	src/kext/Ath10kUserClient.cpp src/kext/Ath10kNetwork.cpp src/kext/Ath10kRuntime.cpp \
-	src/kext/Ath10kPower.cpp src/kext/Ath10kPCIDevice.cpp
+	src/kext/Ath10kPower.cpp src/kext/Ath10kPCIDevice.cpp ${AWDL_CORE_SRC[@]+"${AWDL_CORE_SRC[@]}"}
 "$NM" -m "$OUT/Ath10kMac.kext/Contents/MacOS/Ath10kMac" > "$OUT/Ath10kMac.nm.txt"
 python3 -I scripts/check-kext-symbols.py --listing "$OUT/Ath10kMac.nm.txt"
 
@@ -57,7 +60,7 @@ cp native/NOTICE "$OUT/AirportAth10k-resources/NOTICE" 2>/dev/null || true
 	--cflags "$CFLAGS -Wno-unused-private-field -Wno-overloaded-virtual -Wno-invalid-offsetof" \
 	--allow "$ROOT/build/gen/native/families.allow" --resources "$OUT/AirportAth10k-resources" \
 	--kc-sibling "$OUT/Ath10kMac.kext/Contents/MacOS/Ath10kMac" \
-	native/src/AirportAth10kNub.cpp native/src/AirportAth10k.cpp native/src/AirportAth10kInterface.cpp native/src/AirportAth10kEthernetInterface.cpp
+	native/src/AirportAth10kNub.cpp native/src/AirportAth10k.cpp native/src/AirportAth10kInterface.cpp native/src/AirportAth10kEthernetInterface.cpp ${AWDL_FRONT_SRC[@]+"${AWDL_FRONT_SRC[@]}"}
 rm -rf "$OUT/AirportAth10k-resources"
 "$NM" -m "$OUT/AirportAth10k.kext/Contents/MacOS/AirportAth10k" > "$OUT/AirportAth10k.nm.txt"
 python3 -I scripts/check-kext-symbols.py --listing "$OUT/AirportAth10k.nm.txt"

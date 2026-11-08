@@ -49,6 +49,13 @@ bool AirportAth10kInterface::init(AirportAth10k *provider)
     return true;
 }
 
+#if AIRPORT_ATH10K_AWDL
+IOReturn AirportAth10kInterface::setVIRTUAL_IF_CREATE(apple80211_virt_if_create_data *d)
+{
+    return controller?controller->createAwdlInterface(d):kIOReturnNotReady;
+}
+#endif
+
 void AirportAth10kInterface::startPolling()
 {
     if(started || stopping || !timer)return;

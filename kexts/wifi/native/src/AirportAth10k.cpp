@@ -42,6 +42,10 @@ extern "C" __attribute__((used)) const KcAuditParentSize kKcAuditParentSizes[]={
     {"IONetworkInterface",sizeof(IONetworkInterface)},
     {"IO80211WorkQueue",sizeof(IO80211WorkQueue)},
     {"IOService",sizeof(IOService)},
+#if AIRPORT_ATH10K_AWDL
+    {"IO80211VirtualInterface",sizeof(IO80211VirtualInterface)},
+    {"IO80211AWDLProtocol",sizeof(IO80211AWDLProtocol)},
+#endif
     {nullptr,0}};
 
 bool airportAth10kRandom(uint8_t *p,size_t n){if(!p || !n)return false;read_random(p,static_cast<u_int>(n));return true;}
@@ -230,6 +234,9 @@ bool AirportAth10k::bringUp(IOService *provider)
     broughtUp=true;
     AIRPORT_STEP("started; arming the core poll");
     netif->startPolling();
+#if AIRPORT_ATH10K_AWDL
+    startAwdl();
+#endif
     AIRPORT_LOG("started over %s via %s (version %s)",ath10k->getName(),nub->getName(),ATH10K_VERSION);
     return true;
 }
@@ -245,6 +252,9 @@ void AirportAth10k::stop(IOService *provider)
         thread_call_free(deferredCall);deferredCall=nullptr;
     }
     if(!broughtUp){IOService::stop(provider);return;} // deferred bring-up never happened: IO80211Controller::start never ran
+#if AIRPORT_ATH10K_AWDL
+    stopAwdl();
+#endif
     if(netif)netif->stopSession();
     setOutputThread(false); // no gate held here: the halt waits for the start thread to acknowledge
     if(coreAttached && ath10k){ath10k->nativeDetachInterface();coreAttached=false;}
@@ -488,6 +498,33 @@ IOReturn AirportAth10k::setCOUNTRY_CODE(IO80211SkywalkInterface *,apple80211_cou
     if(cd->cc[0]!='x' && cd->cc[0]!='X')memcpy(geoCountry,cd->cc,sizeof(geoCountry));
     return kIOReturnSuccess;
 }
+
+#if AIRPORT_ATH10K_AWDL
+// ath10k_awdl=1 creates awdl0 at bring-up; wifip2pd's VIRTUAL_IF_CREATE then finds it.
+bool AirportAth10k::startAwdl()
+{
+    UInt32 on=0;
+    if(!PE_parse_boot_argn("ath10k_awdl",&on,sizeof(on)) || !on)return false;
+    if(awdlNet)return true;
+    AIRPORT_STEP("awdl: bringing up awdl0 (ath10k_awdl=1, research path)");
+    awdlNet=new AirportAth10kAwdlNet;
+    if(!awdlNet || !awdlNet->initWith(this) || !awdlNet->attach(this) || !awdlNet->start(this)){
+        AIRPORT_LOG("awdl: bring-up failed; station path unaffected");
+        if(awdlNet){awdlNet->stop(this);awdlNet->detach(this);OSSafeReleaseNULL(awdlNet);}
+        return false;
+    }
+    return true;
+}
+void AirportAth10k::stopAwdl()
+{
+    if(!awdlNet)return;
+    awdlNet->stop(this);awdlNet->detach(this);OSSafeReleaseNULL(awdlNet);
+}
+IOReturn AirportAth10k::createAwdlInterface(apple80211_virt_if_create_data *data)
+{
+    return awdlNet?awdlNet->fillCreateReply(data):kIOReturnUnsupported;
+}
+#endif
 
 static IOPMPowerState powerStates[2]={
     {1,0,0,0,0,0,0,0,0,0,0,0},

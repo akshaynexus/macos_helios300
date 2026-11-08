@@ -152,6 +152,19 @@ private:
     DataBuffers _dataBuffers[Ath10k::kDataTxSlots]{};
     const char *submitNetworkCE(UInt32,Ath10kDMABuffer &,UInt32,UInt32 &);
     const char *submitNetworkPacket(const UInt8 *,UInt32,bool,UInt64);
+#if AIRPORT_ATH10K_AWDL
+    // AWDL radio binding (Ath10kAwdlService.cpp, docs/WIFI-AWDL.md 5a); allocated on the
+    // first AwdlRadioStart, never otherwise.
+    Ath10k::AwdlRadio *_awdl=nullptr;
+    const char *serviceAwdl(UInt64 nowMs);
+    IOReturn awdlControl(const AthControl::Request &,AthControl::Response &);
+    static IOReturn awdlFrameAction(OSObject *,void *,void *,void *,void *);
+public:
+    // In-kernel frame path of the AWDL front end (the control ABI caps at 512 bytes).
+    bool nativeAwdlTx(const UInt8 *frame,UInt32 length,bool action);
+    bool nativeAwdlRx(UInt8 *buffer,UInt32 capacity,UInt32 *length,UInt8 *kind,UInt8 *channel,SInt8 *rssi,UInt64 *timeUs);
+private:
+#endif
     IOWorkLoop *_networkWorkLoop=nullptr;
     IONetworkInterface *_networkInterface=nullptr;
     bool _networkEnabled=false,_networkLinkUp=false;

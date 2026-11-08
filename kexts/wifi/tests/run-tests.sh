@@ -118,6 +118,12 @@ ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-registration"
 "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
     native/tests/test_native_awdl.cpp -o "$test_tmp_dir/native-awdl"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-awdl"
+# AWDL radio binding + engine session over a radio model (gated code, always tested on the host).
+"${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -Wno-unused-function -Wno-misleading-indentation -fsanitize=address,undefined \
+    -Inative/src -Isrc/kext native/tests/test_native_awdl_radio.cpp -o "$test_tmp_dir/native-awdl-radio"
+ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-awdl-radio"
+# awdl0 creation path: production AirportAth10kAwdlDriver.cpp against fake IOKit/IO80211 classes.
+CXX="${CXX:-c++}" bash native/tests/build-awdl-iface.sh "$test_tmp_dir/awdl-iface"
 "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
     -I"$test_tmp_dir" -Isrc/kext -Ibuild/gen/test tests/test_rx_pipeline.cpp -o "$test_tmp_dir/rx-pipeline"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/rx-pipeline"

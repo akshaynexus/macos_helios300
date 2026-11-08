@@ -18,6 +18,9 @@
 #include "AirportAth10kNub.hpp"
 #include "AirportAth10kTx.hpp"
 #include "Ath10kPCIDevice.hpp"
+#if AIRPORT_ATH10K_AWDL
+#include "AirportAth10kAwdlDriver.hpp"
+#endif
 
 class AirportAth10k : public IO80211Controller {
     OSDeclareDefaultStructors(AirportAth10k)
@@ -90,6 +93,9 @@ public:
     // as the poll that mirrors them): AirportAth10kTx* on the controller.
     const AirportTx::PullStats &txStats() const {return pullStats;}
     const AirportTx::OutputThread &txThread() const {return outputThread;}
+#if AIRPORT_ATH10K_AWDL
+    IOReturn createAwdlInterface(apple80211_virt_if_create_data *); // setVIRTUAL_IF_CREATE role 6
+#endif
 private:
     bool bringUp(IOService *);
     static void deferredStart(thread_call_param_t,thread_call_param_t);
@@ -120,5 +126,10 @@ private:
     AirportTx::OutputThread outputThread;
     AirportTx::PullStats pullStats;
     void setOutputThread(bool up);
+#if AIRPORT_ATH10K_AWDL
+    AirportAth10kAwdlNet *awdlNet=nullptr; // created only with the boot-arg ath10k_awdl=1
+    bool startAwdl();
+    void stopAwdl();
+#endif
     char geoCountry[3]{};
 };

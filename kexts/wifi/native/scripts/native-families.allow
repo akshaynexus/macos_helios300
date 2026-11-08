@@ -26,6 +26,9 @@ hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211ControllerV2.h
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211SkywalkInterface.h
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211InfraInterface.h
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211InfraProtocol.h
+hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211AWDLProtocol.h
+# AWDL: the controller is told which interface is the AWDL one (AIRPORT_ATH10K_AWDL builds).
+sym com.apple.iokit.IO80211Family __ZN17IO80211Controller16setAwdlInterfaceEP23IO80211VirtualInterface
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211WorkQueue.h
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/FaultReporter.h
 hdr com.apple.iokit.IOSkywalkFamily @AIRPORT@/macOS26/IOSkywalkInterface.h
