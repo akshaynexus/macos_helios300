@@ -24,9 +24,16 @@ kext, verify what kxld/OpenCore will do at injection time:
      binary and the family would call the wrong method, so both fail here.
 
 --kc may be given more than once (Boot and System collections) and their
-symbol tables are merged. Only symbol names, slot indices and class sizes
-are read from the collections; nothing from them is written anywhere.
---dump CLASS prints a class's real vtable and size.
+symbol tables are merged. A pointer inside a collection is a chained fixup
+in the x86_64 kernel-cache format whose cacheLevel bits (31:30) say which
+collection the 30-bit target offset belongs to (0 = Boot, 1 = System), so
+the System collection's vtables resolve to kernel methods and to their own.
+An inherited slot the real parent overrides (the kext names the ancestor's
+method, the parent slot holds the parent's own) is what kxld and OpenCore
+patch at link time; it is reported as a note, not a finding, unless
+--strict. Only symbol names, slot indices and class sizes are read from the
+collections; nothing from them is written anywhere. --dump CLASS prints a
+class's real vtable and size.
 
 Exit 0 pass, 1 findings, 2 usage. Kext vtable slots in the collection are
 chained fixups in the x86_64 kernel-cache format (target = low 30 bits,
@@ -76,6 +83,7 @@ class Collection:
                 self.segs.append((vmaddr, vmsize, fileoff))
             off += size
         self.base = min(s[0] for s in self.segs)
+        self.levels = None  # set by Merged: collection per cacheLevel
         self.defined = {}   # symbol -> (address, bundle)
         self.by_addr = {}   # address -> symbol
         for bundle, (_, fileoff) in self.entries.items():
@@ -112,11 +120,28 @@ class Collection:
             return 0
         if raw >> 32 == 0xFFFFFF80:
             return raw  # the kernel's own vtables hold plain kernel addresses
-        return self.base + (raw & 0x3FFFFFFF)  # chained fixup, x86_64 kernel-cache format
+        # dyld_chained_ptr_64_kernel_cache_rebase: target 29:0, cacheLevel 31:30.
+        level = (raw >> 30) & 3
+        base = self.base
+        if self.levels and level < len(self.levels) and self.levels[level]:
+            base = self.levels[level].base
+        return base + (raw & 0x3FFFFFFF)
+
+    def name_at(self, addr):
+        if self.levels:
+            for c in self.levels:
+                if c and addr in c.by_addr:
+                    return c.by_addr[addr]
+        return self.by_addr.get(addr)
 
     def class_size(self, cls):
         """classSize passed by <cls>::MetaClass::MetaClass() to OSMetaClass::OSMetaClass."""
+        # OSMetaClass::OSMetaClass lives in the kernel (Boot collection). A
+        # System-collection kext reaches it through a stub, `jmp [rip+GOT]`,
+        # whose GOT slot is a cacheLevel-0 fixup to the kernel's symbol.
         ctor = self.defined.get("__ZN11OSMetaClassC2EPKcPKS_j")
+        if not ctor and self.levels and self.levels[0]:
+            ctor = self.levels[0].defined.get("__ZN11OSMetaClassC2EPKcPKS_j")
         for suffix in ("C2Ev", "C1Ev"):
             entry = self.defined.get("__ZN%d%s9MetaClass%s" % (len(cls), cls, suffix))
             if not entry or not ctor:
@@ -132,12 +157,20 @@ class Collection:
                     continue
                 if code[i] == 0xE8:  # call rel32
                     target = entry[0] + i + 5 + struct.unpack_from("<i", code, i + 1)[0]
-                    if target == ctor[0]:
+                    if target == ctor[0] or self.stub_target(target) == ctor[0]:
                         return size
                     i += 5
                     continue
                 i += 1
         return None
+
+    def stub_target(self, addr):
+        """Where a `jmp qword [rip+disp32]` stub at addr goes (None if not one)."""
+        off = self.file_offset(addr)
+        if off is None or self.f[off:off + 2] != b"\xff\x25":
+            return None
+        disp = struct.unpack_from("<i", self.f, off + 2)[0]
+        return self.pointer(addr + 6 + disp)
 
     def vtable(self, cls):
         """Slot symbols after the two header words, until the next symbol or a null."""
@@ -152,7 +185,7 @@ class Collection:
             target = self.pointer(addr)
             if not target:
                 break
-            slots.append(self.by_addr.get(target, "?%x" % target))
+            slots.append(self.name_at(target) or "?%x" % target)
             i += 1
         return slots
 
@@ -192,9 +225,12 @@ class Kext:
         # ld64 -kext keeps every relocation in the "local" table, external ones
         # included; r_address is relative to the first segment (vmaddr 0).
         self.relocs = {}
+        self.relocs_any = {}  # every external relocation, 4-byte ones (GOT loads, lea) included
         for table in ((dysym[14], dysym[15]), (dysym[12], dysym[13])):
             for r in range(table[1]):
                 r_address, info = struct.unpack_from("<iI", f, table[0] + 8 * r)
+                if (info >> 27) & 1:
+                    self.relocs_any[r_address] = self.syms[info & 0xFFFFFF]
                 if (info >> 25) & 3 != 3:
                     continue
                 if (info >> 27) & 1:
@@ -254,6 +290,33 @@ class Kext:
         """Classes whose gMetaClass the kext references: the direct superclasses."""
         return [m.group(1) for n in self.undefined for m in [re.match(r"^__ZN\d+(\w+?)10gMetaClassE$", n)] if m]
 
+    def direct_parent(self, cls):
+        """The superclass CLASS's MetaClass constructor names: the gMetaClass
+        it passes OSMetaClass::OSMetaClass (`lea rdx, [rip+X]`, relocated)."""
+        for suffix in ("C2Ev", "C1Ev"):
+            va = self.defined.get("__ZN%d%s9MetaClass%s" % (len(cls), cls, suffix))
+            if va is None:
+                continue
+            for i in range(0, 0x80):
+                # lea rdx, [rip+disp32] or mov rdx, [rip+GOT] (external data under -mkernel)
+                if self.read_bytes(va + i, 3) in (b"\x48\x8d\x15", b"\x48\x8b\x15"):
+                    sym = self.relocs_any.get(va + i + 3) or self.relocs.get(va + i + 3)
+                    if sym is None:
+                        # mov rdx, [rip+disp]: the GOT slot carries the relocation
+                        disp = struct.unpack_from("<i", self.read_bytes(va + i + 3, 4), 0)[0]
+                        slot = va + i + 7 + disp
+                        sym = self.relocs.get(slot) or self.by_addr.get(slot)
+                    m = re.match(r"^__ZN\d+(\w+?)10gMetaClassE$", sym or "")
+                    if m:
+                        return m.group(1)
+        return None
+
+    def read_bytes(self, vmaddr, n):
+        for sva, svs, sfo in self.segs:
+            if sva <= vmaddr < sva + svs:
+                return self.f[sfo + vmaddr - sva:sfo + vmaddr - sva + n]
+        return b""
+
 
 class Merged:
     """Several collections seen as one symbol space (Boot + System)."""
@@ -261,7 +324,13 @@ class Merged:
     def __init__(self, kcs):
         self.kcs = kcs
         self.defined = {}
+        # cacheLevel 0 is the Boot collection (the one with the kernel's
+        # 0xffffff80... base), 1 the System one (linked at 0).
+        boot = [c for c in kcs if c.base >> 32 == 0xFFFFFF80]
+        system = [c for c in kcs if c.base >> 32 != 0xFFFFFF80]
+        levels = [boot[0] if boot else None, system[0] if system else None]
         for c in kcs:
+            c.levels = levels
             for k, v in c.defined.items():
                 self.defined.setdefault(k, v)
 
@@ -283,6 +352,12 @@ class Merged:
         return None
 
 
+def method_name(demangled):
+    """`IOService::setProperties(OSObject*)` -> `setProperties(OSObject*)`."""
+    head = demangled.split("(", 1)
+    return head[0].rsplit("::", 1)[-1] + ("(" + head[1] if len(head) > 1 else "")
+
+
 def demangle(names):
     stripped = [n[1:] if n.startswith("_") else n for n in names]
     try:
@@ -302,6 +377,7 @@ def main():
     ap.add_argument("--plist", help="its Info.plist (OSBundleLibraries)")
     ap.add_argument("--sibling", action="append", default=[], help="binary of another kext built alongside (exports count as resolved)")
     ap.add_argument("--dump", action="append", default=[], metavar="CLASS", help="print CLASS's vtable from the collection")
+    ap.add_argument("--strict", action="store_true", help="count a parent's own override of an inherited slot as a finding too")
     a = ap.parse_args()
     kcs = [Collection(p) for p in a.kc]
     kc = Merged(kcs)
@@ -329,6 +405,8 @@ def main():
     for s in a.sibling:
         sibling_defs |= set(Kext(s).defined)
     findings = []
+    patched = []
+    unverified = []
     # 1. imports
     vtable_symbols = set()
     for cls in kext.classes():
@@ -358,10 +436,20 @@ def main():
     else:
         print("  class sizes: kext exports no kKcAuditParentSizes table; sizes not checked")
     # 3. vtables
-    parents = kext.parents()
+    all_parents = kext.parents()
     for cls in kext.classes():
+        parents = all_parents
         ours = kext.vtable(cls)
         best, best_score = None, -1
+        direct = kext.direct_parent(cls)
+        if direct and kc.vtable(direct) is None:
+            # The real family has the class (its gMetaClass resolved above)
+            # but does not name its vtable: the layout cannot be compared.
+            unverified.append("vtable %s: parent %s's vtable is not named in the collection; layout unverified" % (cls, direct))
+            if not a.strict:
+                continue
+        if direct and kc.vtable(direct) is not None:
+            parents = [direct]  # the superclass the MetaClass constructor names, not a guess by score
         for p in parents:
             theirs = kc.vtable(p)
             if theirs is None:
@@ -388,9 +476,18 @@ def main():
             if pad_slot(real):
                 findings.append("vtable %s slot %d: kext names %s but the parent slot is the pad %s (OpenCore refuses this)"
                                 % (cls, i, names.get(mine, mine), names.get(real, real)))
+            elif not real.startswith("?") and method_name(names.get(mine, mine)) == method_name(names.get(real, real)) and not a.strict:
+                # The parent overrides an ancestor's method the kext's header
+                # does not list: the slot is inherited, so kxld (and OpenCore's
+                # vtable patcher) replace it with the parent's entry.
+                patched.append("vtable %s slot %d: %s is the parent's own override (patched at link)" % (cls, i, names.get(real, real)))
             else:
                 findings.append("vtable %s slot %d: kext names %s but the parent slot holds %s (header slot order differs)"
                                 % (cls, i, names.get(mine, mine), names.get(real, real)))
+    for x in unverified:
+        print("  NOTE %s" % x)
+    if patched:
+        print("  %d inherited slot(s) the parent overrides (patched at link): %s" % (len(patched), "; ".join(x.split(": ", 1)[1] for x in patched[:6]) + (" ..." if len(patched) > 6 else "")))
     if findings:
         print("FAIL: %d finding(s) against %s:" % (len(findings), ", ".join(os.path.basename(p) for p in a.kc)))
         for x in findings:

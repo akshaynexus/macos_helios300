@@ -28,14 +28,15 @@
       "source": {"tree": "driver", "path": "pascal/kext"},
       "built_by": "cross", "licence": "GPL-2.0-only",
       "licence_files": ["NVIDIA-firmware-LICENCE.txt"],
-      "contains_firmware": "14 NVIDIA GP106 firmware files from linux-firmware (NVIDIA licence) in Contents/Resources",
-      "status": "pre-release: bring-up proven on the Helios GP106 under Linux (pascal/core); the kext has not been loaded on macOS",
+      "contains_firmware": "17 NVIDIA GP106 firmware files from linux-firmware (NVIDIA licence), unmodified and sha256-pinned, built into the binary (pascal/kext/firmware.sha256); the same files also in Contents/Resources",
+      "status": "pre-release: bring-up and the render path proven on the Helios GP106 under Linux (pascal/core); loads and attaches on macOS 26.7.2 (first boot 2026-11-07, firmware now embedded because an OpenCore-injected kext has no bundle for OSKextRequestResource)",
       "install": "opencore",
       "opencore": {"order": 100, "BundlePath": "PG106.kext", "ExecutablePath": "Contents/MacOS/PG106", "PlistPath": "Contents/Info.plist",
                    "Arch": "x86_64", "MinKernel": "25.0.0", "MaxKernel": "", "Enabled": true, "Comment": "GTX 1060 Mobile (GP106) - macos_helios300"},
       "requires": [],
       "hardware": [{"bus": "pci", "vendor": "10de", "device": "1c20", "subsystem_vendor": "1025", "subsystem_device": "118b"}],
       "boot_args_optional": [
+        {"arg": "-pg106off", "what": "kill switch: PG106 does not attach and touches no GPU register"},
         {"arg": "pg106_stop_after=1", "what": "identify and read the VBIOS only; no GPU register is written (runbook step 1 safe mode)"},
         {"arg": "pg106_d3cold=1", "what": "power the dGPU off through ACPI PG00._OFF when idle (never run under macOS)"},
         {"arg": "pg106_render_users=0", "what": "render connections for administrators only"},
@@ -46,10 +47,8 @@
       "name": "PG106FB.kext", "kind": "kext", "bundle_id": "org.helios300.pg106fb",
       "source": {"tree": "driver", "path": "pascal/fb"},
       "built_by": "cross", "licence": "GPL-2.0-only",
-      "status": "pre-release: HDMI framebuffer, only run against the mock display engine",
-      "install": "opencore",
-      "opencore": {"order": 110, "BundlePath": "PG106FB.kext", "ExecutablePath": "Contents/MacOS/PG106FB", "PlistPath": "Contents/Info.plist",
-                   "Arch": "x86_64", "MinKernel": "25.0.0", "MaxKernel": "", "Enabled": true, "Comment": "GP106 HDMI framebuffer - macos_helios300"},
+      "status": "pre-release: HDMI framebuffer, only run against the mock display engine; links IOGraphicsFamily, which macOS 26.7.2 keeps in SystemKernelExtensions.kc, so OpenCore cannot inject it (first boot 2026-11-07): installed into /Library/Extensions after macOS is installed",
+      "install": "library-extensions",
       "requires": ["PG106.kext"],
       "hardware": [{"bus": "pci", "vendor": "10de", "device": "1c20", "subsystem_vendor": "1025", "subsystem_device": "118b"}],
       "boot_args_optional": [
@@ -222,6 +221,7 @@
     }
   },
   "post_install": [
+    {"step": "pg106fb", "what": "Copy PG106FB.kext to /Library/Extensions (root:wheel 755), kmutil load -p /Library/Extensions/PG106FB.kext, approve in System Settings if asked, restart; it attaches under PG106 once PG106Ready is Yes", "artifacts": ["PG106FB.kext"]},
     {"step": "pg106accel", "what": "Copy PG106Accel.kext to /Library/Extensions (root:wheel), kmutil load, approve, restart", "artifacts": ["PG106Accel.kext"]},
     {"step": "gpu-bundles", "what": "Copy NVMTLDriver.bundle and nvmtl/ (NVK, translator) to /Library/GPUBundles", "artifacts": ["NVMTLDriver.bundle", "libnvmtl_translate.dylib", "NVK-Pascal"]}
   ]
