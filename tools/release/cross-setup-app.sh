@@ -3,7 +3,8 @@
 # cross-setup-app.sh <self tree> <driver tree> <out dir> <version> — "Helios 300 Setup.app" cross-built on Linux.
 #
 #   1. swift format lint (apps/HeliosSetup/.swift-format) and swift test of the core (HeliosCore) on Linux: a broken
-#      app does not ship (SKIP_TESTS=1 skips both; release.sh never does).
+#      app does not ship (SKIP_TESTS=1 skips both; release.sh never does). swift-crypto (Package.resolved pins it) is
+#      a Linux-only dependency for those tests; the Mac build uses CryptoKit and links nothing from it.
 #   2. swift build -c release for x86_64-apple-macosx (minos 26.0) with the darwin Swift SDK xtool installed
 #      (~/.config/swiftpm/swift-sdks/darwin.artifactbundle; SwiftPM's native build system: the default one cannot
 #      find the macOS platform in that SDK). Products: HeliosSetup (the AppKit app) and helios-setup (the CLI).
@@ -42,11 +43,12 @@ mkdir -p "$SRC"
 mkdir -p "$SRC/apps"
 rsync -a --delete --exclude .build "$SELF/apps/HeliosSetup/" "$SRC/apps/HeliosSetup/"
 mkdir -p "$SRC/tools/release" "$SRC/tools/macos"
-cp "$SELF/tools/release/spec.json" "$SRC/tools/release/spec.json"
+cp "$SELF"/tools/release/{spec.json,sign-manifest.sh,manifest-ed25519.pub} "$SRC/tools/release/"
 cp "$SELF"/tools/macos/*.sh "$SRC/tools/macos/"
 cd "$SRC/apps/HeliosSetup"
 
-# 2. tests on Linux (the core and its fixtures; tests read ../../tools/release/spec.json and ../../tools/macos/*.sh)
+# 2. tests on Linux (the core and its fixtures; tests read ../../tools/release/{spec.json,sign-manifest.sh,manifest-ed25519.pub}
+#    and ../../tools/macos/*.sh)
 if [ "${SKIP_TESTS:-0}" != 1 ]; then
 	if swift format --version >/dev/null 2>&1; then
 		swift format lint --strict --configuration .swift-format -r Sources Tests >"$LOG.format.log" 2>&1 ||

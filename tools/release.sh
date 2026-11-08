@@ -24,6 +24,9 @@
 #      and a failed or unverifiable signature stops it (exit 1); nothing that installs into /Library ships unsigned.
 #   5. tools/release/make_manifest.py zips each bundle deterministically, hashes everything, checks the result
 #      against tools/release/manifest.schema.json and writes dist/manifest.json + dist/SHA256SUMS.txt.
+#   6. tools/release/sign-manifest.sh signs manifest.json into dist/manifest.json.sig (Ed25519) with the key at
+#      $HELIOS_SIGNING_KEY or ~/.config/helios300-release/manifest-ed25519, created there (0600, with a notice) if absent.
+#      The app refuses an update whose manifest does not verify; a key other than the committed one is reported.
 #
 # It publishes nothing. A GitHub Actions runner has no macOS SDK, so this runs on the owner's Linux machine.
 # --dry-run: a required artifact that fails to build is listed in the manifest (release.missing, dry_run=true)
@@ -34,7 +37,7 @@
 # boot-args out of NVRAM -> Delete, so a boot-arg in a new config never reaches an installed Mac. "00" = world rules.
 #
 # Build keys for --skip: pg106 pg106fb nmhda bluetooth wifi ssdt pg106accel plugin xlate nvk licences scripts setupapp
-# Environment: HELIOS_KC_DIR (= --real-kc), HELIOS_KC_AUDIT=skip (= --no-kc-audit; 1401 --build-from-source sets it
+# Environment: HELIOS_SIGNING_KEY (the manifest signing key), HELIOS_KC_DIR (= --real-kc), HELIOS_KC_AUDIT=skip (= --no-kc-audit; 1401 --build-from-source sets it
 #   when HELIOS_KC_DIR is unset), HELIOS_WIFI_COUNTRY (= --wifi-country), MACOS_SDK, LD64, XNU_CONFIG,
 #   HELIOS_CROSS (tools/cross-build-kext.sh defaults), HELIOS_IAF2 (= --iaf2), RELEASE_CACHE
 #   (downloads + the NVK Mesa tree, default ~/.cache/helios300-release), PG106_NATIVE_BIN (NVK's build-machine
@@ -85,7 +88,7 @@ fi
 [ -f "$MACOS_SDK/usr/lib/libkmod.a" ] || { echo "release.sh: SKIP — no macOS SDK at $MACOS_SDK"; exit 77; }
 [ -x "$LD64" ] || { echo "release.sh: SKIP — no Apple ld64 at $LD64"; exit 77; }
 [ -d "$XNU_CONFIG" ] || { echo "release.sh: SKIP — no xnu config at $XNU_CONFIG"; exit 77; }
-for t in clang llvm-nm llvm-objdump ld64.lld iasl git python3; do command -v "$t" >/dev/null || { echo "release.sh: SKIP — $t missing"; exit 77; }; done
+for t in clang llvm-nm llvm-objdump ld64.lld iasl git python3 openssl; do command -v "$t" >/dev/null || { echo "release.sh: SKIP — $t missing"; exit 77; }; done
 # What installs into /Library (kmutil, dyld in WindowServer and apps) must be signed; install-gpu.sh copies it as is.
 SIGN_KEYS=(pg106fb pg106accel plugin xlate nvk setupapp)
 for k in "${SIGN_KEYS[@]}"; do
@@ -360,5 +363,6 @@ DRY_ARG=(); [ "$DRY" = 1 ] && DRY_ARG=(--dry-run)
 python3 -I "$HERE/release/make_manifest.py" --spec "$SELF/tools/release/spec.json" --schema "$SELF/tools/release/manifest.schema.json" \
 	--stage "$STAGE" --dist "$DIST" --version "$VERSION" --self-commit "$SELF_COMMIT" --driver-commit "$DRIVER_COMMIT" \
 	--wifi-country "$WIFI_CC" --driver-tree "$DRV" "${KC_ARG[@]}" "${DRY_ARG[@]}" "${SIGNED[@]}" "${MISSING[@]}" || exit 1
+bash "$HERE/release/sign-manifest.sh" "$DIST/manifest.json" || die "the manifest could not be signed"
 [ "$FAILED" = 0 ] || echo "release.sh: some builds failed (see $LOGS); the manifest lists them under release.missing"
 echo "release.sh: dist/ ready: $DIST (nothing was published)"

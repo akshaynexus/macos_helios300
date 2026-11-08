@@ -12,14 +12,27 @@ release is a contract.
 
 ## Trust chain
 
-1. The consumer pins the release tag and the **SHA-256 of `manifest.json`**, e.g. 1401's
-   `p1401/helios300_release.json`.
+1. The consumer establishes that `manifest.json` is the release's, one of two ways:
+   - **1401** pins the release tag and the **SHA-256 of `manifest.json`** in its `p1401/helios300_release.json`.
+   - **Helios 300 Setup.app** cannot pin a release that does not exist yet, so it checks a signature. `manifest.json.sig`
+     in the release is an Ed25519 signature (64 raw bytes) over the exact bytes of `manifest.json`. The public key is
+     compiled into the app (`ManifestVerifier.releaseKeyHex`, committed as `tools/release/manifest-ed25519.pub`; a test
+     keeps the two equal). The app verifies it before it believes anything in a manifest it is going to act on:
+     once when the update is offered and again, on the bytes about to be applied, in the root half. An unsigned or
+     badly signed manifest is refused, so a compromised GitHub account or download path cannot deliver an update
+     without the signing key. The private key is offline, at `$HELIOS_SIGNING_KEY` or
+     `~/.config/helios300-release/manifest-ed25519` (0600, never committed); `tools/release/sign-manifest.sh` creates it
+     if absent, says so, and `tools/release.sh` signs with it. A manifest on a stick the user points the app at is
+     covered by whoever made that stick, as with every other file on it: it is not an update and it is not signed.
 2. `manifest.json` lists each file's `sha256` and `size`, and its `url` under
    `https://github.com/akshaynexus/macos_helios300/releases/download/v<version>/`.
 3. For a zipped bundle, `contents_sha256` lists the SHA-256 of every file inside it. The consumer checks the
    extracted bundle again, so a zip with an extra or changed file is refused even if someone recomputed the zip's hash.
 
 `SHA256SUMS.txt` in the release lists the same hashes, plus the manifest's own, for people checking by hand.
+
+A path built from the manifest is never trusted to be well-formed. `release.tag` must be exactly `v<version>`, and a tag
+or artifact `name` is one path component: no `/`, no `..`, not absolute. A consumer refuses the manifest otherwise.
 
 ## Top level
 
@@ -129,6 +142,8 @@ and does comes from the manifest, so a new step or artifact needs only a spec ch
 | `config_delta` | computed by make_manifest: `kernel_add` (the `opencore` entries in order, each with its `requires`), `acpi_add`, `device_properties`, `nvram_add`, `nvram_delete`, `boot_args_required` (= `config.boot_args`), `forbidden`. The app merges it into the internal `config.plist`: the user's own keys and entries are never dropped, existing entries keep the user's `Enabled`/`Comment`, and `forbidden` is only reported |
 | `app_help` | the Help sheet (`sections[]`: `title`, `lines`) |
 | `third_party_kexts` | optional updates from Dortania's build repo: `source` (its `latest.json`) and `products` (product -> `[{bundle, id}]`) |
+
+Update planning: an artifact in the installed manifest and not in the new one is a removal (an OpenCore kext or SSDT leaves the ESP, kept for rollback, and its config entries go). `update_groups` members can span install kinds; the app applies every part of a group or none of it.
 
 Post-install steps without a script (`opencore`, `sleep`) are run by the app; their `run` lines are the same
 commands for Terminal (`helios-setup` is `Helios 300 Setup.app/Contents/MacOS/helios-setup`).
@@ -246,8 +261,10 @@ Only this repo builds. `tools/release.sh` produces every file an EFI for this la
 ## Publishing (coordinator, after review)
 
 `tools/release.sh` stops at `dist/`. To publish: review `dist/manifest.json` and `dist/logs/`, then create release
-`v<version>` (pre-release) with every file in `dist/` except `logs/` uploaded under its `file` name, and set the
-tag + manifest SHA-256 in 1401's `p1401/helios300_release.json`.
+`v<version>` (pre-release) with every file in `dist/` except `logs/` uploaded under its `file` name, including
+`manifest.json.sig` (the app refuses an update without it), and set the tag + manifest SHA-256 in 1401's
+`p1401/helios300_release.json`. `release.sh` must have said `verifies against the committed release key`; a `NOTE` that
+a different key signed means this build must not be published.
 
 ## v0.1.1: the exact procedure
 
@@ -274,8 +291,8 @@ publishes.
    `applbkl`, and `post_install` with the `gpu` step and the two audio choices. Read `dist/logs/pg106.log` for
    `check-pg106-firmware: PASS 17 of 17` and `dist/logs/kc-audit.log`. `sha256sum -c SHA256SUMS.txt` in `dist/`.
 3. **Publish the pre-release** (coordinator): tag `v0.1.1` at the commit in `release.commit`, GitHub release marked
-   pre-release, upload every file in `dist/` except `logs/` under its `file` name. Download `manifest.json` back
-   and compare its SHA-256 with `dist/manifest.json`.
+   pre-release, upload every file in `dist/` except `logs/` under its `file` name, including `manifest.json.sig`.
+   Download `manifest.json` back and compare its SHA-256 with `dist/manifest.json`.
 4. **Pin it in 1401**: `p1401/helios300_release.json` → `"tag": "v0.1.1"`, `"manifest_sha256": <that SHA-256>`;
    `python3 -m unittest -q tests.test_helios300` green; commit.
 5. **Build the stick** with that 1401 (`1401 build ...` for the Helios, then write the stick). Check the stick's
