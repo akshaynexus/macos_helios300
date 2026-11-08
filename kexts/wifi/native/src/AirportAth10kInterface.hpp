@@ -14,6 +14,7 @@
 #include <IOKit/IOCommandGate.h>
 #include "AirportAth10kCrypto.hpp"
 #include "AirportAth10kBridge.hpp"
+#include "AirportAth10kRegistration.hpp"
 
 class AirportAth10k;
 bool airportAth10kRandom(uint8_t *,size_t);
@@ -24,7 +25,13 @@ class AirportAth10kInterface : public IO80211InfraProtocol {
     OSDeclareDefaultStructors(AirportAth10kInterface)
 public:
     bool init(AirportAth10k *);
+    void stop(IOService *) override;
     void free() override;
+    // The two Skywalk RegistrationInfo blocks (AirportAth10kRegistration.hpp):
+    // installed by the controller before IO80211InfraInterface::start, taken
+    // back in stop()/free() before the family's typed free can reach them.
+    bool installRegistrationInfo(const IOSkywalkEthernetInterface::RegistrationInfo &);
+    void releaseRegistrationInfo();
     // Polling (and with it every postMessage/setLQM) starts only after the
     // controller has attached and started this interface and registered it.
     void startPolling();
@@ -245,6 +252,7 @@ private:
     IOReturn gated(uintptr_t op,void *arg=nullptr);
     uint64_t nowMs() const;
     void updateLinkQuality();
+    void mirrorState();
     IOReturn fillRateSet(apple80211_rate_set_data *);
     IOReturn fillMCSSet(apple80211_mcs_index_set_data *);
     AirportAth10k *controller=nullptr;
@@ -253,6 +261,8 @@ private:
     AirportAth10kSession *session=nullptr;
     uint8_t permanentMAC[6]{};
     bool stopping=false,started=false;
+    AirportRegistration::Blocks registration{};
+    uint32_t mirroredState=~0u,mirroredReason=~0u;const char *mirroredError=nullptr;
     int reportedQuality=-3;
     uint16_t scanHomeAwayMs=0;
 };

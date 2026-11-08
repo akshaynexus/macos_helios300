@@ -13,8 +13,6 @@ static_assert(AirportBridge::kNotReady==kIOReturnNotReady && AirportBridge::kBus
               AirportBridge::kAborted==kIOReturnAborted && AirportBridge::kNotFound==kIOReturnNotFound && AirportBridge::kError==kIOReturnError &&
               AirportBridge::kExclusiveAccess==kIOReturnExclusiveAccess && AirportBridge::kNotAttached==kIOReturnNotAttached,"IOReturn mirror");
 
-volatile SInt32 gAirportAth10kStep=0;
-
 // IONetworkInterface output-pull-model SPI (exported by IONetworkingFamily 3.4,
 // hidden from the SDK headers), bound by mangled name; `this` is the first argument.
 extern "C" IOReturn airportConfigureOutputPullModel(IONetworkInterface *,uint32_t driverQueueSize,uint32_t options,uint32_t outputQueueSize,uint32_t schedulingModel,uint32_t targetQdelay) __asm__("__ZN18IONetworkInterface24configureOutputPullModelEjjjjj");
@@ -52,6 +50,7 @@ bool AirportAth10k::init(OSDictionary *properties)
 
 IOService *AirportAth10k::probe(IOService *provider,SInt32 *score)
 {
+    if(PE_parse_boot_argn("-x",nullptr,0)){IOLog("AirportAth10k: safe mode (-x): controller not attaching\n");return nullptr;}
     AIRPORT_STEP("probe");
     auto *n=OSDynamicCast(AirportAth10kNub,provider);
     if(!n || !n->core() || !n->queue()){AIRPORT_LOG("provider is not a started AirportAth10kNub");return nullptr;}
@@ -209,11 +208,10 @@ bool AirportAth10k::bringUp(IOService *provider)
     AIRPORT_STEP("Skywalk registration info");
     IOSkywalkEthernetInterface::RegistrationInfo info;memset(&info,0,sizeof(info));
     if(!netif->initRegistrationInfo(&info,1,sizeof(info))){AIRPORT_LOG("initRegistrationInfo failed");super::stop(provider);releaseAll();return false;}
-    netif->mExpansionData->fRegistrationInfo=static_cast<IOSkywalkNetworkInterface::RegistrationInfo *>(IOMalloc(sizeof(IOSkywalkNetworkInterface::RegistrationInfo)));
-    netif->mExpansionData2->fRegistrationInfo=static_cast<IOSkywalkEthernetInterface::RegistrationInfo *>(IOMalloc(sizeof(IOSkywalkEthernetInterface::RegistrationInfo)));
-    if(!netif->mExpansionData->fRegistrationInfo || !netif->mExpansionData2->fRegistrationInfo){super::stop(provider);releaseAll();return false;}
-    memcpy(netif->mExpansionData->fRegistrationInfo,&info,sizeof(info));
-    memcpy(netif->mExpansionData2->fRegistrationInfo,&info,sizeof(info));
+    // The family dereferences both RegistrationInfo slots during the BSD attach
+    // and typed-frees them in its stop/free; the interface owns the blocks and
+    // takes them back first (AirportAth10kRegistration.hpp, reboot panic 2026-11-07).
+    if(!netif->installRegistrationInfo(info)){AIRPORT_LOG("registration blocks: no memory");super::stop(provider);releaseAll();return false;}
     if(netif->getInterfaceRole()==1)netif->deferBSDAttach(true);
     AIRPORT_STEP("IO80211InfraInterface::start");
     if(!netif->start(this)){AIRPORT_LOG("Skywalk interface start failed");super::stop(provider);releaseAll();return false;}
@@ -472,9 +470,23 @@ IOReturn AirportAth10k::registerWithPolicyMaker(IOService *policyMaker)
     pmPolicyMaker=policyMaker;pmState=1;
     return policyMaker->registerPowerDriver(this,powerStates,2);
 }
-// Sleep/wake is owned by the core (Ath10kPower.cpp); after wake the session
-// sees the core's restart-required bit and asks for the guarded restart.
+// Power tree: PM takes this controller to state 0 before the system sleeps
+// (after the core's priority sleep notification has quiesced the firmware, see
+// Ath10kPower.cpp) and back to 1 on wake. Off tells the session the radio is
+// gone: it drops the join and posts link-down/deauth to WCL, so the family
+// never waits on a dead link. On tells it the radio may be used again; the
+// core then reports "restart required" and the session asks for the guarded
+// restart (terminate + rematch; AirportAth10kInterface::stop takes the
+// registration blocks back so that teardown is clean). The user's Wi-Fi
+// on/off switch (setPOWER) is kept separate in powerState.
 IOReturn AirportAth10k::setPowerState(unsigned long state,IOService *)
 {
-    pmState=state;return IOPMAckImplied;
+    if(state==pmState)return IOPMAckImplied;
+    pmState=state;
+    AIRPORT_STEP(state?"PM: on":"PM: off");
+    if(broughtUp && netif){
+        if(!state)netif->powerChanged(false);
+        else if(powerState)netif->powerChanged(true);
+    }
+    return IOPMAckImplied;
 }

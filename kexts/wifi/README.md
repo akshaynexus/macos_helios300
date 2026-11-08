@@ -121,12 +121,20 @@ Keep Ethernet (RTL8111) or a USB adapter available.
    - `ath10k_cc=IN` (two-letter wireless-regdb country; default `00` world rules) and
      `ath10k_txpower=<1..30>` (cap in dBm; default: the regdb limit per channel).
    - For the first boots: `keepsyms=1 debug=0x100` so a panic names the function.
+   - Safe mode (`-x`, macOS safe boot / OpenCore Shift+Enter): `Ath10kMac`, `AirportAth10k`
+     (nub and controller) and `QCARomePatchRAM` each log one line and do not attach, so a
+     bad build is always bypassed from the boot menu. No boot-arg of ours is needed for it.
    - Diagnostics for the front end: `-airportath10k_off` skips AirportAth10k entirely (the
      core still loads and scans; no Wi-Fi interface). `ath10k_native_delay=<seconds>`
      makes AirportAth10k return from start() at once and run its whole bring-up N seconds
      later, so the system reaches login and SSH first; every bring-up stage logs one
      `AirportAth10k: step N …` line (`log stream --predicate 'sender == "AirportAth10k"'`),
-     and the last line before a hang names the stage.
+     and the last line before a hang names the stage. The same state is mirrored into the
+     registry, so no verbose console is needed: on the nub `AirportAth10kLastStep` and
+     `AirportAth10kLastMessage`, on the controller `AirportAth10kJoinState`
+     (offline/ready/joining/connected/leaving/restarting), `AirportAth10kLastError` and
+     `AirportAth10kLastDisconnectReason` (802.11 reason code; 255 = driver-initiated):
+     `ioreg -l -w0 | grep AirportAth10k`. Nothing is logged from the 100 ms poll.
    - `pg106_hda=0`-style GPU args are unrelated; the core needs no `-v`.
 4. AppleVTD (`Kernel › Quirks › DisableIoMapper`): the core allocates DMA through the
    system mapper when one is active and works without it; leave your existing setting. If

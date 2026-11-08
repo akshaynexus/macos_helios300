@@ -164,6 +164,7 @@ int main(){
         core.link=false;core.stage=0;core.secure=false;core.beaconMisses=5;s.poll(t+=100);
         assert(s.state()==Session::State::Ready && sink.count(W::Deauth)==1 && sink.links.size()==2 && !sink.links[1]);
         auto *d=reinterpret_cast<const W::DeauthEvent *>(sink.last(W::Deauth)->data.data());assert(d->reason==4 && !memcmp(d->bssid,v_ap,6));
+        assert(s.lastDisconnectReason==4 && !strcmp(Session::stateName(s.state()),"ready")); // registry mirror (AirportAth10kLastDisconnectReason / JoinState)
     }
     { // Private Wi-Fi Address: WCL sets a station MAC; the join carries it (extended Connect, flags 16),
       // the supplicant uses it, and clearing it (permanent address) sends a plain Connect again.

@@ -12,9 +12,18 @@
 #endif
 #include <Availability.h>
 #include <IOKit/IOLib.h>
-#define AIRPORT_LOG(fmt,...) IOLog("AirportAth10k: " fmt "\n",##__VA_ARGS__)
+#include <IOKit/IOService.h>
+// Logging (AirportAth10kNub.cpp). Every line goes to IOLog and the last one is
+// mirrored into the registry on the nub (AirportAth10kLastMessage,
+// AirportAth10kLastStep), so the state survives a boot without the verbose
+// console: ioreg -l -w0 | grep AirportAth10k. Neither is called from the poll
+// timer or any wait loop (printing in a loop hung the PG106 boots).
+void airportLog(const char *fmt,...) __attribute__((format(printf,1,2)));
 // Bring-up breadcrumbs: one line per stage with a monotonic counter, so the
 // last line before a hang names the step (log stream --predicate 'sender == "AirportAth10k"').
-#include <libkern/OSAtomic.h>
-extern volatile SInt32 gAirportAth10kStep;
-#define AIRPORT_STEP(name) IOLog("AirportAth10k: step %d %s\n",OSIncrementAtomic(&gAirportAth10kStep)+1,name)
+void airportStep(const char *name);
+// Registry sink for the mirrored state: the nub while it exists (set in
+// AirportAth10kNub::start, cleared in its stop), nullptr otherwise.
+void airportSetStateSink(IOService *);
+#define AIRPORT_LOG(fmt,...) airportLog(fmt,##__VA_ARGS__)
+#define AIRPORT_STEP(name) airportStep(name)

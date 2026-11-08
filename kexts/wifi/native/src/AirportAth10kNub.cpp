@@ -1,8 +1,34 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "AirportAth10kNub.hpp"
 
+#include <libkern/OSAtomic.h>
+#include <stdarg.h>
+
 #define super IOService
 OSDefineMetaClassAndStructors(AirportAth10kNub, IOService)
+
+static volatile SInt32 gAirportAth10kStep=0;
+static IOService *volatile gAirportAth10kStateSink=nullptr;
+void airportSetStateSink(IOService *sink){gAirportAth10kStateSink=sink;}
+static void airportMirror(const char *key,const char *value)
+{
+    IOService *sink=gAirportAth10kStateSink;
+    if(sink && !sink->isInactive())sink->setProperty(key,value);
+}
+void airportLog(const char *fmt,...)
+{
+    char line[192];
+    va_list ap;va_start(ap,fmt);vsnprintf(line,sizeof(line),fmt,ap);va_end(ap);
+    IOLog("AirportAth10k: %s\n",line);
+    airportMirror("AirportAth10kLastMessage",line);
+}
+void airportStep(const char *name)
+{
+    char line[160];
+    snprintf(line,sizeof(line),"%d %s",OSIncrementAtomic(&gAirportAth10kStep)+1,name);
+    IOLog("AirportAth10k: step %s\n",line);
+    airportMirror("AirportAth10kLastStep",line);
+}
 
 static IOPMPowerState nubPowerStates[2]={
     {1,0,0,0,0,0,0,0,0,0,0,0},
@@ -10,6 +36,11 @@ static IOPMPowerState nubPowerStates[2]={
 
 IOService *AirportAth10kNub::probe(IOService *provider,SInt32 *score)
 {
+    // Safe mode (-x, OpenCore Shift+Enter / macOS safe boot): stand down after
+    // one line, so a bad build is always bypassed from the boot menu. The core
+    // declines in the same way, so this is reached only when the core was
+    // forced in; it still refuses.
+    if(PE_parse_boot_argn("-x",nullptr,0)){IOLog("AirportAth10k: safe mode (-x): not attaching\n");return nullptr;}
     // Kill switch: -airportath10k_off leaves the core up (Ath10kNativeReady,
     // no interface) and never starts the front end.
     if(PE_parse_boot_argn("-airportath10k_off",nullptr,0)){AIRPORT_LOG("disabled by -airportath10k_off");return nullptr;}
@@ -29,6 +60,7 @@ bool AirportAth10kNub::start(IOService *provider)
     workQueue=IO80211WorkQueue::workQueue();
     if(!workQueue){AIRPORT_LOG("no IO80211WorkQueue");return false;}
     if(!super::start(provider)){workQueue->release();workQueue=nullptr;return false;}
+    airportSetStateSink(this);
     UInt8 builtIn=0;
     setProperty("built-in",OSData::withBytes(&builtIn,sizeof(builtIn)));
     PMinit();
@@ -43,6 +75,7 @@ bool AirportAth10kNub::start(IOService *provider)
 void AirportAth10kNub::stop(IOService *provider)
 {
     AIRPORT_STEP("nub stop");
+    airportSetStateSink(nullptr);
     if(pmStarted){PMstop();pmStarted=false;}
     super::stop(provider);
     if(workQueue){workQueue->release();workQueue=nullptr;}

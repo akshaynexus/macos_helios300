@@ -139,6 +139,10 @@ IOService *QCARomePatchRAM::probe(IOService *provider, SInt32 *score)
         LOG("probe: unexpected device %04x:%04x, declining", vid, pid);
         return nullptr;
     }
+    if (bootFlag("-x")) {
+        LOG("probe: safe mode (-x), not attaching");
+        return nullptr;
+    }
     if (bootFlag("-qcarpoff")) {
         LOG("probe: disabled by -qcarpoff");
         return nullptr;

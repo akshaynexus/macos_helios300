@@ -57,9 +57,24 @@ Decisions:
    raw beacons): SSID, rates, DS, HT/VHT, RSN, power constraint. Transition-mode RSN IEs are
    rewritten to plain WPA2-PSK for WCL, as AirportItlwm does. `BEACON_INFO` polls get a
    synthesized beacon with an advancing timestamp.
-5. **Sleep/wake** stays the core's: after wake it reports "restart required"; the session
-   posts driver-unavailable, asks for the guarded restart, and the rematched core brings a
-   fresh front end which WCL re-enumerates.
+5. **Sleep/wake** stays the core's: the priority sleep notification quiesces the firmware
+   (Ath10kPower.cpp), then PM takes the controller to state 0 and `AirportAth10k::setPowerState`
+   tells the session the radio is gone (link-down/deauth to WCL, join dropped). After wake
+   the core reports "restart required"; the session posts driver-unavailable, asks for the
+   guarded restart, and the rematched core brings a fresh front end which WCL re-enumerates.
+   That restart terminates the old interface, so it depends on the clean teardown below.
+6. **The Skywalk registration blocks are the driver's** (`AirportAth10kRegistration.hpp`).
+   IOSkywalkFamily 1.0 dereferences `mExpansionData->fRegistrationInfo` and
+   `mExpansionData2->fRegistrationInfo` during the BSD attach without a NULL check, allocates
+   them itself only on the `registerNetworkInterface` path (which IO80211 drivers never take),
+   and typed-frees them in `IOSkywalkNetworkInterface::stop/free` and
+   `IOSkywalkEthernetInterface::free`. A block from `IOMalloc` is in another zone, and the
+   free panicked at every reboot/shutdown ("not in the expected zone early.kalloc.288, found
+   in kalloc.type.var5.384", 2026-11-07; the wake restart hit the same path, which is why the
+   screen stayed black). `AirportAth10kInterface::stop()`/`free()` take the blocks back
+   (pointer cleared, `IOFree` with the allocating size) before the family runs; both family
+   frees skip a NULL pointer. The host suite pins the ownership rules
+   (`native/tests/test_native_registration.cpp`).
 
 ## OpenCore
 

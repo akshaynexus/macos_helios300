@@ -64,10 +64,37 @@ void AirportAth10kInterface::stopSession()
     if(controller && controller->core())controller->core()->closeControl(this);
 }
 
+bool AirportAth10kInterface::installRegistrationInfo(const IOSkywalkEthernetInterface::RegistrationInfo &info)
+{
+    static_assert(sizeof(IOSkywalkNetworkInterface::RegistrationInfo)==AirportRegistration::kInfoBytes &&
+                  sizeof(IOSkywalkEthernetInterface::RegistrationInfo)==AirportRegistration::kInfoBytes,"RegistrationInfo size (IOSkywalkFamily 1.0)");
+    if(!mExpansionData || !mExpansionData2)return false;
+    return registration.install(reinterpret_cast<void **>(&mExpansionData->fRegistrationInfo),
+                                reinterpret_cast<void **>(&mExpansionData2->fRegistrationInfo),&info,sizeof(info),
+                                [](size_t n){return IOMalloc(n);},[](void *p,size_t n){IOFree(p,n);});
+}
+void AirportAth10kInterface::releaseRegistrationInfo()
+{
+    registration.release(mExpansionData?reinterpret_cast<void **>(&mExpansionData->fRegistrationInfo):nullptr,
+                         mExpansionData2?reinterpret_cast<void **>(&mExpansionData2->fRegistrationInfo):nullptr,
+                         [](void *p,size_t n){IOFree(p,n);});
+}
+
+// Terminate path (reboot, shutdown, the wake restart): IOSkywalkNetworkInterface::stop
+// typed-frees mExpansionData->fRegistrationInfo. Take our blocks back first.
+void AirportAth10kInterface::stop(IOService *provider)
+{
+    AIRPORT_STEP("interface stop");
+    stopping=true;
+    releaseRegistrationInfo();
+    super::stop(provider);
+}
+
 void AirportAth10kInterface::free()
 {
     if(timer)stopSession();
     if(session){session->stop();delete session;session=nullptr;}
+    releaseRegistrationInfo(); // IOSkywalkEthernetInterface::free typed-frees mExpansionData2's block
     super::free();
 }
 
@@ -88,7 +115,20 @@ void AirportAth10kInterface::pollTimer(OSObject *owner,IOTimerEventSource *)
     const bool linked=self->session->linkUp();
     self->session->poll(self->nowMs());
     if(before!=self->session->state() || linked!=self->session->linkUp())self->updateLinkQuality();
+    self->mirrorState();
     if(self->timer && !self->stopping)self->timer->setTimeoutMS(100);
+}
+
+// Registry mirror of the session (on the controller), written only on change:
+// AirportAth10kJoinState, AirportAth10kLastError, AirportAth10kLastDisconnectReason.
+// No log line here: this runs from the 100 ms poll.
+void AirportAth10kInterface::mirrorState()
+{
+    if(!controller || !session || controller->isInactive())return;
+    const uint32_t state=static_cast<uint32_t>(session->state());
+    if(state!=mirroredState){mirroredState=state;controller->setProperty("AirportAth10kJoinState",AirportAth10kSession::stateName(session->state()));}
+    if(session->lastError!=mirroredError){mirroredError=session->lastError;controller->setProperty("AirportAth10kLastError",session->lastError?session->lastError:"none");}
+    if(session->lastDisconnectReason!=mirroredReason){mirroredReason=session->lastDisconnectReason;controller->setProperty("AirportAth10kLastDisconnectReason",mirroredReason,32);}
 }
 
 IOReturn AirportAth10kInterface::command(OSObject *,void *a0,void *a1,void *a2,void *)

@@ -174,6 +174,11 @@ public:
     enum class State : uint8_t { Offline, Ready, Joining, Connected, Leaving, Restarting };
     Session(Core &core,Sink &sink):core(core),sink(sink){}
     State state() const {return state_;}
+    static const char *stateName(State s){
+        switch(s){case State::Offline:return "offline";case State::Ready:return "ready";case State::Joining:return "joining";
+        case State::Connected:return "connected";case State::Leaving:return "leaving";case State::Restarting:return "restarting";}
+        return "?";
+    }
     bool scanning() const {return scanPending;}
     bool joining() const {return state_==State::Joining;}
     bool linkUp() const {return state_==State::Connected && status.link;}
@@ -280,6 +285,7 @@ public:
         return buildBeaconFrame(joined,(nowMs-joinStartedMs)*1000u,beaconSequence,out,capacity)!=0;
     }
     const char *lastError="none";
+    uint32_t lastDisconnectReason=0; // 802.11 reason of the last link-down/deauth we reported (255 = driver-initiated)
     uint32_t lqmQuality() const { // 100/50/20 like AirportItlwm, -2 when down
         if(!linkUp() || status.rssi==INT32_MIN)return uint32_t(-2);
         return status.rssi>=-70?100:(status.rssi>=-85?50:20);
@@ -382,6 +388,7 @@ private:
         sink.post(AirportWCL::ScanDone,&result,sizeof(result));
     }
     void postLink(bool up,uint32_t reason){
+        if(!up)lastDisconnectReason=reason;
         AirportWCL::LinkStatusEvent e{};memcpy(e.bssid,joinBSSID,6);e.up=up?1:0;e.reason=reason;
         linkIndicated=up;sink.linkState(up);
         sink.post(AirportWCL::LinkStatus,&e,sizeof(e));
@@ -397,6 +404,7 @@ private:
         } else state_=State::Connected;
     }
     void postDeauth(uint16_t reason){
+        lastDisconnectReason=reason;
         AirportWCL::DeauthEvent e{};e.reason=reason;memcpy(e.bssid,joinBSSID,6);
         sink.post(AirportWCL::Deauth,&e,sizeof(e));
     }

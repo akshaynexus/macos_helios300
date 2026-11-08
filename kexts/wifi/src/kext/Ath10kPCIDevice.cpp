@@ -59,6 +59,13 @@ IOService *Ath10kPCIDevice::probe(IOService *provider, SInt32 *score)
     IOPCIDevice *pci = OSDynamicCast(IOPCIDevice, provider);
     if (!pci)
         return nullptr;
+    // Safe mode (-x: macOS safe boot, OpenCore Shift+Enter): one line, no
+    // attach, no firmware. A bad build is always bypassed from the boot menu;
+    // the native front end matches on this driver and so never appears either.
+    if (PE_parse_boot_argn("-x", nullptr, 0)) {
+        IOLog("Ath10kMac: safe mode (-x): not attaching\n");
+        return nullptr;
+    }
 
     const UInt16 vendor = pci->configRead16(kIOPCIConfigVendorID);
     const UInt16 device = pci->configRead16(kIOPCIConfigDeviceID);

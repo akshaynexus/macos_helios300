@@ -114,6 +114,8 @@ controller can only be confirmed on macOS (test step 4).
    - `-qcarpprobe`: read-only, no download. Use it first if you want to be
      cautious.
    - `-qcarpoff`: the kext does not attach.
+   - `-x` (macOS safe mode): the kext logs one line and does not attach, like the
+     Wi-Fi kexts.
    - `-qcarpnoname`: no rename (diagnostics).
    - `-btlfxallowanyaddr` (BlueToolFixup): only if the log says "Third Party
      Dongle has the same address as the internal module".
