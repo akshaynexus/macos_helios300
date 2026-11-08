@@ -7,7 +7,9 @@
 // aborts the test (the "no ring touched after free" rule). 10 cycles with a
 // join between them, a failing reload (guarded restart fallback, then a clean
 // reload on the next wake), a sleep during a reload, a double wake, and a
-// quarantine (no reload, no free) at the end.
+// quarantine (no reload, no free) at the end. Then: a sleep that arrives while
+// the reload is inside probeTarget and outlasts the bounded wait (quarantine,
+// no reset, no free), and a reload with no work loop (no gated step, no crash).
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -27,7 +29,7 @@ using IOReturn=int;using vm_size_t=unsigned long;using IOOptionBits=unsigned;
 constexpr IOReturn kIOReturnSuccess=0,kIOReturnBadArgument=1,kIOReturnNotReady=2,kIOReturnNoMemory=3,kIOReturnError=4;
 constexpr unsigned kIOMessageSystemWillSleep=1,kIOMessageSystemHasPoweredOn=2,kIOMessageSystemWillNotSleep=3;
 static void IOLog(const char *,...){}
-static unsigned sleeps=0;static void IOSleep(unsigned){++sleeps;}
+static unsigned sleeps=0;static void (*sleepHook)()=nullptr;static void IOSleep(unsigned){++sleeps;if(sleepHook)sleepHook();}
 static UInt64 clockMs=1000;
 UInt64 Ath10k::uptimeNS(){return clockMs*1000000ull;}
 static bool OSCompareAndSwap(UInt32 old,UInt32 next,volatile UInt32 *address){if(*address!=old)return false;*address=next;return true;}
@@ -124,6 +126,7 @@ public:
     static constexpr UInt32 kSleepQuiesceMs=500,kWakeReinitWaitMs=30000;
     // --- mock behaviour knobs and counters
     bool failProbe=false,quarantineOnReset=false,stuckTeardown=false;unsigned probes=0,arms=0,teardownTicks=0,linkDowns=0;
+    void (*duringProbe)(Ath10kPCIDevice &)=nullptr; // runs inside probeTarget, rings programmed, target running (another thread)
     template<class... T>void setProperty(T...){}
     void publishWMIRuntimeProperties(){}void publishDiagnosticProperties(){}void publishConnection(){}
     void networkLink(bool up){if(!up)++linkDowns;}
@@ -157,6 +160,7 @@ public:
         hw.give(&wmiRx);hw.give(&htcReady);
         for(auto &m:hostMemory){hw.give(&m);}
         hw.running=true;clockMs+=5; // the reload takes time (boot ~2-4 s on hardware)
+        if(duringProbe)duringProbe(*this);
         if(failProbe){hw.reset();return false;} // the real failure paths quiesce the target before returning
         _runtimeActive=true;_wmiInit.ready=true;_wmiLive.active=true;timer.enable();
         return true;
@@ -217,7 +221,7 @@ static void join(Ath10kPCIDevice &d){
     for(int i=0;i<5;++i)d.tick();
     assert(hw.dmaCycles>0);
 }
-static int baseline=0;
+static int baseline=0;static Ath10kPCIDevice *hookDevice=nullptr;static unsigned hookSleeps=0;
 static void checkAfterReinit(Ath10kPCIDevice &d,unsigned reinits,UInt32 generation){
     const auto &p=d._power;
     assert(!p.reinitRunning && p.wakeResult==Ath10k::WakeResult::Reinit && p.reinits==reinits && !p.needsRestart && !strcmp(p.status,"active"));
@@ -291,9 +295,11 @@ int main(){
             assert(liveBuffers==live && d._wmiScan.generation==generation);
             d._wmiLive.active=true;
         }
-        if(cycle==8){ // a sleep while a reload runs waits for it (bounded), never resets underneath it
-            d._power.reinitRunning=true;const unsigned before=sleeps;d.waitForWakeReinit();
-            assert(sleeps-before==Ath10kPCIDevice::kWakeReinitWaitMs/10);d._power.reinitRunning=false;
+        if(cycle==8){ // a sleep while a reload runs waits for it; one that finishes within the bound leaves no quarantine
+            hookDevice=&d;hookSleeps=0;d._power.reinitRunning=true;const unsigned before=sleeps;
+            sleepHook=[]{if(++hookSleeps==100)hookDevice->_power.reinitRunning=false;};
+            d.waitForWakeReinit();sleepHook=nullptr;
+            assert(sleeps-before==100 && !d._dmaQuarantine && !d._power.reinitRunning);
         }
     }
     assert(reinits==8 && hw.dmaCycles>=10);
@@ -303,5 +309,47 @@ int main(){
     legacy.loop.runAction(Ath10kPCIDevice::controlWMIRuntime,&legacy);
     hw.reset();legacy._wmiLive.active=true;sleepWake(legacy);
     assert(!callPending && legacy._power.needsRestart && legacy.powerRestartAllowed() && legacy._power.wakeResult==Ath10k::WakeResult::FallbackRestart);
-    puts("Wake re-init tests passed (10 sleep/wake cycles with joins: target reset before D3, no buffer freed while the target holds it, rings/buffers rebuilt, runtime state reset, keys wiped, generation/hints kept, failure -> guarded restart -> clean reload, double wake, sleep during reload, quarantine, reload disabled).");
+
+    // A sleep while the reload is inside probeTarget (the probe thread, outside
+    // the gate, rings programmed, target running) that outlasts the 30 s wait:
+    // quarantine. The target is not reset and nothing is freed under it; the
+    // second wait of the same sleep returns at once; the late reload fails into
+    // the quarantine and the next wake does not reload again.
+    hw=Hardware{};
+    Ath10kPCIDevice stuck;stuck.pci.command=6;stuck.allocateCERings();stuck.probeTarget();
+    stuck.loop.runAction(Ath10kPCIDevice::controlWMIRuntime,&stuck);
+    sleepWake(stuck);
+    assert(callPending && stuck._power.reinitRunning);
+    stuck.duringProbe=[](Ath10kPCIDevice &x){
+        x.duringProbe=nullptr;
+        const unsigned before=sleeps,freedBefore=freed;const size_t given=hw.programmed.size();
+        IOPowerStateChangeNotification note;note.powerRef=&x;
+        x.powerNotification(&x,nullptr,kIOMessageSystemWillSleep,nullptr,&note,sizeof(note));
+        x.requestPowerEvent(Ath10k::PowerEvent::DeviceOff);
+        assert(sleeps-before==Ath10kPCIDevice::kWakeReinitWaitMs/10); // one bounded wait, not one per caller
+        assert(x._dmaQuarantine && x._power.reinitRunning && x._systemSuspended && x.powerIOBlocked() && !note.returnValue);
+        assert(!strcmp(x._power.status,"suspended-dma-quarantined") && !strcmp(x._power.wakeDetail,"reinit-timeout"));
+        assert(hw.running && hw.programmed.size()==given && given && freed==freedBefore); // no reset, no free
+    };
+    stuck.probeThread();
+    {const auto &p=stuck._power;
+     assert(!p.reinitRunning && p.reinitFailures==1 && p.needsRestart && p.wakeResult==Ath10k::WakeResult::Quarantined);
+     assert(!strcmp(p.status,"wake-dma-quarantined") && !strcmp(p.wakeDetail,"dma-quarantine") && !stuck._wmiLive.active);}
+    stuck.requestPowerEvent(Ath10k::PowerEvent::DeviceOn);
+    stuck.powerNotification(&stuck,nullptr,kIOMessageSystemHasPoweredOn,nullptr,nullptr,0);
+    assert(!callPending && stuck._power.wakeResult==Ath10k::WakeResult::Quarantined && !strcmp(stuck._power.status,"wake-dma-quarantined"));
+    {const unsigned before=sleeps;stuck.waitForWakeReinit();assert(sleeps==before);}
+
+    // No work loop (released under a queued reload): queueWakeReinit refuses,
+    // and a reload that runs anyway records the failure without a gated step.
+    Ath10kPCIDevice orphan;orphan._wmiWorkLoop=nullptr;
+    assert(!orphan.queueWakeReinit() && !callPending && !orphan._power.reinitRunning && orphan._deferredProbeState==2);
+    orphan._wmiWorkLoop=&orphan.loop;assert(orphan.queueWakeReinit() && callPending); // the loop was the only reason
+    callPending=false;orphan._wmiWorkLoop=nullptr;orphan._powerIOBlock=1;
+    orphan.runWakeReinit();
+    {const auto &p=orphan._power;
+     assert(!p.reinitRunning && p.needsRestart && p.reinitFailures==1 && p.wakeResult==Ath10k::WakeResult::FallbackRestart);
+     assert(!strcmp(p.wakeDetail,"no-work-loop") && !strcmp(p.status,"wake-restart-required") && orphan.powerRestartAllowed() && !orphan._wakeReinitRequested);}
+    {const unsigned before=sleeps;orphan.waitForWakeReinit();assert(sleeps==before);}
+    puts("Wake re-init tests passed (10 sleep/wake cycles with joins: target reset before D3, no buffer freed while the target holds it, rings/buffers rebuilt, runtime state reset, keys wiped, generation/hints kept, failure -> guarded restart -> clean reload, double wake, sleep during reload, quarantine, reload disabled, sleep past the reload wait -> quarantine without reset, no work loop).");
 }

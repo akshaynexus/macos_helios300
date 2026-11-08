@@ -480,8 +480,9 @@ public:
     // request with several candidates when it is at least kBandPreferDbm.
     bool reportWidth=true,bandPreference=false;
     static constexpr int32_t kBandPreferDbm=-68;
-    // Width WCL is told for the associated BSS: what the core negotiated.
-    unsigned linkMHz() const {return !reportWidth?20u:(status.width==40 || status.width==80?status.width:(status.width==20?20u:80u));}
+    // Width WCL is told for the associated BSS: what the core negotiated; 20 MHz
+    // (valid on every band and channel) while the core reports none (0) or an odd value.
+    unsigned linkMHz() const {return reportWidth && (status.width==40 || status.width==80)?status.width:20u;}
     // The last WCL join's candidates: "N: ch44 -55 80MHz*, ch2 -26 40MHz" (* = joined;
     // RSSI and width from our cache, "?" = not in it). No addresses.
     const char *candidateText() const {return candidateLine;}

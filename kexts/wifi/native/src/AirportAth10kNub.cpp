@@ -65,7 +65,7 @@ bool AirportAth10kNub::start(IOService *provider)
     if(!super::start(provider)){workQueue->release();workQueue=nullptr;return false;}
     airportSetStateSink(this);
     UInt8 builtIn=0;
-    setProperty("built-in",OSData::withBytes(&builtIn,sizeof(builtIn)));
+    if(OSData *d=OSData::withBytes(&builtIn,sizeof(builtIn))){setProperty("built-in",d);d->release();} // setProperty retains
     PMinit();
     registerPowerDriver(this,nubPowerStates,2);
     provider->joinPMtree(this);

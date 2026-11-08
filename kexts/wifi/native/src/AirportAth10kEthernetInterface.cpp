@@ -41,11 +41,11 @@ IOReturn AirportAth10kEthernetInterface::attachToDataLinkLayer(IOOptionBits opti
     IOReturn ret=super::attachToDataLinkLayer(options,parameter);
     if(ret!=kIOReturnSuccess || !interface)return ret;
     UInt8 builtIn=0;
-    interface->setProperty("built-in",OSData::withBytes(&builtIn,sizeof(builtIn)));
+    if(OSData *d=OSData::withBytes(&builtIn,sizeof(builtIn))){interface->setProperty("built-in",d);d->release();} // setProperty retains
     snprintf(name,sizeof(name),"%s%u",ifnet_name(getIfnet()),ifnet_unit(getIfnet()));
-    interface->setProperty("IOInterfaceName",OSString::withCString(name));
-    interface->setProperty(kIOInterfaceUnit,OSNumber::withNumber(ifnet_unit(getIfnet()),8));
-    interface->setProperty(kIOInterfaceNamePrefix,OSString::withCString(ifnet_name(getIfnet())));
+    if(OSString *v=OSString::withCString(name)){interface->setProperty("IOInterfaceName",v);v->release();}
+    if(OSNumber *v=OSNumber::withNumber(ifnet_unit(getIfnet()),8)){interface->setProperty(kIOInterfaceUnit,v);v->release();}
+    if(OSString *v=OSString::withCString(ifnet_name(getIfnet()))){interface->setProperty(kIOInterfaceNamePrefix,v);v->release();}
     IOEthernetAddress address;
     if(OSDynamicCast(IOEthernetController,getController())->getHardwareAddress(&address)==kIOReturnSuccess)
         setProperty(kIOMACAddress,&address,kIOEthernetAddressSize);

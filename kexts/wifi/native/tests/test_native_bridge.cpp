@@ -25,7 +25,7 @@ struct FakeSink:B::Sink{
 // Simulated core: the subset of Ath10kUserClient.cpp controlAction the front end uses.
 struct FakeCore:B::Core{
     bool reachable=true,runtime=true,scanDone=true,scanning=false,link=false,txBusy=false,disconnecting=false,scanOptions=true;
-    uint32_t stage=0,phase=0,generation=1,stateBits=0,psBits=0,beaconMisses=0;int32_t rssi=-55;
+    uint32_t stage=0,phase=0,generation=1,stateBits=0,psBits=0,beaconMisses=0,width=80;int32_t rssi=-55;
     std::vector<B::Network> bss;std::vector<std::vector<uint8_t>> eapolIn;std::vector<std::vector<uint8_t>> eapolOut;
     std::vector<uint8_t> installedKeys;bool authorized=false,secure=false,rejectConnect=false,failAfterConnect=false,connected=false;
     unsigned scans=0,scanCancels=0,cancels=0,disconnects=0,restarts=0,psRequests=0,macChanges=0,connects=0,scanBusy=0;uint32_t lastPS=9;int connectIndex=-1;std::string error="none";uint8_t stationMAC[6]={2,1,2,3,4,5};
@@ -39,7 +39,7 @@ struct FakeCore:B::Core{
         o.flags=128|512|(runtime?1:0)|(scanDone?2:0)|(link?4:0)|(txBusy?8:0)|(secure?16:0)|(disconnecting?64:0)|(scanning?256:0);
         strncpy(o.error,error.c_str(),95);
         if(r.operation==Status)return 0;
-        if(r.operation==Info){le32(o.data,0x2ff|256|(scanOptions?2048:0));le32(o.data+4,generation);le32(o.data+8,44);le32(o.data+12,uint32_t(rssi));le32(o.data+16,80);le32(o.data+20,2);
+        if(r.operation==Info){le32(o.data,0x2ff|256|(scanOptions?2048:0));le32(o.data+4,generation);le32(o.data+8,44);le32(o.data+12,uint32_t(rssi));le32(o.data+16,width);le32(o.data+20,2);
             le32(o.data+28,stateBits);le32(o.data+84,psBits);le32(o.data+88,beaconMisses);le32(o.data+92,46);le32(o.data+108,scanDone?1:0);o.data[112]='U';o.data[113]='S';o.data[115]=1;o.length=116;return 0;}
         if(r.operation==BSS){
             if(r.index>=bss.size())return B::kNotFound;
@@ -435,6 +435,10 @@ int main(){
         for(int i=0;i<14 && !s.linkUp();++i){s.poll(t+=20);core.advance();}
         assert(s.linkUp());
         uint8_t info[2048];size_t n=0;assert(s.bssInfo(info,sizeof(info),n) && reinterpret_cast<W::BeaconMetadata *>(info)->channelSpec==0xe22a);
+        // A core that reports no width (0) or an odd one: 20 MHz, never a guessed 80; 40 is passed through.
+        for(uint32_t cw:{0u,160u,40u,80u}){core.width=cw;s.poll(t+=20);core.advance();assert(s.linkUp() && s.core_().width==cw);
+            const unsigned want=cw==40||cw==80?cw:20;assert(s.linkMHz()==want && s.bssInfo(info,sizeof(info),n));
+            assert(reinterpret_cast<W::BeaconMetadata *>(info)->channelSpec==(want==80?0xe22a:want==40?0xd82e:0xd02c));}
         assert(!strncmp(s.candidateText(),"1: ch44 -55 80MHz*",18));
         // Candidates: WCL's first choice is the 2.4 GHz BSS; band preference (opt-in) takes the 5 GHz one at -68 dBm or better.
         FakeCore c2;FakeSink k2;Session s2(c2,k2);B::Network v5=vht;v5.snr=35;B::Network h24=ht40;h24.snr=69;c2.bss={h24,v5};

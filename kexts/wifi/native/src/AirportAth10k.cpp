@@ -171,7 +171,7 @@ void AirportAth10k::deferredStart(thread_call_param_t self_,thread_call_param_t)
 bool AirportAth10k::bringUp(IOService *provider)
 {
     UInt8 builtIn=0;
-    setProperty("built-in",OSData::withBytes(&builtIn,sizeof(builtIn)));
+    if(OSData *d=OSData::withBytes(&builtIn,sizeof(builtIn))){setProperty("built-in",d);d->release();} // setProperty retains
     setProperty("DriverKitDriver",kOSBooleanFalse);
     setProperty("AirportAth10kVersion",ATH10K_VERSION);
     // IO80211Controller::start consults createWorkQueue/getWorkQueue. The

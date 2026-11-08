@@ -85,10 +85,19 @@ IOReturn Ath10kPCIDevice::controlPowerState(OSObject *owner,void *argument,void 
         if(!self->_systemSuspended){++p.sleeps;p.lastSleepMs=Ath10k::uptimeNS()/1000000u;}
         self->_systemSuspended=true;p.needsRestart=true;
         OSCompareAndSwap(2,1,&self->_powerIOBlock);
-        // Linux power-off suspend (no WoWLAN): connection and scan were taken
-        // down by quiesceForSleep; this stops HTC/WMI/CE, masks IRQs and
-        // resets the target, so no DMA runs while PCI goes to D3.
-        self->endWMIRuntime("suspended-awaiting-wake");
+        if(p.reinitRunning){
+            // The wake re-initialisation did not finish within the bounded wait
+            // (waitForWakeReinit): the probe thread may be inside probeTarget,
+            // outside this gate, with rings programmed. Resetting the target or
+            // freeing anything under it is unsafe: quarantine, as a failed
+            // reset does (mappings kept until reboot, no reload on the next wake).
+            self->_dmaQuarantine=true;p.wakeDetail="reinit-timeout";
+        }else{
+            // Linux power-off suspend (no WoWLAN): connection and scan were taken
+            // down by quiesceForSleep; this stops HTC/WMI/CE, masks IRQs and
+            // resets the target, so no DMA runs while PCI goes to D3.
+            self->endWMIRuntime("suspended-awaiting-wake");
+        }
         p.status=self->_dmaQuarantine?"suspended-dma-quarantined":"suspended-quiesced";
     }else{
         if(self->_systemSuspended){++p.wakes;p.lastWakeMs=Ath10k::uptimeNS()/1000000u;}
@@ -181,14 +190,19 @@ IOReturn Ath10kPCIDevice::controlSleepQuiesce(OSObject *owner,void *begin,void *
 }
 void Ath10kPCIDevice::waitForWakeReinit()
 {
-    // The probe thread clears reinitRunning as its last gated step.
-    for(UInt32 waited=0;_power.reinitRunning && waited<kWakeReinitWaitMs;waited+=10)IOSleep(10);
+    // The probe thread clears reinitRunning as its last gated step. Bounded:
+    // on a timeout the device is quarantined under the gate (step 5), so a
+    // second wait in the same sleep (quiesceForSleep, then requestPowerEvent)
+    // returns at once, and controlPowerState neither resets nor frees.
+    for(UInt32 waited=0;_power.reinitRunning && !_dmaQuarantine && waited<kWakeReinitWaitMs;waited+=10)IOSleep(10);
+    if(_power.reinitRunning && _wmiWorkLoop)_wmiWorkLoop->runAction(controlWakeReinit,this,reinterpret_cast<void *>(5));
 }
 // Under the gate (controlPowerState): hand the wake to the probe thread.
 bool Ath10kPCIDevice::queueWakeReinit()
 {
     auto &p=_power;
-    if(!p.reinitEnabled || !_deferredProbeCall || _deferredProbeState!=2 || isInactive() || !_pci || p.reinitRunning)return false;
+    // runWakeReinit runs every step on _wmiWorkLoop: no loop, no in-place reload.
+    if(!p.reinitEnabled || !_wmiWorkLoop || !_deferredProbeCall || _deferredProbeState!=2 || isInactive() || !_pci || p.reinitRunning)return false;
     p.reinitRunning=true;p.wakeResult=Ath10k::WakeResult::Pending;p.wakeDetail="queued";p.needsRestart=false;
     _wakeReinitRequested=true;_deferredProbeState=0;
     if(thread_call_enter(_deferredProbeCall)){ // already pending: cannot happen with state 2
@@ -237,7 +251,8 @@ void Ath10kPCIDevice::resetRuntimeServices()
 }
 // Steps under the gate: 1 prepare (verify, quiesce leftovers, reset state,
 // drop the runtime IRQ source so bootstrap can register its raw handler
-// again), 2 finish (buffers for data TX, RX reserve, unblock, arm), 3 fail.
+// again), 2 finish (buffers for data TX, RX reserve, unblock, arm), 3 fail,
+// 4 done (either outcome), 5 a sleep's bounded wait for it timed out.
 IOReturn Ath10kPCIDevice::controlWakeReinit(OSObject *owner,void *step,void *reason,void *,void *)
 {
     auto *self=OSDynamicCast(Ath10kPCIDevice,owner);if(!self)return kIOReturnBadArgument;
@@ -268,7 +283,8 @@ IOReturn Ath10kPCIDevice::controlWakeReinit(OSObject *owner,void *step,void *rea
         self->_wmiLive.status="wake-reinit-running";self->publishWMIRuntimeProperties();
         return kIOReturnSuccess;}
     case 2:{
-        if(!self->_wmiLive.active || self->_dmaQuarantine || !self->_wmiInit.ready){p.wakeDetail="runtime-not-prepared";return kIOReturnNotReady;}
+        if(self->_dmaQuarantine){p.wakeDetail="dma-quarantine";return kIOReturnNotReady;}
+        if(!self->_wmiLive.active || !self->_wmiInit.ready){p.wakeDetail="runtime-not-prepared";return kIOReturnNotReady;}
         for(auto &b:self->_dataBuffers)
             if(!b.payload.allocate(2048,128,self->_dmaMapper,Ath10kDMABuffer::Role::Payload) ||
                !b.command.allocate(256,128,self->_dmaMapper) || !b.fragments.allocate(16,16,self->_dmaMapper)){p.wakeDetail="data-buffer-allocation";return kIOReturnNoMemory;}
@@ -298,6 +314,13 @@ IOReturn Ath10kPCIDevice::controlWakeReinit(OSObject *owner,void *step,void *rea
         p.reinitRunning=false;p.wakeMs=Ath10k::uptimeNS()/1000000u-p.lastWakeMs;
         self->publishPowerState();self->publishWMIRuntimeProperties();
         return kIOReturnSuccess;
+    case 5: // waitForWakeReinit gave up; reinitRunning is authoritative here
+        if(p.reinitRunning && !self->_dmaQuarantine){
+            self->_dmaQuarantine=true;p.wakeDetail="reinit-timeout";
+            IOLog("Ath10kMac: WAKE re-init still running after %u ms at sleep: DMA quarantined (no reset, no free; reboot to recover)\n",kWakeReinitWaitMs);
+            self->publishPowerState();
+        }
+        return kIOReturnSuccess;
     }
     return kIOReturnBadArgument;
 }
@@ -305,9 +328,22 @@ IOReturn Ath10kPCIDevice::controlWakeReinit(OSObject *owner,void *step,void *rea
 void Ath10kPCIDevice::runWakeReinit()
 {
     _wakeReinitRequested=false;
+    if(!_wmiWorkLoop){
+        // queueWakeReinit refuses without a work loop; if it is gone anyway, no
+        // gated step can run and nothing was touched. The probe thread is the
+        // only writer while reinitRunning: record the failure here and leave
+        // the guarded restart (or the quarantine), as step 3 does.
+        auto &p=_power;
+        ++p.reinitFailures;p.needsRestart=true;_suspending=false;p.wakeDetail="no-work-loop";
+        if(_dmaQuarantine){p.wakeResult=Ath10k::WakeResult::Quarantined;p.status="wake-dma-quarantined";}
+        else {OSCompareAndSwap(0,1,&_powerIOBlock);OSCompareAndSwap(1,2,&_powerIOBlock);p.wakeResult=Ath10k::WakeResult::FallbackRestart;p.status="wake-restart-required";}
+        p.reinitRunning=false;publishPowerState();
+        IOLog("Ath10kMac: WAKE re-init FAILED (guarded restart) detail=no-work-loop\n");
+        return;
+    }
     IOLog("Ath10kMac: WAKE re-init begin (in place: rings, BMI, firmware, HTC, WMI)\n");
     const char *failure=nullptr;
-    if(!_wmiWorkLoop || _wmiWorkLoop->runAction(controlWakeReinit,this,reinterpret_cast<void *>(1))!=kIOReturnSuccess)failure=_power.wakeDetail;
+    if(_wmiWorkLoop->runAction(controlWakeReinit,this,reinterpret_cast<void *>(1))!=kIOReturnSuccess)failure=_power.wakeDetail;
     // Outside the gate, exactly like the first start: nothing else touches the
     // hardware (timer disabled, IRQ source gone, control ops refused).
     if(!failure && !allocateCERings())failure="ce-ring-allocation";
