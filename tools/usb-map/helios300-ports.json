@@ -1,0 +1,24 @@
+{
+  "about": "USB port table for the Helios 300 G3-571 (xHCI 8086:a12f). Facts read from the laptop's DSDT and from lsusb on Linux; no ACPI data is copied here. 'evidence' says how sure each entry is. See docs/USB-MAP.md.",
+  "controller": {
+    "pci_id": "0xa12f8086",
+    "name": "Intel 100 Series xHCI"
+  },
+  "numbering": "Physical port numbers. HS01-HS14 = 1-14, USR1/USR2 = 15-16, SS01-SS10 = 17-26: the DSDT's USRA() returns 15 and SSPA() returns 17 on a Sunrise Point-H PCH, and Linux reports a 16-port USB 2 root hub on this controller.",
+  "ports": [
+    {"name": "HS02", "port": 2,  "connector": 3,   "evidence": "acpi",      "what": "USB 3 Type-A (_UPC type 3); one connector with SS02 (same _PLD)"},
+    {"name": "HS03", "port": 3,  "connector": 10,  "evidence": "acpi",      "what": "USB-C (_UPC type 0x0A); one connector with SS03 and SS04 (same _PLD)"},
+    {"name": "HS05", "port": 5,  "connector": 0,   "evidence": "acpi",      "what": "USB 2 Type-A (_UPC type 0)"},
+    {"name": "HS06", "port": 6,  "connector": 0,   "evidence": "acpi",      "what": "USB 2 Type-A (_UPC type 0)"},
+    {"name": "HS07", "port": 7,  "connector": 255, "evidence": "observed",  "what": "internal Bluetooth 04ca:3016 (lsusb -t: port 7). ACPI says not connectable; that is wrong for this port"},
+    {"name": "HS09", "port": 9,  "connector": 255, "evidence": "observed",  "what": "internal webcam 0408:a060 (lsusb -t: port 9; _UPC type 0xFF)"},
+    {"name": "HS01", "port": 1,  "connector": 0,   "evidence": "candidate", "what": "ACPI not connectable. Kept in case ACPI is wrong here too; remove after the plug test"},
+    {"name": "HS08", "port": 8,  "connector": 0,   "evidence": "candidate", "what": "ACPI not connectable. Kept in case ACPI is wrong here too; remove after the plug test"},
+    {"name": "SS01", "port": 17, "connector": 3,   "evidence": "candidate", "what": "ACPI not connectable; possible USB 3 lane of a connector ACPI calls USB 2"},
+    {"name": "SS02", "port": 18, "connector": 3,   "evidence": "acpi",      "what": "USB 3 Type-A (_UPC type 3); one connector with HS02"},
+    {"name": "SS03", "port": 19, "connector": 10,  "evidence": "acpi",      "what": "USB-C (_UPC type 0x0A); one connector with HS03"},
+    {"name": "SS04", "port": 20, "connector": 10,  "evidence": "acpi",      "what": "USB-C (_UPC type 0x0A); one connector with HS03"},
+    {"name": "SS05", "port": 21, "connector": 3,   "evidence": "candidate", "what": "ACPI not connectable; possible USB 3 lane of a connector ACPI calls USB 2"},
+    {"name": "SS06", "port": 22, "connector": 3,   "evidence": "candidate", "what": "ACPI not connectable; possible USB 3 lane of a connector ACPI calls USB 2"}
+  ]
+}
