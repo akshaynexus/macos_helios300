@@ -123,7 +123,12 @@ int main(){
         const uint8_t rsn[]={48,24,1,0,0,15,172,4,1,0,0,15,172,4,2,0,0,15,172,2,0,15,172,8,0x80,0};
         transition.rsnLength=sizeof(rsn);memcpy(transition.rsn,rsn,sizeof(rsn));
         n=B::buildScanResult(transition,out,sizeof(out));assert(n);
-        const uint8_t *r=out+sizeof(*m)+71;assert(r[0]==48 && r[1]==20 && r[14]==1 && r[19]==2 && r[20]==0x80);
+        const uint8_t *r=out+sizeof(*m)+71;
+#if AIRPORT_ATH10K_WPASEC
+        assert(r[0]==48 && r[1]==24 && r[14]==2 && r[19]==2 && r[23]==8); // gate on: SAE is usable, WCL sees both AKMs
+#else
+        assert(r[0]==48 && r[1]==20 && r[14]==1 && r[19]==2 && r[20]==0x80);
+#endif
         uint8_t beacon[1024];n=B::buildBeaconFrame(wpa,123456,7,beacon,sizeof(beacon));
         uint32_t length;memcpy(&length,beacon,4);assert(n==4+length && beacon[4]==0x80 && !memcmp(beacon+4+10,v_ap,6) && !memcmp(beacon+4+16,v_ap,6));
         assert(beacon[4+24]==0x40 && beacon[4+25]==0xe2 && beacon[4+32]==100 && beacon[4+36]==0);
@@ -136,9 +141,14 @@ int main(){
         AthControl::Request r;B::buildConnectRequest(plan,r);assert(r.operation==AthControl::Connect && r.index==0 && r.length==12 && r.data[0]==4 && r.data[1]==1 && !memcmp(r.data+2,v_ap,6) && !memcmp(r.data+8,"home",4));
         assert(!B::planJoin(join(open,false),&open,plan) && !plan.secure);
         assert(!strcmp(B::planJoin(join(wpa,false),&wpa,plan),"protected-network-not-supported"));
+#if !AIRPORT_ATH10K_WPASEC
         B::Network sae=wpa;sae.wpa2=false;assert(!strcmp(B::planJoin(join(sae,true),&sae,plan),"wpa2-psk-ccmp-pairwise-required"));
         j=join(wpa,true);j.upperAuth=1u<<2;j.keyLength=0;assert(!strcmp(B::planJoin(j,&wpa,plan),"enterprise-not-supported"));
         j=join(wpa,true);j.upperAuth=1u<<12;assert(!strcmp(B::planJoin(j,&wpa,plan),"auth-not-supported"));
+#else
+        j=join(wpa,true);j.upperAuth=1u<<2;j.keyLength=0;assert(!strcmp(B::planJoin(j,&wpa,plan),"enterprise-akm-not-offered"));
+        j=join(wpa,true);j.upperAuth=1u<<12;assert(!strcmp(B::planJoin(j,&wpa,plan),"sae-not-offered"));
+#endif
         j=join(wpa,true);j.ssid[0]='x';assert(!strcmp(B::planJoin(j,&wpa,plan),"ssid-mismatch"));
         assert(!B::planJoin(join(wpa,true),nullptr,plan)); // unknown BSS: decided after a scan
         // Unsupported security names its reason; refusalStatus maps it to the 802.11 status WCL gets.
@@ -156,7 +166,12 @@ int main(){
          assert(!strcmp(B::planJoin(join(sae2,true),&sae2,plan),"tkip-pairwise-not-supported") && B::refusalStatus("tkip-pairwise-not-supported")==42);
          const uint8_t pmf[]={48,20,1,0,0,15,172,4,1,0,0,15,172,4,1,0,0,15,172,2,0xc0,0};
          sae2.rsnLength=sizeof(pmf);memcpy(sae2.rsn,pmf,sizeof(pmf));
+#if AIRPORT_ATH10K_WPASEC
+         assert(!B::planJoin(join(sae2,true),&sae2,plan) && plan.mfpc && plan.mfpr && plan.extended && plan.akm==2); // gate on: PMF-required WPA2 joins
+         assert(!strcmp(B::planJoin(join(sae2,true),&sae2,plan,0),"pmf-required-not-supported") && B::refusalStatus("pmf-required-not-supported")==31);}
+#else
          assert(!strcmp(B::planJoin(join(sae2,true),&sae2,plan),"pmf-required-not-supported") && B::refusalStatus("pmf-required-not-supported")==31);}
+#endif
         assert(B::refusalStatus("wep-not-supported")==13 && B::refusalStatus("enterprise-not-supported")==43);
     }
     { // Full WPA2 join: ready, scan (cache first), join, in-kernel handshake, keys, link, LQM; then AP deauth.
@@ -266,7 +281,11 @@ int main(){
         // Abort (accepted while the timed-out connection is still being torn down).
         assert(s.startJoin(join(open,false),t)==B::kSuccess);assert(s.abortJoin(t)==B::kSuccess && sink.count(W::JoinAbortComplete)==1 && !s.joining());
         // An auth type the card cannot do: accepted, then refused with an 802.11 status (no driver error).
+#if AIRPORT_ATH10K_WPASEC
+        W::JoinRequest j=join(wpa,true);j.upperAuth=1u<<12;assert(s.startJoin(j,t)==B::kSuccess && !strcmp(s.lastError,"sae-not-offered"));
+#else
         W::JoinRequest j=join(wpa,true);j.upperAuth=1u<<12;assert(s.startJoin(j,t)==B::kSuccess && !strcmp(s.lastError,"auth-not-supported"));
+#endif
         s.poll(t+=20);c=reinterpret_cast<const W::ConnectionEvent *>(sink.last(W::ConnectComplete)->data.data());
         assert(!s.joining() && c->status==1 && c->reason==43 && c->peers[0].driverStatus==B::kUnsupported);
         assert(reinterpret_cast<const W::AssociationEvent *>(sink.last(W::AssocComplete)->data.data())->status==43);

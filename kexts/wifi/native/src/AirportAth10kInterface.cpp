@@ -6,7 +6,7 @@
 #define super IO80211InfraProtocol
 OSDefineMetaClassAndStructors(AirportAth10kInterface, IO80211InfraProtocol)
 
-enum : uintptr_t { OpScan, OpScanAbort, OpJoin, OpJoinAbort, OpLeave, OpPoll, OpStop, OpPower, OpQuery, OpBeacon, OpBssInfo, OpExtendedBss, OpPowerSave, OpCountry, OpStationMAC, OpSystemPower };
+enum : uintptr_t { OpScan, OpScanAbort, OpJoin, OpJoinAbort, OpLeave, OpPoll, OpStop, OpPower, OpQuery, OpBeacon, OpBssInfo, OpExtendedBss, OpPowerSave, OpCountry, OpStationMAC, OpSystemPower, OpCipherKey, OpClearPMKSA };
 
 int AirportAth10kInterface::CoreAdapter::call(const AthControl::Request &r,AthControl::Response &o)
 {
@@ -39,6 +39,10 @@ bool AirportAth10kInterface::init(AirportAth10k *provider)
     uint32_t option=0;
     if(PE_parse_boot_argn("airportath10k_bw",&option,sizeof(option)))session->reportWidth=option!=0;
     if(PE_parse_boot_argn("airportath10k_bandpref",&option,sizeof(option)))session->bandPreference=option!=0;
+#if AIRPORT_ATH10K_WPASEC
+    // airportath10k_pmf: 0 off, 1 capable (default), 2 required on PMF-capable APs.
+    if(PE_parse_boot_argn("airportath10k_pmf",&option,sizeof(option)))session->pmfMode=option>2?1:option;
+#endif
     AIRPORT_STEP("interface init: family init done, MAC copied");
     timer=IOTimerEventSource::timerEventSource(this,pollTimer);
     IO80211WorkQueue *queue=controller->getWorkQueue();
@@ -168,6 +172,9 @@ void AirportAth10kInterface::mirrorState()
         mirroredRoams=session->roams;mirroredRoamMs=session->lastRoamMs;
         controller->setProperty("AirportAth10kRoams",mirroredRoams,32);controller->setProperty("AirportAth10kLastRoamMs",mirroredRoamMs,32);
     }
+#if AIRPORT_ATH10K_WPASEC
+    {const uint32_t cached=session->pmksaCount();if(cached!=mirroredPMKSA){mirroredPMKSA=cached;controller->setProperty("AirportAth10kPMKSACount",cached,32);}}
+#endif
     if(session->networkCount()!=mirroredNetworks){mirroredNetworks=session->networkCount();controller->setProperty("AirportAth10kCachedNetworks",mirroredNetworks,32);}
     // Output path (AirportAth10kTx.hpp), at most once a second while traffic flows:
     // AirportAth10kTxThread (output thread started), AirportAth10kTxStarts/Stops,
@@ -231,6 +238,13 @@ IOReturn AirportAth10kInterface::command(OSObject *,void *a0,void *a1,void *a2,v
         // The address WCL set (private or the permanent one restored). The join
         // carries it whenever the firmware vdev currently has a different one.
         self->session->setStationMAC(static_cast<const uint8_t *>(a2));return kIOReturnSuccess;
+#if AIRPORT_ATH10K_WPASEC
+    case OpCipherKey:{
+        const auto *key=static_cast<const apple80211_key *>(a2);
+        // Key bytes span 0x10..0x4f in the 26.7.2 layout (32 + pad, WCLJoinRequest::checkValidationForApple80211Key).
+        return self->session->setCipherKey(key->key_cipher_type,reinterpret_cast<const uint8_t *>(key)+0x10,key->key_len,key->key_ea.octet,now);}
+    case OpClearPMKSA:self->session->clearPMKSA();return kIOReturnSuccess;
+#endif
     case OpCountry:{
         auto *cd=static_cast<apple80211_country_code_data *>(a2);
         memset(cd,0,sizeof(*cd));cd->version=APPLE80211_VERSION;
@@ -270,6 +284,17 @@ IOReturn AirportAth10kInterface::setWCL_SCAN_ABORT(void *){return gated(OpScanAb
 IOReturn AirportAth10kInterface::setWCL_ASSOCIATE(apple80211AssocCandidates *request){return request?gated(OpJoin,request):kIOReturnBadArgument;}
 IOReturn AirportAth10kInterface::setWCL_JOIN_ABORT(apple80211_wcl_abort_join *){return gated(OpJoinAbort);}
 IOReturn AirportAth10kInterface::setWCL_LEAVE_NETWORK(apple80211_leave_network *){return gated(OpLeave);}
+#if AIRPORT_ATH10K_WPASEC
+IOReturn AirportAth10kInterface::setCLEAR_PMKSA_CACHE(void *){return gated(OpClearPMKSA);}
+IOReturn AirportAth10kInterface::setCIPHER_KEY(apple80211_key *key)
+{
+    // WCL delivers PMK/MSK here for enterprise networks only (after EAP-Success);
+    // Personal keys arrive inside the association request and the kernel
+    // supplicant installs PTK/GTK itself (never through this entry).
+    if(!key)return kIOReturnBadArgument;
+    return gated(OpCipherKey,key);
+}
+#else
 IOReturn AirportAth10kInterface::setCLEAR_PMKSA_CACHE(void *){return kIOReturnSuccess;} // no PMKSA cache: PSK only
 IOReturn AirportAth10kInterface::setCIPHER_KEY(apple80211_key *key)
 {
@@ -279,6 +304,7 @@ IOReturn AirportAth10kInterface::setCIPHER_KEY(apple80211_key *key)
     if(!key)return kIOReturnBadArgument;
     return kIOReturnUnsupported;
 }
+#endif
 IOReturn AirportAth10kInterface::setWCL_SET_SCAN_HOME_AWAY_TIME(scanHomeAndAwayTime *data)
 {
     if(!data)return kIOReturnBadArgument;
@@ -514,8 +540,15 @@ IOReturn AirportAth10kInterface::getWCL_EXTENDED_BSS_INFO(apple80211_extended_bs
     const uint32_t heVersion=APPLE80211_VERSION;const uint16_t heMap=0xffff;
     memcpy(bytes+0xd4,&heVersion,sizeof(heVersion));memcpy(bytes+0xd8,&heMap,sizeof(heMap));
     if(n->rsnLength && n->rsnLength<=0x214-0x113){
+#if AIRPORT_ATH10K_WPASEC
+        // The element this station associated with (SAE, 802.1X, PMF), when the join built one.
+        size_t rsnBytes=0;const uint8_t *rsn=nullptr;
+        if(!session->stationRSN(rsn,rsnBytes))rsn=AthSecurity::stationRSNForGroup(AthSecurity::wpa2GroupCipher(n->rsn,n->rsnLength),rsnBytes);
+        if(rsn)memcpy(bytes+0x113,rsn,rsnBytes);
+#else
         size_t rsnBytes=0;const uint8_t *rsn=AthSecurity::stationRSNForGroup(AthSecurity::wpa2GroupCipher(n->rsn,n->rsnLength),rsnBytes);
         if(rsn)memcpy(bytes+0x113,rsn,rsnBytes);
+#endif
     }
     return kIOReturnSuccess;
 }

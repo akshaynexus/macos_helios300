@@ -217,8 +217,17 @@ struct ConnectionState {
     // retries, 1000 TU maximum), and the small protected-frame TX slot.
     UInt8 igtk[16]{};UInt16 igtkIndex=0;UInt64 igtkIPN=0;bool igtkValid=false;
     struct SAQuery { bool active=false;UInt16 tids[5]{};UInt8 sent=0;UInt64 startedMs=0,lastMs=0; } saQuery{};
-    struct PMFTx { UInt8 frame[64]{};UInt8 length=0;bool pending=false,inFlight=false; } pmfTx{};
+    struct PMFTx { UInt8 frame[64]{};UInt8 length=0;bool pending=false,inFlight=false;
+#if AIRPORT_ATH10K_WPASEC
+        UInt64 sinceMs=0;
+#endif
+    } pmfTx{};
     bool lastTxPMF=false;UInt32 pmfDropped=0,bipFailures=0,saQueryCompleted=0,saQueryTimeouts=0;
+#if AIRPORT_ATH10K_WPASEC
+    // Packet number of the host-built CCMP header on protected management TX
+    // (Linux IEEE80211_KEY_FLAG_GENERATE_IV_MGMT); the firmware encrypts.
+    UInt64 pmfTxPN=0;
+#endif
     // Station MAC change (Private Wi-Fi Address): VDEV_DELETE, VDEV_CREATE
     // with the new address, ECHO barrier, before VDEV_START. Linux ath10k has
     // no runtime MAC change either: mac80211 removes and re-adds the
@@ -867,17 +876,34 @@ inline UInt32 buildExternalAuth(UInt8 *f,UInt32 capacity,ConnectionState &s){
     for(UInt32 i=0;i<s.authTxLength;++i)f[24+i]=s.authTx[i];
     return 24+s.authTxLength;
 }
-// SA Query request/response (IEEE 802.11-2020 9.6.9): a protected action
-// frame; the firmware inserts the CCMP header and MIC (room reserved, as
-// ath10k_htt_tx does for protected action/deauth/disassoc frames).
+// SA Query request/response (IEEE 802.11-2020 9.6.9): a protected action frame.
+// The CCMP header comes from the host: ath10k_set_key sets
+// IEEE80211_KEY_FLAG_GENERATE_IV_MGMT, so mac80211 writes the IV of management
+// frames; the firmware encrypts and fills the MIC (ath10k_htt_tx reserves the
+// 8 bytes for protected action/deauth/disassoc frames).
+static constexpr UInt64 kSAQueryRetryMs=206,kSAQueryMaxMs=1024; // 201 TU retries, 1000 TU maximum (wpa_supplicant sme.c)
+#if AIRPORT_ATH10K_WPASEC
+inline UInt32 buildSAQuery(UInt8 *f,UInt32 capacity,ConnectionState &s,bool request,UInt16 tid){
+    if(!f || capacity<44 || !s.pmf)return 0;
+    htcZero(f,44);f[0]=0xd0;f[1]=0x40; // Protected Frame
+    for(UInt32 i=0;i<6;++i){f[4+i]=s.bssid[i];f[10+i]=s.local[i];f[16+i]=s.bssid[i];}
+    htcWriteLE16(f+22,static_cast<UInt16>((s.sequence&4095)<<4));
+    const UInt64 pn=++s.pmfTxPN;
+    f[24]=static_cast<UInt8>(pn);f[25]=static_cast<UInt8>(pn>>8);f[26]=0;f[27]=0x20; // ExtIV, key id 0
+    for(UInt32 i=0;i<4;++i)f[28+i]=static_cast<UInt8>(pn>>(16+8*i));
+    f[32]=8;f[33]=request?0:1;htcWriteLE16(f+34,tid);
+    return 44; // 24 + CCMP header 8 + 4 + 8 bytes of MIC room
+}
+#else
 inline UInt32 buildSAQuery(UInt8 *f,UInt32 capacity,ConnectionState &s,bool request,UInt16 tid){
     if(!f || capacity<36 || !s.pmf)return 0;
     htcZero(f,36);f[0]=0xd0;f[1]=0x40; // Protected Frame
     for(UInt32 i=0;i<6;++i){f[4+i]=s.bssid[i];f[10+i]=s.local[i];f[16+i]=s.bssid[i];}
     htcWriteLE16(f+22,static_cast<UInt16>((s.sequence&4095)<<4));
     f[24]=8;f[25]=request?0:1;htcWriteLE16(f+26,tid);
-    return 36; // 24 + 4 + 8 bytes of MIC room
+    return 36; // not used with the gate off (no PMF is negotiated)
 }
+#endif
 // Station MAC change before VDEV_START: 1 VDEV_DELETE (0x5002, vdev 0), 2
 // VDEV_CREATE (0x5001, STA, the new address), 3 ECHO barrier 0xa7100058.
 static constexpr UInt32 kMacChangeEchoCookie=0xa7100058u;
@@ -1572,7 +1598,9 @@ inline UInt32 buildHTTPacket(UInt8 *f,UInt32 capacity,const UInt8 *packet,UInt32
     UInt32 bytes=0;
     if(!frags)return 0;
     UInt32 prefetch=length<50?length:50;bytes=24+((prefetch+3u)&~3u);
-    f[8]=1;f[9]=management?0x65:((s.secure && (s.portAuthorized || s.rekeyKind))?0x42:0x46); // HTT >=3: TX_FRM for both management and Ethernet.
+    // HTT >=3: TX_FRM for both management and Ethernet. Management frames carry
+    // NO_ENCRYPT (bit 2) unless they have the Protected bit (ath10k_tx_h_use_hwcrypto).
+    f[8]=1;f[9]=management?((AIRPORT_ATH10K_WPASEC && length>=2 && (packet[1]&0x40))?0x61:0x65):((s.secure && (s.portAuthorized || s.rekeyKind))?0x42:0x46);
     const UInt8 tid=management?17:txPriorityTID(s,packet,length);if(tid==255)return 0;
     htcWriteLE16(f+10,static_cast<UInt16>(0x800u|(UInt16(tid)<<6))); // POSTPONED, TID bits 6..10
     htcWriteLE16(f+12,static_cast<UInt16>(length));htcWriteLE16(f+14,s.txId);

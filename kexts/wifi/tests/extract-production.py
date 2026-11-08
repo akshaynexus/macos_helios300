@@ -59,4 +59,5 @@ Path(sys.argv[1]).with_name('runtime_irq_methods.inc').write_text(runtime[runtim
 Path(sys.argv[1]).with_name('rx_reserve_methods.inc').write_text(runtime[runtime.index('bool Ath10kPCIDevice::prepareRXReserve('):])
 control = Path('src/kext/Ath10kUserClient.cpp').read_text()
 Path(sys.argv[1]).with_name('control_method.inc').write_text(control[control.index('IOReturn Ath10kPCIDevice::controlAction('):])
+Path(sys.argv[1]).with_name('control_info_method.inc').write_text(control[control.index('void Ath10kPCIDevice::fillControlInfo('):control.index('IOReturn Ath10kPCIDevice::controlRequest(')])
 Path(sys.argv[1]).with_name('recovery_methods.inc').write_text(control[control.index('bool Ath10kPCIDevice::requestDeviceRestart('):control.index('void Ath10kPCIDevice::closeControl(')])

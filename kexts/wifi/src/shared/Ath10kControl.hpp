@@ -43,7 +43,9 @@ struct Response {
 //        Authentication frames through SendAuth/ReceiveAuth, e.g. SAE),
 //        2 PMF capable, 4 PMF required, 8 enterprise (EAPOL frames other than
 //        EAPOL-Key pass to the network interface before the port opens),
-//        16 station MAC present (the vdev is recreated with it); a block with
+//        16 station MAC present (the vdev is recreated with it); SAE with one
+//        PMKID in the RSN element is a PMKSA-caching join (flag 1 clear: Open
+//        System authentication, the PMKID in the association); a block with
 //        flags 16 alone (r.length = 8 + SSID + 10, AKM/RSN/RSNXE zero) is the
 //        Private Wi-Fi Address request and is accepted in every build;
 //   x[1] AKM suite type (00-0F-AC:n), x[2..7] station MAC, x[8] RSN length,
@@ -87,7 +89,8 @@ struct Response {
 // (AirportAth10k owns the interface). The original prefix and structure sizes are unchanged.
 // Info [116] security u32: 1 external auth active, 2 PMF negotiated, 4 enterprise,
 // 8 station MAC differs from the hardware MAC, 16 SA Query in progress; [120..125]
-// the station MAC in use. Capabilities (Info [0]) bit 1024: this extension exists.
+// the station MAC in use; [126..127] 802.11 status of the last Authentication or
+// Association response. Capabilities (Info [0]) bit 1024: this extension exists.
 // Status local = the station MAC of the connection (the vdev MAC when idle).
 // BSS extension after the 105 native bytes: RSNXE length u8 + up to 18 bytes
 // (security gate on only), then the WPA1 vendor element: length u8 + element.

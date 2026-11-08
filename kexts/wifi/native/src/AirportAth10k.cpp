@@ -464,6 +464,9 @@ IOReturn AirportAth10k::getCARD_CAPABILITIES(IO80211SkywalkInterface *,apple8021
     cd->capabilities[1]=(1<<(APPLE80211_CAP_SHSLOT-8))|(1<<(APPLE80211_CAP_SHPREAMBLE-8))|(1<<(APPLE80211_CAP_WPA2-8))|(1<<(APPLE80211_CAP_TKIPMIC-8));
     cd->capabilities[2]=(1<<(APPLE80211_CAP_WME-16))|(1<<(APPLE80211_CAP_SHORT_GI_40MHZ-16))|(1<<(APPLE80211_CAP_SHORT_GI_20MHZ-16));
     cd->capabilities[5]=0x40;
+#if AIRPORT_ATH10K_WPASEC
+    cd->capabilities[6]|=0x01; // MFP capable (the bit AirportItlwm names and leaves commented out)
+#endif
     return kIOReturnSuccess;
 }
 IOReturn AirportAth10k::getPOWER(IO80211SkywalkInterface *,apple80211_power_data *pd)

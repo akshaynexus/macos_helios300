@@ -129,6 +129,21 @@ int main(){
         aggregate(frame,s,true);batch._rxBatch.reset();batch.deliverNetworkRX(frame,1,7,0,2048);batch.finishNetworkRX();
         batch.flushNetworkRX();assert(batch.interface.frames.size()==65);
     }
+#if AIRPORT_ATH10K_WPASEC
+    { // 802.1X before the port opens: EAP goes to the stack (eapolclient), EAPOL-Key to the supplicant, data is refused.
+        Ath10kPCIDevice e;auto &s=e._connection;s.stage=LinkStage::Connected;s.secure=true;s.enterprise=true;s.portAuthorized=false;
+        s.peerId=7;s.peerCount=1;s.peerIDs[0]=1u<<7;s.local[0]=s.bssid[0]=2;s.local[5]=1;s.bssid[5]=2;s.firmwareReorder=true;
+        UInt8 frame[2048];auto feed=[&](){e._rxBatch.reset();e.deliverNetworkRX(frame,1,7,0,2048);e.finishNetworkRX();};
+        descriptor(frame,s,1,1,false);frame[312]=0x88;frame[313]=0x8e;frame[315]=0;feed();
+        assert(e.interface.frames.size()==1 && !s.eapolCount && e.interface.frames[0][12]==0x88);
+        // A long EAP-TLS fragment passes too (only EAPOL-Key frames are bound by the 512-byte queue).
+        descriptor(frame,s,2,2,false);frame[312]=0x88;frame[313]=0x8e;frame[315]=0;htcWriteLE32(frame+24,1200);feed();
+        assert(e.interface.frames.size()==2 && e.interface.frames[1].size()==1200);
+        descriptor(frame,s,3,3,false);frame[312]=0x88;frame[313]=0x8e;frame[315]=3;feed();
+        assert(e.interface.frames.size()==2 && s.eapolCount==1); // EAPOL-Key: the kernel supplicant
+        descriptor(frame,s,4,4,false);feed();assert(e.interface.frames.size()==2 && s.rxReasons[ConnectionState::Plaintext]>=1); // IP before the port opens: dropped
+    }
+#endif
     Ath10kPCIDevice d;auto &s=d._connection;s.stage=LinkStage::Connected;s.secure=true;s.securityPhase=5;s.groupCipher=AthSecurity::cipherCCMP;s.portAuthorized=true;
     s.peerId=7;s.peerCount=1;s.peerIDs[0]=1u<<7;s.local[0]=s.bssid[0]=2;s.local[5]=1;s.bssid[5]=2;
     s.firmwareReorder=true;UInt8 desc[2048];

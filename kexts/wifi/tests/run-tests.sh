@@ -284,5 +284,18 @@ echo '32-slot connection/traffic and Block ACK tests passed.'
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/connection16"
 echo '16/32/64-slot connection/traffic regressions passed (64 is default).'
 
+# AIRPORT_ATH10K_WPASEC=1 (docs/WIFI-SECURITY.md): the WPA3/PMF/802.1X paths through the production
+# core and front end, and the control, bridge and data-path tests with the gate on.
+for gated in tests/test_control.cpp native/tests/test_native_bridge.cpp tests/test_network_rx.cpp tests/test_native_tx.cpp; do
+    gated_bin="$test_tmp_dir/gated-$(basename "$gated" .cpp)"
+    "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -Wno-unused-function -fsanitize=address,undefined \
+        -DAIRPORT_ATH10K_WPASEC=1 -I"$test_tmp_dir" -Isrc/kext -Ibuild/gen/test -Inative/src "$gated" -o "$gated_bin"
+    ASAN_OPTIONS=detect_leaks=0 "$gated_bin"
+done
+"${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -Wno-unused-function -Wno-deprecated-declarations -fsanitize=address,undefined \
+    -DAIRPORT_ATH10K_WPASEC=1 -I"$test_tmp_dir" -Isrc/kext -Ibuild/gen/test -Inative/src tests/test_wpasec.cpp $security_libs -o "$test_tmp_dir/wpasec"
+ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/wpasec"
+echo 'Gate-on tests passed (SAE, PMF, 802.1X, PMKSA caching through the production core and front end).'
+
 "${CXX:-c++}" -std=c++17 -O1 -Wall -Wextra -Werror -Wno-unused-function -fsanitize=address,undefined -I"$test_tmp_dir" -Isrc/kext -Ibuild/gen/test tests/test_review_regressions.cpp -o "$test_tmp_dir/review-regressions"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/review-regressions"

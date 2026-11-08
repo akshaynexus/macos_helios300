@@ -365,6 +365,38 @@ static void pullUnit(){
     puts("  outputStart: success when drained, NoResources when the gated queue is full or absent");
 }
 
+#if AIRPORT_ATH10K_WPASEC
+// 802.1X before the port opens: EAPOL from eapolclient leaves in the clear
+// (submitNetworkPacket), ordinary packets are dropped so they cannot hold the
+// queue behind a stalled head (production outputPacket).
+static void enterpriseEAPOLBeforePort(){
+    NativeTxRig r;auto &s=r.d._connection;
+    s.secure=true;s.enterprise=true;s.portAuthorized=false;s.securityPhase=0;
+    std::vector<std::vector<uint8_t>> air;std::vector<uint8_t> flags;
+    r.d._regs.tx4Consume=[&](){
+        const UInt8 *cmd=static_cast<const UInt8 *>(r.d._packetCommand.virtualAddress());
+        const UInt16 n=Ath10k::htcReadLE16(cmd+12);const UInt8 *f=static_cast<const UInt8 *>(r.d._packetBuffer.virtualAddress());
+        air.emplace_back(f,f+n);flags.push_back(cmd[9]);r.d.deliver(1,completion(s.txId));
+    };
+    r.link(true);
+    const std::vector<uint8_t> eap={2,0,0,5,1,1,0,5,1};
+    const auto dropped=s.txLinkDropped;
+    r.send(ethernet(r.router,r.mac,0x0800,ipv4(17,0xc0a80119,0xc0a80101,udp(50000,9,std::vector<uint8_t>(64,1)))));
+    assert(air.empty() && s.txLinkDropped==dropped+1 && !r.d._dataTXStalled && r.gated.q.empty()); // dropped, not stalled
+    r.send(ethernet(r.router,r.mac,0x888e,eap));
+    assert(air.size()==1 && be16(air[0].data()+12)==0x888e && flags[0]==0x46 && s.lastTxEAPOL && s.txOwned && !s.txManagement);
+    // The next EAPOL frame waits for the completion instead of being dropped.
+    r.send(ethernet(r.router,r.mac,0x888e,eap));
+    assert(air.size()==1 && r.gated.q.size()==1);
+    for(int i=0;i<5 && s.txOwned;++i){r.now+=20;r.d.tick(r.now);}
+    assert(!s.txOwned);r.gated.service();
+    assert(air.size()==2 && r.gated.q.empty());
+    for(int i=0;i<5 && s.txOwned;++i){r.now+=20;r.d.tick(r.now);}
+    r.iface.purge();r.link(false);assert(liveMbufs==0);
+    r.d.releaseWMIRuntime();
+    puts("  802.1X before the port opens: EAPOL out in the clear, IP dropped, not stalled");
+}
+#endif
 int main(){
     puts("Native TX path (front end + core, host models of IONetworkingFamily 3.4 and IOBasicOutputQueue):");
     pullUnit();
@@ -374,6 +406,9 @@ int main(){
     dhcpArpDns();
     sourceAddressMustMatch();
     openNetwork();
+#if AIRPORT_ATH10K_WPASEC
+    enterpriseEAPOLBeforePort();
+#endif
     puts("Native TX path tests passed.");
     return 0;
 }

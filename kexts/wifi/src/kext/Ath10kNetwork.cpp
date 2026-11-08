@@ -465,6 +465,28 @@ UInt32 Ath10kPCIDevice::outputPacket(mbuf_t packet,void *)
     if(powerIOBlocked() || !_networkLinkUp || !_networkEnabled || !_wmiLive.active || _connection.stage!=Ath10k::LinkStage::Connected){
         ++_connection.txLinkDropped;freePacket(packet);return kIOReturnOutputDropped;
     }
+#if AIRPORT_ATH10K_WPASEC
+    // 802.1X before the port opens: only EAPOL leaves (eapolclient's EAP frames,
+    // in the clear, like the 4-way handshake's). Ordinary traffic is dropped, not
+    // stalled, so a queued IP packet cannot hold back an EAP response.
+    if(_connection.enterprise && !_connection.portAuthorized && !_connection.rekeyKind){
+        UInt32 length=static_cast<UInt32>(mbuf_pkthdr_len(packet));
+        UInt8 frame[Ath10k::kEthernetFrameMax];
+        if(length<18 || length>sizeof(frame) || mbuf_copydata(packet,0,length,frame) || !Ath10k::ethernetFrameAllowed(frame,length) ||
+           frame[12]!=0x88 || frame[13]!=0x8e || !Ath10k::sameMAC(frame+6,_connection.local)){
+            ++_connection.txLinkDropped;freePacket(packet);return kIOReturnOutputDropped;
+        }
+        if(_connection.txOwned || _connection.dataPending || _connection.txPauseMask || _connection.maintenance.step || _connection.csa.blocked || _connection.radio.blocked || _connection.radio.powerBlocked){
+            _dataTXStalled=true;++_connection.dataStalls;++_connection.stallManagement;return kIOReturnOutputStall;
+        }
+        uint64_t now=0,ns=0;clock_get_uptime(&now);absolutetime_to_nanoseconds(now,&ns);
+        _connection.eapolTxFailed=false;
+        const char *error=submitNetworkPacket(frame,length,false,ns/1000000u);
+        freePacket(packet);
+        if(error){++_connection.txErrors;_connection.error=error;_connection.stage=Ath10k::LinkStage::Failed;return kIOReturnOutputDropped;}
+        return kIOReturnOutputSuccess;
+    }
+#endif
     if(!_connection.portAuthorized || _connection.maintenance.blocked || _connection.eapolPause || _connection.spectrum.pending || _connection.spectrum.inFlight || _connection.probe.active || _connection.csa.blocked || _connection.radio.blocked || _connection.radio.powerBlocked || _connection.txOwned || _connection.txPauseMask || _connection.dataPending>=Ath10k::kDataTxSlots){
         _dataTXStalled=true;
         ++_connection.dataStalls;
@@ -528,7 +550,16 @@ void Ath10kPCIDevice::releaseRXBatch(Ath10k::RXBatch &b)
     if(b.failed || !b.count || !_networkEnabled || !_networkInterface || s.stage!=Ath10k::LinkStage::Connected ||
        s.disconnect!=Ath10k::DisconnectStage::None)return;
     UInt32 eapols=0;
+    // 802.1X: EAPOL frames other than EAPOL-Key go to the network stack
+    // (eapolclient); only EAPOL-Key frames feed the in-kernel 4-way handshake.
+#if AIRPORT_ATH10K_WPASEC
+    const auto eapToStack=[&s](const UInt8 *frame,UInt32 length){return s.enterprise && frame[12]==0x88 && frame[13]==0x8e && length>=16 && frame[15]!=3;};
+#endif
     if(s.secure)for(UInt32 i=0;i<b.count;++i){const UInt8 *frame=b.data+b.offsets[i];
+#if AIRPORT_ATH10K_WPASEC
+        if(eapToStack(frame,b.lengths[i])){if(!Ath10k::sameMAC(frame+6,s.bssid)){Ath10k::rxDrop(s,Ath10k::ConnectionState::EAPOL);return;}}
+        else
+#endif
         if(frame[12]==0x88 && frame[13]==0x8e){++eapols;
             if(b.lengths[i]>512 || !Ath10k::sameMAC(frame+6,s.bssid)){
                 Ath10k::rxDrop(s,Ath10k::ConnectionState::EAPOL);return;}}
@@ -543,7 +574,11 @@ void Ath10kPCIDevice::releaseRXBatch(Ath10k::RXBatch &b)
         Ath10k::rxDrop(s,s.rxLastReason);return;}
     if(b.count>1)s.rxAmsduSubframes+=b.count;
     for(UInt32 i=0;i<b.count;++i){const UInt8 *frame=b.data+b.offsets[i];const UInt32 length=b.lengths[i];
+#if AIRPORT_ATH10K_WPASEC
+        if(s.secure && frame[12]==0x88 && frame[13]==0x8e && !eapToStack(frame,length)){
+#else
         if(s.secure && frame[12]==0x88 && frame[13]==0x8e){
+#endif
             if(length>512 || s.eapolCount==4 || !Ath10k::sameMAC(frame+6,s.bssid)){Ath10k::rxDrop(s,Ath10k::ConnectionState::EAPOL);continue;}
             bcopy(frame,s.eapolFrames[s.eapolWrite],length);s.eapolLength[s.eapolWrite]=static_cast<UInt16>(length);
             s.eapolWrite=(s.eapolWrite+1)%4;++s.eapolCount;
@@ -639,6 +674,9 @@ const char *Ath10kPCIDevice::submitNetworkPacket(const UInt8 *data,UInt32 bytes,
     _connection.txId=static_cast<UInt16>((_connection.txId+1)%1056);_connection.txComplete=false;_connection.txStatus=0;_connection.txManagement=mgmt;
     _connection.lastTxSpectrum=mgmt && _connection.spectrum.inFlight && data==_connection.spectrum.frame;
     _connection.lastTxProbe=mgmt && _connection.probe.active && bytes>=24 && Ath10k::htcReadLE16(data)==0x40;
+#if AIRPORT_ATH10K_WPASEC
+    _connection.lastTxPMF=mgmt && _connection.pmfTx.inFlight && data==_connection.pmfTx.frame;
+#endif
     UInt32 length=Ath10k::buildHTTPacket(static_cast<UInt8 *>(_packetCommand.virtualAddress()),256,data,bytes,
         static_cast<UInt32>(_packetBuffer.dmaAddress()),static_cast<UInt32>(_packetFragments.dmaAddress()),
         _htcHTTData.endpoint,_connection,mgmt);
@@ -704,7 +742,11 @@ const char *Ath10kPCIDevice::serviceConnection(UInt64 nowMs)
             if(s.txStatus){
                 if(s.lastTxEAPOL)s.eapolTxFailed=true;
                 ++s.txErrors;
+#if AIRPORT_ATH10K_WPASEC
+                if(s.txManagement && !s.lastTxProbe && !s.lastTxSpectrum && !s.lastTxPMF){
+#else
                 if(s.txManagement && !s.lastTxProbe && !s.lastTxSpectrum){
+#endif
                     const bool mlme=s.stage==LinkStage::Auth || s.stage==LinkStage::Assoc;
                     const bool reply=s.stage==LinkStage::Auth?s.authReply:s.assocReply;
                     if(!mlme || (!reply && s.managementAttempts>=3)){s.error="management-tx-failed";s.cancelRequested=true;}
@@ -718,6 +760,9 @@ const char *Ath10kPCIDevice::serviceConnection(UInt64 nowMs)
                 if(s.txStatus)++s.spectrum.dropped;else ++s.spectrum.completed;
                 s.txWakePending=true;
             }
+#if AIRPORT_ATH10K_WPASEC
+            if(s.lastTxPMF){s.pmfTx.inFlight=false;s.pmfTx.length=0;s.lastTxPMF=false;if(s.txStatus)++s.pmfDropped;s.txWakePending=true;}
+#endif
             if(!s.txManagement && txQueue())serviceTxQueue(); // IOBasicOutputQueue::kServiceAsync, avoid recursive output
         }else if(nowMs-s.txSinceMs>=5000)return "packet-completion-timeout";
     }
@@ -809,8 +854,38 @@ const char *Ath10kPCIDevice::serviceConnection(UInt64 nowMs)
                 ++s.sequence;return nullptr;
             }
             if(s.spectrum.inFlight)return nullptr;
+#if AIRPORT_ATH10K_WPASEC
+            // SA Query (11.13, wpa_supplicant sme.c): retry every 201 TU, give up after 1000 TU.
+            if(s.saQuery.active){
+                auto &q=s.saQuery;if(!q.startedMs)q.startedMs=nowMs?nowMs:1;
+                if(nowMs>=q.startedMs && nowMs-q.startedMs>=Ath10k::kSAQueryMaxMs){
+                    ++s.saQueryTimeouts;q={};Ath10k::connectionFailure(s,"sa-query-timeout");s.portAuthorized=false;s.cancelRequested=true;return nullptr;
+                }
+                if(!s.pmfTx.pending && !s.pmfTx.inFlight && q.sent<5 && (!q.sent || (nowMs>=q.lastMs && nowMs-q.lastMs>=Ath10k::kSAQueryRetryMs))){
+                    const UInt16 tid=static_cast<UInt16>(0xa000u|(nowMs&0x0fffu))^static_cast<UInt16>(UInt16(q.sent)<<12);
+                    const UInt32 n=Ath10k::buildSAQuery(s.pmfTx.frame,sizeof(s.pmfTx.frame),s,true,tid);
+                    if(!n)return "sa-query-build";
+                    q.tids[q.sent++]=tid;q.lastMs=nowMs;s.pmfTx.length=static_cast<UInt8>(n);s.pmfTx.pending=true;s.pmfTx.sinceMs=nowMs;
+                }
+            }
+            if(s.pmfTx.pending){
+                auto &p=s.pmfTx;if(!p.sinceMs)p.sinceMs=nowMs?nowMs:1;
+                if(nowMs>=p.sinceMs && nowMs-p.sinceMs>=1000){p.pending=false;p.length=0;++s.pmfDropped;s.txWakePending=true;return nullptr;}
+                if(s.txOwned || s.dataPending || s.wmiOwned || s.submitted || s.eapolPause || s.txPauseMask ||
+                   _wmi.credits.outstanding || !_wmiScan.completed || _wmiScan.txOwned || s.radio.appliedPS || s.radio.blocked || s.radio.powerBlocked)return nullptr;
+                Ath10k::htcWriteLE16(p.frame+22,UInt16((s.sequence&4095)<<4));
+                p.pending=false;p.inFlight=true;
+                error=submitNetworkPacket(p.frame,p.length,true,nowMs);if(error)return error;
+                ++s.sequence;return nullptr;
+            }
+            if(s.pmfTx.inFlight)return nullptr;
+#endif
             return serviceStatsMaintenance(nowMs);}
+#if AIRPORT_ATH10K_WPASEC
+        if(nowMs-s.sinceMs>=(s.enterprise?60000u:15000u)){s.error="wpa2-handshake-timeout";s.cancelRequested=true;return nullptr;}
+#else
         if(nowMs-s.sinceMs>=15000){s.error="wpa2-handshake-timeout";s.cancelRequested=true;return nullptr;}
+#endif
         if(!s.securityPhase || s.securityPhase>=5 || (s.securityPhase==3 && !s.authorizeRequested))return nullptr;
         if(!s.submitted){
             if(s.txOwned || s.wmiOwned || s.dataPending || !_wmiScan.completed || _wmiScan.txOwned || _wmi.credits.outstanding)return nullptr;
@@ -871,6 +946,28 @@ const char *Ath10kPCIDevice::serviceConnection(UInt64 nowMs)
         if(!s.macChange.step){s.stage=LinkStage::Start;s.sinceMs=nowMs;}
     }
     if(s.stage==LinkStage::Scan && s.macChange.step)return serviceMacChangeOnly(nowMs);
+#if AIRPORT_ATH10K_WPASEC
+    // External authentication (SAE): the front end owns the Commit/Confirm
+    // exchange and its retransmissions; the core carries the frames and leaves
+    // the stage on AuthResult. Each frame sent restarts the stage timer.
+    if(s.stage==LinkStage::Auth && s.externalAuth){
+        if(s.cancelRequested)return nullptr;
+        if(s.authDone){
+            if(s.txOwned)return nullptr;
+            s.stage=LinkStage::Assoc;s.submitted=false;s.sinceMs=nowMs;s.managementAttempts=0;s.managementRetryMs=0;
+            publishConnection();return nullptr;
+        }
+        if(nowMs-s.sinceMs>=10000 && !s.wmiOwned && !s.txOwned){Ath10k::connectionFailure(s,"external-authentication-timeout");s.cancelRequested=true;return nullptr;}
+        if(s.authTxPending && !s.txOwned && !s.wmiOwned && !s.txPauseMask){
+            UInt8 frame[24+512];const UInt32 length=Ath10k::buildExternalAuth(frame,sizeof(frame),s);
+            if(!length)return "external-auth-build";
+            s.authTxPending=false;s.sinceMs=nowMs;
+            const char *error=submitNetworkPacket(frame,length,true,nowMs);if(error)return error;
+            ++s.sequence;
+        }
+        return nullptr;
+    }
+#endif
     if(nowMs-s.sinceMs>=5000 && !s.wmiOwned && !s.txOwned){
         Ath10k::connectionFailure(s,"connection-stage-timeout");s.cancelRequested=true;
         IOLog("Ath10kMac: CONNECTION timeout stage=%u cmd=0x%x start-reply=%u peer-mapped=%u echo-reply=%u peers=%u\n",
@@ -928,7 +1025,13 @@ const char *Ath10kPCIDevice::serviceConnection(UInt64 nowMs)
     s.managementAttempts=0;s.managementRetryMs=0;
     if(s.stage==LinkStage::Connected){
         s.lastBeaconMs=nowMs;s.radio.appliedPower=s.radio.vdevPower=s.txPowerHalfDbm;
+#if AIRPORT_ATH10K_WPASEC
+        // 802.1X: the data link comes up at association so EAP can run; only
+        // EAPOL passes until the port opens (acceptSecureRX, outputPacket).
+        s.maintenance.blocked=true;s.portAuthorized=!s.secure;networkLink(!s.secure || s.enterprise);
+#else
         s.maintenance.blocked=true;s.portAuthorized=!s.secure;networkLink(!s.secure);
+#endif
         IOLog("Ath10kMac: ASSOCIATION complete aid=%u peer=%u; controlled port follows security state\n",s.aid,s.peerId);
     }
     publishConnection();return nullptr;
@@ -1037,6 +1140,9 @@ const char *Ath10kPCIDevice::serviceRadioMaintenance(UInt64 nowMs)
         if(s.submitted || s.stats.step || s.maintenance.step || s.csa.submitted || s.csa.phase>Ath10k::ChannelSwitchPhase::Drain ||
            s.disconnect>Ath10k::DisconnectStage::Drain){r.blocked=false;return nullptr;}
         bool desired=r.requestedPS && s.disconnect==Ath10k::DisconnectStage::None && s.ap.timPresent && s.portAuthorized && !s.cancelRequested && !s.rekeyKind && !s.eapolPause &&
+#if AIRPORT_ATH10K_WPASEC
+            !s.pmfTx.pending && !s.pmfTx.inFlight && !s.saQuery.active &&
+#endif
             !s.probe.active && !s.spectrum.pending && !s.spectrum.inFlight && s.csa.phase==Ath10k::ChannelSwitchPhase::Idle && _wmiScan.completed;
         UInt8 power=Ath10k::stationOperationalPowerLimit(s);
         if(!power){s.error="ap-power-constraint-forbids-tx";s.cancelRequested=true;r.powerBlocked=true;desired=false;

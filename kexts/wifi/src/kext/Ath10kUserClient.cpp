@@ -87,7 +87,9 @@ void Ath10kPCIDevice::fillControlInfo(AthControl::Response &o){
  const UInt8 *mac=idle?_vdevMAC:s.local;
  Ath10k::htcWriteLE32(o.data+116,(s.externalAuth && s.stage==Ath10k::LinkStage::Auth?1u:0u)|(s.pmf && !idle?2u:0u)|(s.enterprise && !idle?4u:0u)|
   (Ath10k::sameMAC(mac,_wmiInit.mac)?0u:8u)|(s.saQuery.active?16u:0u));
- bcopy(mac,o.data+120,6);o.length=128;
+ bcopy(mac,o.data+120,6);
+ // [126..127] 802.11 status of the last Authentication/Association response.
+ Ath10k::htcWriteLE16(o.data+126,static_cast<UInt16>(s.associationStatus));o.length=128;
 #endif
 }
 IOReturn Ath10kPCIDevice::controlRequest(OSObject *client,const AthControl::Request *r,AthControl::Response *o){
@@ -217,7 +219,13 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
     if(akm!=AthSecurity::akm8021X && akm!=AthSecurity::akmPSK && akm!=AthSecurity::akm8021XSHA256 && akm!=AthSecurity::akmPSKSHA256 && akm!=AthSecurity::akmSAE)return kIOReturnBadArgument;
     AthSecurity::RSNInfo own;
     if(!x[8] || !AthSecurity::parseRSN(x+9,x[8],own) || !own.akm(akm) || !own.pairwiseCCMP || (pmfRequired && !pmfCapable) || (own.mfpc!=pmfCapable) || (own.mfpr!=pmfRequired))return kIOReturnBadArgument;
+#if AIRPORT_ATH10K_WPASEC
+    // SAE runs as external authentication unless the station RSN names a cached
+    // PMKSA (one PMKID: Open System authentication, then the PMKID in the association).
+    if(external!=(akm==AthSecurity::akmSAE && !own.pmkidCount) || enterprise!=AthSecurity::akmEnterprise(akm))return kIOReturnBadArgument;
+#else
     if(external!=(akm==AthSecurity::akmSAE) || enterprise!=AthSecurity::akmEnterprise(akm))return kIOReturnBadArgument;
+#endif
    } else if(external || pmfCapable || pmfRequired || enterprise || x[8] || x[9+x[8]])return kIOReturnBadArgument;
    if(withMAC && ((x[2]&1) || !(x[2]|x[3]|x[4]|x[5]|x[6]|x[7])))return kIOReturnBadArgument;
    const UInt8 xe=x[9+x[8]];

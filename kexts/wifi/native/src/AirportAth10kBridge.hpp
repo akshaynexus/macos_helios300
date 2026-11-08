@@ -18,6 +18,9 @@
 #include "AirportWCL.hpp"
 #include "../../src/shared/Ath10kControl.hpp"
 #include "../../src/shared/Ath10kSupplicant.hpp"
+#if AIRPORT_ATH10K_WPASEC
+#include "../../src/shared/Ath10kSAE.hpp"
+#endif
 
 namespace AirportBridge {
 // IOReturn values (IOKit/IOReturn.h); the kext static_asserts they match.
@@ -59,6 +62,9 @@ struct Network {
     uint16_t rsnLength=0,capabilities=0,beaconInterval=100;
     uint8_t rsn[257]{},rateCount=0,rates[32]{},ht[26]{},htOp[22]{},vht[12]{},vhtOp[5]{},powerConstraintDb=0;
     uint8_t wpa[34]{},wpaLength=0; // WPA1 vendor element
+#if AIRPORT_ATH10K_WPASEC
+    uint8_t rsnxe[18]{},rsnxeLength=0; // AP's RSNXE
+#endif
     uint32_t snr=0;
     int32_t rssi() const {return int32_t(snr>95?95:snr)-95;} // Linux ath10k convention (Ath10kControl.hpp): signal = SNR + noise floor (-95 dBm)
 };
@@ -78,6 +84,9 @@ inline bool decodeNetwork(const uint8_t *d,uint32_t length,Network &n){
         n.htPresent=present&1;n.htOpPresent=present&2;n.vhtPresent=present&4;n.vhtOpPresent=present&8;
         memcpy(n.ht,d+at+38,26);memcpy(n.htOp,d+at+64,22);memcpy(n.vht,d+at+86,12);memcpy(n.vhtOp,d+at+98,5);
         n.powerConstraintPresent=d[at+103]!=0;n.powerConstraintDb=d[at+104];
+#if AIRPORT_ATH10K_WPASEC
+        if(length>=at+105+19 && d[at+105]<=sizeof(n.rsnxe)){n.rsnxeLength=d[at+105];memcpy(n.rsnxe,d+at+106,n.rsnxeLength);}
+#endif
         at+=105+(AIRPORT_ATH10K_WPASEC?19u:0u);
         if(length>=at+1 && d[at]>=6 && d[at]<=sizeof(n.wpa) && length>=at+1u+d[at] && d[at+1]==221 && d[at+2]+2u==d[at]){
             n.wpaLength=d[at];memcpy(n.wpa,d+at+1,n.wpaLength);}
@@ -156,6 +165,9 @@ inline size_t buildIEs(const Network &n,uint8_t *out,size_t capacity){
     if(n.htPresent && !put(45,n.ht,26))return 0;
     if(n.htOpPresent && !put(61,n.htOp,22))return 0;
     if(n.rsnLength>=2){if(at+n.rsnLength>capacity)return 0;memcpy(out+at,n.rsn,n.rsnLength);at+=n.rsnLength;}
+#if AIRPORT_ATH10K_WPASEC
+    if(n.rsnxeLength>=2){if(at+n.rsnxeLength>capacity)return 0;memcpy(out+at,n.rsnxe,n.rsnxeLength);at+=n.rsnxeLength;} // WCL sees the H2E capability
+#endif
     if(n.wpaLength>=6){if(at+n.wpaLength>capacity)return 0;memcpy(out+at,n.wpa,n.wpaLength);at+=n.wpaLength;}
     if(n.vhtPresent && !put(191,n.vht,12))return 0;
     if(n.vhtOpPresent && !put(192,n.vhtOp,5))return 0;
@@ -169,7 +181,9 @@ inline size_t buildScanResult(const Network &n,uint8_t *out,size_t capacity,unsi
     uint8_t *ies=out+sizeof(*m);
     size_t length=buildIEs(n,ies,capacity-sizeof(*m));
     if(!length)return 0;
-    length=AirportWCL::selectWPA2TransitionMode(ies,length);
+#if !AIRPORT_ATH10K_WPASEC
+    length=AirportWCL::selectWPA2TransitionMode(ies,length); // gate on: SAE is usable, the transition RSN is shown as it is
+#endif
     m->ieLength=uint32_t(length);m->channelSpec=widthSpec(bssWidth(n,maxMHz));m->channel=n.channel;
     m->ssidLength=n.hidden?0:n.ssidLength;if(!n.hidden)memcpy(m->ssid,n.ssid,n.ssidLength);
     memcpy(m->bssid,n.bssid,6);m->rssi=n.rssi();m->noise=-95;m->snr=int16_t(n.snr);
@@ -193,23 +207,88 @@ inline size_t buildBeaconFrame(const Network &n,uint64_t tsfMicroseconds,uint16_
 // Join parameters after validation against what the core supports.
 struct JoinPlan {
     bool secure=false,hidden=false,macSet=false;uint8_t bssid[6]{},ssid[32]{},ssidLength=0,pmk[32]{},mac[6]{};
+#if AIRPORT_ATH10K_WPASEC
+    // Decided by planJoin from the WCL request and the AP's RSN; the station RSN
+    // and RSNXE by the join (PMKSA cache). upperAuth/keyCipher/key: the WCL key.
+    bool sae=false,enterprise=false,mfpc=false,mfpr=false,h2e=false,extended=false,pmksa=false,havePMKID=false;
+    uint8_t akm=AthSecurity::akmPSK,group=0,passwordLength=0,password[AthSAE::kMaxPassword]{},pmkid[16]{};
+    uint8_t stationRSN[64]{},stationRSNLength=0,stationRSNXE[3]{},stationRSNXELength=0;
+    uint32_t upperAuth=0,keyCipher=0,keyLength=0;uint8_t key[AirportWCL::kJoinKeyMax]{};
+#endif
 };
+#if AIRPORT_ATH10K_WPASEC
+// PMF policy (boot-arg airportath10k_pmf): 0 off (SAE and PMF-required networks
+// are refused), 1 capable when the AP is, required when it requires it
+// (default), 2 required on every PMF-capable AP.
+inline const char *planSecurity(const AirportWCL::JoinRequest &j,const Network &n,JoinPlan &p,unsigned pmfMode){
+    using namespace AthSecurity;
+    RSNInfo rsn;
+    if(!n.rsnLength)return n.wpaLength?"wpa1-only-not-supported":"wpa2-psk-ccmp-pairwise-required";
+    if(!parseRSN(n.rsn,n.rsnLength,rsn) || (rsn.caps&((1u<<9)|(1u<<13))))return "rsn-not-understood";
+    if(!rsn.pairwiseCCMP)return "tkip-pairwise-not-supported";
+    p.group=rsn.group;
+    if(p.sae){
+        if(!rsn.akm(akmSAE))return "sae-not-offered";
+        p.akm=akmSAE;p.h2e=rsnxeH2E(n.rsnxe,n.rsnxeLength);
+    }else if(p.enterprise){
+        const bool sha=(j.upperAuth&((1u<<11)|AirportWCL::kAuthWPA3Enterprise))!=0;
+        p.akm=rsn.akm(akm8021XSHA256)&&(sha||!rsn.akm(akm8021X))?akm8021XSHA256:(rsn.akm(akm8021X)?akm8021X:0);
+        if(!p.akm)return "enterprise-akm-not-offered";
+    }else{
+        p.akm=rsn.akm(akmPSKSHA256)&&((j.upperAuth&(1u<<10))||!rsn.akm(akmPSK))?akmPSKSHA256:(rsn.akm(akmPSK)?akmPSK:0);
+        if(!p.akm)return (rsn.akm(akmSAE)||rsn.akm(24))?"wpa3-sae-only-not-supported":((rsn.akm(akm8021X)||rsn.akm(akm8021XSHA256))?"enterprise-not-supported":"wpa2-psk-ccmp-pairwise-required");
+    }
+    const bool wpa3=p.sae || (j.upperAuth&AirportWCL::kAuthWPA3Enterprise);
+    if(pmfMode==0 ? (rsn.mfpr || wpa3) : (wpa3 && !rsn.mfpc))return "pmf-required-not-supported";
+    p.mfpc=pmfMode>=1 && rsn.mfpc;
+    if(p.mfpc && rsn.groupMgmt && rsn.groupMgmt!=cipherBIP){
+        if(wpa3 || rsn.mfpr)return "pmf-cipher-not-supported";
+        p.mfpc=false; // WPA2 with an unusable group management cipher: no PMF
+    }
+    p.mfpr=p.mfpc && (rsn.mfpr || pmfMode==2);
+    p.extended=p.sae || p.enterprise || p.mfpc || p.akm!=akmPSK;
+    return nullptr;
+}
+#endif
 // WCL hands Personal networks the PMK (apple80211 cipher PMK/PMKSA, 32 bytes;
 // WCL.hpp classifyLegacyAuth). WPA2-Personal and WPA2/WPA3 transition networks
 // (PSK offered) are accepted; SAE-only, enterprise, WEP and PMF-required are not.
+#if AIRPORT_ATH10K_WPASEC
+inline const char *planJoin(const AirportWCL::JoinRequest &j,const Network *n,JoinPlan &plan,unsigned pmfMode=1){
+#else
 inline const char *planJoin(const AirportWCL::JoinRequest &j,const Network *n,JoinPlan &plan){
+#endif
     plan=JoinPlan{};
-    switch(AirportWCL::classifyLegacyAuth(j)){
+    const auto authKind=AirportWCL::classifyLegacyAuth(j);
+    switch(authKind){
     case AirportWCL::LegacyAuth::Open:plan.secure=false;break;
     case AirportWCL::LegacyAuth::Personal:plan.secure=true;break;
+#if AIRPORT_ATH10K_WPASEC
+    case AirportWCL::LegacyAuth::Sae:plan.secure=plan.sae=true;break;
+    case AirportWCL::LegacyAuth::Enterprise:plan.secure=plan.enterprise=true;break;
+#else
     case AirportWCL::LegacyAuth::Enterprise:return "enterprise-not-supported";
+#endif
     case AirportWCL::LegacyAuth::Wep:return "wep-not-supported";
     default:return "auth-not-supported";
     }
+#if AIRPORT_ATH10K_WPASEC
+    plan.upperAuth=j.upperAuth;plan.keyCipher=j.keyCipher;plan.keyLength=j.keyLength;
+    if(j.keyLength<=sizeof(plan.key))memcpy(plan.key,j.key,j.keyLength);
+    if(plan.sae){
+        if(j.keyCipher==AirportWCL::kCipherPWD && j.keyLength>=1 && j.keyLength<=sizeof(plan.password)){plan.passwordLength=uint8_t(j.keyLength);memcpy(plan.password,j.key,j.keyLength);}
+    } else if(plan.secure && j.keyLength==32)memcpy(plan.pmk,j.key,32);
+#else
     if(plan.secure)memcpy(plan.pmk,j.key,32);
+#endif
     memcpy(plan.bssid,j.bssid,6);
     plan.ssidLength=uint8_t(j.ssidLength);memcpy(plan.ssid,j.ssid,j.ssidLength);
     if(!n)return nullptr; // not in the last scan: the session scans first and re-checks
+#if AIRPORT_ATH10K_WPASEC
+    if(plan.secure){
+        if(const char *why=planSecurity(j,*n,plan,pmfMode))return why;
+    }
+#else
     if(plan.secure && !n->wpa2){
         // Name the reason (the refusal's 802.11 status follows from it, refusalStatus).
         AthSecurity::RSNInfo rsn;
@@ -221,6 +300,7 @@ inline const char *planJoin(const AirportWCL::JoinRequest &j,const Network *n,Jo
         if(!rsn.pairwiseCCMP)return "tkip-pairwise-not-supported";
         return "wpa2-psk-ccmp-pairwise-required";
     }
+#endif
     if(!plan.secure && n->privacy)return "protected-network-not-supported";
     if(!channelKnown(n->channel))return "bss-channel-unsupported";
     plan.hidden=n->hidden;
@@ -235,6 +315,10 @@ inline const char *planJoin(const AirportWCL::JoinRequest &j,const Network *n,Jo
 inline uint16_t refusalStatus(const char *why){
     if(!why)return 0;
     if(!strcmp(why,"wpa3-sae-only-not-supported") || !strcmp(why,"enterprise-not-supported") || !strcmp(why,"auth-not-supported"))return 43; // invalid AKMP
+#if AIRPORT_ATH10K_WPASEC
+    if(!strcmp(why,"sae-not-offered") || !strcmp(why,"enterprise-akm-not-offered"))return 43;
+    if(!strcmp(why,"pmf-cipher-not-supported"))return 31;
+#endif
     if(!strcmp(why,"tkip-pairwise-not-supported") || !strcmp(why,"wpa1-only-not-supported") || !strcmp(why,"wpa2-psk-ccmp-pairwise-required"))return 42; // invalid pairwise cipher
     if(!strcmp(why,"pmf-required-not-supported"))return 31; // robust management frame policy violation
     if(!strcmp(why,"wep-not-supported"))return 13;           // authentication algorithm not supported
@@ -246,6 +330,16 @@ inline void buildConnectRequest(const JoinPlan &p,AthControl::Request &r){
     r=AthControl::Request{};r.operation=AthControl::Connect;r.index=p.hidden?1:0;
     r.data[0]=p.ssidLength;r.data[1]=p.secure?1:0;memcpy(r.data+2,p.bssid,6);memcpy(r.data+8,p.ssid,p.ssidLength);
     r.length=8u+p.ssidLength;
+#if AIRPORT_ATH10K_WPASEC
+    if(p.extended){ // extended Connect (Ath10kControl.hpp): flags, AKM, station MAC, station RSN, RSNXE
+        uint8_t *x=r.data+r.length;
+        x[0]=uint8_t((p.sae && !p.pmksa?1:0)|(p.mfpc?2:0)|(p.mfpr?4:0)|(p.enterprise?8:0)|(p.macSet?16:0));
+        x[1]=p.akm;if(p.macSet)memcpy(x+2,p.mac,6);x[8]=p.stationRSNLength;memcpy(x+9,p.stationRSN,p.stationRSNLength);
+        x[9+p.stationRSNLength]=p.stationRSNXELength;memcpy(x+10+p.stationRSNLength,p.stationRSNXE,p.stationRSNXELength);
+        r.index|=2;r.length+=10u+p.stationRSNLength+p.stationRSNXELength;
+        return;
+    }
+#endif
     if(p.macSet){ // Private Wi-Fi Address: the extended block with the station MAC alone (flags 16)
         uint8_t *x=r.data+r.length;memset(x,0,10);x[0]=16;memcpy(x+2,p.mac,6);
         r.index|=2;r.length+=10;
@@ -276,10 +370,34 @@ inline void buildScanRequest(const ScanPlan &p,bool options,AthControl::Request 
 }
 
 // Snapshot of the core from one Status + Info poll.
+#if AIRPORT_ATH10K_WPASEC
+// PMKSA cache (WCL setCLEAR_PMKSA_CACHE): the PMK of a completed SAE exchange or
+// 802.1X authentication, per BSSID + AKM, so a rejoin can name it by PMKID in
+// the association. The AP may ignore it, full authentication then runs.
+struct PMKSACache {
+    static constexpr unsigned kSlots=8;static constexpr uint64_t kLifetimeMs=12ull*3600*1000; // dot11RSNAConfigPMKLifetime
+    struct Entry { bool valid=false;uint8_t bssid[6]{},akm=0,pmk[32]{},pmkid[16]{};uint64_t expiresMs=0,addedMs=0; } entries[kSlots]{};
+    const Entry *find(const uint8_t *bssid,uint8_t akm,uint64_t nowMs) const {
+        for(const auto &e:entries)if(e.valid && e.akm==akm && !memcmp(e.bssid,bssid,6) && nowMs<e.expiresMs)return &e;
+        return nullptr;
+    }
+    void remove(const uint8_t *bssid,uint8_t akm){for(auto &e:entries)if(e.valid && e.akm==akm && !memcmp(e.bssid,bssid,6)){AthSecurity::wipe(&e,sizeof(e));e=Entry{};}}
+    void add(const uint8_t *bssid,uint8_t akm,const uint8_t *pmk,const uint8_t *pmkid,uint64_t nowMs){
+        remove(bssid,akm);
+        unsigned slot=0;for(unsigned i=0;i<kSlots;++i){if(!entries[i].valid){slot=i;break;}if(entries[i].addedMs<entries[slot].addedMs)slot=i;}
+        auto &e=entries[slot];AthSecurity::wipe(&e,sizeof(e));e=Entry{};e.valid=true;memcpy(e.bssid,bssid,6);e.akm=akm;memcpy(e.pmk,pmk,32);memcpy(e.pmkid,pmkid,16);
+        e.addedMs=nowMs;e.expiresMs=nowMs+kLifetimeMs;
+    }
+    void clear(){for(auto &e:entries){AthSecurity::wipe(&e,sizeof(e));e=Entry{};}}
+};
+#endif
 struct CoreStatus {
     bool reachable=false,runtime=false,scanDone=false,link=false,txBusy=false,secure=false,eapolTxFailed=false,disconnecting=false,scanning=false;
     uint32_t stage=0,phase=0,count=0,scanGeneration=0,channel=0,width=0,nss=0,scanBits=0,stateBits=0,psBits=0,beaconMisses=0,txHalfDbm=0,caps=0;
     int32_t rssi=INT32_MIN;uint8_t local[6]{},bssid[6]{};char error[96]{};char country[3]{'0','0',0};bool stationDFS=false;
+#if AIRPORT_ATH10K_WPASEC
+    uint32_t security=0;uint16_t associationStatus=0; // Info [116], [126..127]
+#endif
 };
 
 // The session: WCL requests in, core polls, WCL events out. Single-threaded
@@ -304,7 +422,7 @@ struct CoreStatus {
 template<class Crypto> class Session {
 public:
     enum class State : uint8_t { Offline, Ready, Joining, Connected, Leaving, Restarting };
-    static constexpr uint64_t kCacheFreshMs=30000,kCacheKeepMs=120000,kScanGraceMs=1500,kScanLimitMs=40000,kJoinLimitMs=30000;
+    static constexpr uint64_t kCacheFreshMs=30000,kCacheKeepMs=120000,kScanGraceMs=1500,kScanLimitMs=40000,kJoinLimitMs=30000,kJoinEnterpriseLimitMs=90000;
     Session(Core &core,Sink &sink):core(core),sink(sink){}
     State state() const {return state_;}
     static const char *stateName(State s){
@@ -357,7 +475,11 @@ public:
         describeCandidates(j,chosen);
         const Network *n=find(j.bssid);
         JoinPlan plan;
+#if AIRPORT_ATH10K_WPASEC
+        const char *why=planJoin(j,n,plan,pmfMode);
+#else
         const char *why=planJoin(j,n,plan);
+#endif
         if(why){
             setError(why);AthSecurity::wipe(&plan,sizeof(plan));
             if(!strcmp(why,"ssid-mismatch"))return kBadArgument;
@@ -379,6 +501,9 @@ public:
         if(!channelKnown(joinChannel))joinChannel=n?n->channel:0;
         state_=State::Joining;joinStartedMs=nowMs;joinPhase=JoinPhase::Prepare;joinRescanned=false;joinCancelMs=joinScanCancelMs=0;
         assocNotified=firstBeaconNotified=false;keysSubmitted=m4Sent=authorized=false;pendingLength=0;clearRekey();
+#if AIRPORT_ATH10K_WPASEC
+        resetSAE();supplicantActive=false;pmksaFallbackTried=false;
+#endif
         return kSuccess;
     }
     int abortJoin(uint64_t nowMs){
@@ -412,6 +537,32 @@ public:
     // applied to the firmware vdev by the next join (extended Connect, flags 16).
     void setStationMAC(const uint8_t *mac){stationMACSet=mac!=nullptr;if(mac)memcpy(stationMAC,mac,6);else memset(stationMAC,0,6);}
     bool hasStationMAC() const {return stationMACSet;}
+#if AIRPORT_ATH10K_WPASEC
+    // airportath10k_pmf (planSecurity); set by the kext from the boot-arg before the first poll.
+    unsigned pmfMode=1;
+    void clearPMKSA(){pmksa.clear();}
+    // WCL's setCIPHER_KEY (802.1X): the PMK or MSK of the finished EAP exchange.
+    // 32 bytes (PMK, or an MSK WCL truncated) or a 64-byte MSK: the PMK is its
+    // first 32 bytes (12.7.1.3). The key must name this AP when it names one.
+    int setCipherKey(uint32_t cipher,const uint8_t *key,uint32_t length,const uint8_t *ea,uint64_t nowMs){
+        if(!key || !(cipher==6 || cipher==7 || cipher==9))return kUnsupported;
+        if(length!=32 && !(cipher==9 && length==64))return kBadArgument;
+        if(state_==State::Connected && pending.enterprise)return kSuccess; // reauthentication: the keys in use stay valid
+        if(state_!=State::Joining || !pending.enterprise || joinPhase!=JoinPhase::Handshake)return kNotReady;
+        uint8_t any=0;if(ea)for(unsigned i=0;i<6;++i)any|=ea[i];
+        if(any && !sameMAC(ea,joined.bssid))return kBadArgument;
+        memcpy(pending.pmk,key,32);
+        // Full EAP ran: the PMKSA the association named (if any) is replaced.
+        if(pending.pmksa){pending.pmksa=pending.havePMKID=false;}
+        if(!beginSupplicant(nowMs))return kError;
+        return kSuccess;
+    }
+    bool stationRSN(const uint8_t *&ie,size_t &n) const {
+        if(!pending.secure || !pending.stationRSNLength)return false;
+        ie=pending.stationRSN;n=pending.stationRSNLength;return true;
+    }
+    uint32_t pmksaCount() const {uint32_t c=0;for(const auto &e:pmksa.entries)if(e.valid)++c;return c;}
+#endif
     void stop(){if(wclScanOwed)finishWCLScan(kOffline);finishJoin(1,0,kOffline);wipeSecurity();coreScan=false;state_=State::Offline;}
 
     // --- Periodic poll -----------------------------------------------------
@@ -545,6 +696,9 @@ private:
             status.width=le32(i.data+16);status.nss=le32(i.data+20);status.stateBits=le32(i.data+28);
             status.psBits=le32(i.data+84);status.beaconMisses=le32(i.data+88);status.txHalfDbm=le32(i.data+92);status.scanBits=le32(i.data+108);
             if(i.length>=116 && i.data[112]){status.country[0]=char(i.data[112]);status.country[1]=char(i.data[113]);status.country[2]=0;}
+#if AIRPORT_ATH10K_WPASEC
+            if(i.length>=128){status.security=le32(i.data+116);status.associationStatus=le16(i.data+126);}
+#endif
         }
     }
     void goOffline(uint64_t){
@@ -730,10 +884,19 @@ private:
         AirportWCL::DeauthEvent e{};e.reason=reason;memcpy(e.bssid,joinBSSID,6);
         sink.post(AirportWCL::Deauth,&e,sizeof(e));
     }
-    void wipeSecurity(){supplicant.reset();AthSecurity::wipe(pendingFrame,sizeof(pendingFrame));pendingLength=0;clearRekey();AthSecurity::wipe(&pending,sizeof(pending));}
+    void wipeSecurity(){supplicant.reset();AthSecurity::wipe(pendingFrame,sizeof(pendingFrame));pendingLength=0;clearRekey();AthSecurity::wipe(&pending,sizeof(pending));
+#if AIRPORT_ATH10K_WPASEC
+        resetSAE();supplicantActive=false;
+#endif
+    }
     void clearRekey(){AthSecurity::wipe(rekeyKeys,sizeof(rekeyKeys));rekeyOperation=0;rekeyKeysReady=rekeyResponsePending=false;}
     void pollJoin(uint64_t nowMs){
-        if(nowMs>joinStartedMs+kJoinLimitMs){setError("join-timeout");finishJoin(1,1004,kTimeout);return;}
+#if AIRPORT_ATH10K_WPASEC
+        const uint64_t limit=pending.enterprise?kJoinEnterpriseLimitMs:kJoinLimitMs; // EAP can wait on the user
+#else
+        const uint64_t limit=kJoinLimitMs;
+#endif
+        if(nowMs>joinStartedMs+limit){setError("join-timeout");finishJoin(1,1004,kTimeout);return;}
         switch(joinPhase){
         case JoinPhase::Refuse:refuse(refusal);return;
         case JoinPhase::Prepare:
@@ -764,8 +927,14 @@ private:
         case JoinPhase::Connect:connect();return;
         case JoinPhase::Associate:
         case JoinPhase::Handshake:
+#if AIRPORT_ATH10K_WPASEC
+            if((status.stage==11 || (status.stage==0 && !status.disconnecting)) && pmksaFallback()){if(status.stage==11)requestCancel();return;}
+#endif
             if(status.stage==0 && !status.disconnecting){setError(status.error);finishJoin(1,1,kError);return;}
             if(status.stage==11){setError(status.error);requestCancel();finishJoin(1,1,kError);return;}
+#if AIRPORT_ATH10K_WPASEC
+            if(pending.sae && !pending.pmksa && status.stage==4){serviceSAE(nowMs);return;}
+#endif
             if(status.stage!=10)return;
             if(!assocNotified){
                 // Associated (vdev up, peer associated): WCL's join manager
@@ -779,7 +948,14 @@ private:
                 joinPhase=JoinPhase::Handshake;
             }
             if(pending.secure){if(!serviceSupplicant())return;}
+#if AIRPORT_ATH10K_WPASEC
+            // 802.1X brings the data link up at association for EAP (the core's
+            // networkLink); the join completes when the port opens (phase 5).
+            if(status.link && (!pending.enterprise || status.phase>=5)){
+                if(pending.enterprise)cacheEnterprisePMKSA(nowMs);
+#else
             if(status.link){
+#endif
                 setDataLink(true);
                 lastJoinMs=uint32_t(nowMs-joinStartedMs);
                 if(roamStartedMs){lastRoamMs=lastJoinMs;roamStartedMs=0;}
@@ -804,12 +980,31 @@ private:
         }
         AirportWCL::JoinRequest j{};memcpy(j.ssid,pending.ssid,32);j.ssidLength=pending.ssidLength;memcpy(j.bssid,joinBSSID,6);
         JoinPlan plan=pending;
+#if AIRPORT_ATH10K_WPASEC
+        memcpy(j.key,plan.key,sizeof(j.key));j.keyLength=plan.keyLength;j.keyCipher=plan.keyCipher;j.lowerAuth=1;j.upperAuth=plan.upperAuth;
+        const char *why=planJoin(j,n,plan,pmfMode);AthSecurity::wipe(&j,sizeof(j));
+#else
         memcpy(j.key,plan.pmk,32);j.keyLength=plan.secure?32:0;j.keyCipher=6;j.lowerAuth=1;j.upperAuth=plan.secure?(1u<<3):0;
         const char *why=planJoin(j,n,plan);AthSecurity::wipe(&j,sizeof(j));
+#endif
         if(why){setError(why);AthSecurity::wipe(&plan,sizeof(plan));refuse(refusalStatus(why));return;}
         if(stationMACSet && memcmp(stationMAC,status.local,6)){plan.macSet=true;memcpy(plan.mac,stationMAC,6);}
+#if AIRPORT_ATH10K_WPASEC
+        if(!prepareSecureConnect(plan,*n,pollMs)){setError("station-rsn-build-failed");AthSecurity::wipe(&plan,sizeof(plan));refuse(1);return;}
+#endif
         uint8_t station[6];memcpy(station,plan.macSet?plan.mac:status.local,6);
+#if AIRPORT_ATH10K_WPASEC
+        memcpy(stationAddr,station,6); // the supplicant's address when it begins later (SAE, 802.1X)
+#endif
         AthControl::Request r;buildConnectRequest(plan,r);AthControl::Response o{};
+#if AIRPORT_ATH10K_WPASEC
+        // Connect may be retried from pending; everything the request carried is there.
+        memcpy(pending.stationRSN,plan.stationRSN,sizeof(plan.stationRSN));pending.stationRSNLength=plan.stationRSNLength;
+        memcpy(pending.stationRSNXE,plan.stationRSNXE,sizeof(plan.stationRSNXE));pending.stationRSNXELength=plan.stationRSNXELength;
+        pending.extended=plan.extended;pending.mfpc=plan.mfpc;pending.mfpr=plan.mfpr;pending.akm=plan.akm;pending.pmksa=plan.pmksa;
+        pending.havePMKID=plan.havePMKID;memcpy(pending.pmkid,plan.pmkid,16);pending.h2e=plan.h2e;pending.group=plan.group;
+        if(plan.pmksa)memcpy(pending.pmk,plan.pmk,32);
+#endif
         AthSecurity::wipe(&plan,sizeof(plan));
         const int rc=core.call(r,o);
         if(rc==kNotReady || rc==kBusy){joinPhase=JoinPhase::Connect;return;}            // scan still completing: next poll
@@ -817,6 +1012,15 @@ private:
         if(rc==kUnsupported && !strcmp(o.error,"configured-bss-not-found") && !joinRescanned){
             joinRescanned=true;joinPhase=JoinPhase::ScanFirst;return;}                   // the core's last scan missed it
         if(rc!=kSuccess){setError(o.error[0]?o.error:"connect-rejected");finishJoin(1,1,rc);return;}
+#if AIRPORT_ATH10K_WPASEC
+        joined=*n;saePhase=SAEPhase::Begin;supplicantActive=false;
+        // The PMK is known now for PSK, a cached PMKSA, or a PMK WCL put in the
+        // join; SAE and full 802.1X begin the handshake when theirs exists.
+        if(pending.secure && ((!pending.sae && !pending.enterprise) || pending.pmksa || (pending.enterprise && pending.keyLength==32)) && !beginSupplicant(pollMs)){
+            setError("supplicant-begin-failed");requestCancel();joinPhase=JoinPhase::Associate;finishJoin(1,1,kError);return;}
+        joinPhase=JoinPhase::Associate;
+        return;
+#else
         if(pending.secure){
             uint8_t nonce[32]{};
             if(!Crypto::random(nonce,32) || !supplicant.begin(pending.pmk,nonce,station,n->bssid,n->rsn,n->rsnLength)){
@@ -824,16 +1028,156 @@ private:
             AthSecurity::wipe(nonce,32);
         }
         joined=*n;joinPhase=JoinPhase::Associate;
+#endif
     }
+#if AIRPORT_ATH10K_WPASEC
+    // Chooses the station RSN/RSNXE and whether a cached PMKSA is offered.
+    bool prepareSecureConnect(JoinPlan &plan,const Network &n,uint64_t nowMs){
+        plan.pmksa=false;plan.havePMKID=false;plan.stationRSNLength=plan.stationRSNXELength=0;
+        if(!plan.secure || !plan.extended)return true;
+        const PMKSACache::Entry *e=nullptr;
+        if((plan.sae||plan.enterprise) && !pmksaFallbackTried)e=pmksa.find(joinBSSID,plan.akm,nowMs);
+        if(e){plan.pmksa=true;plan.havePMKID=true;memcpy(plan.pmk,e->pmk,32);memcpy(plan.pmkid,e->pmkid,16);}
+        const size_t rsn=AthSecurity::buildStationRSN(plan.stationRSN,sizeof(plan.stationRSN),plan.group,plan.akm,plan.mfpc,plan.mfpr,e?e->pmkid:nullptr);
+        if(!rsn)return false;
+        plan.stationRSNLength=uint8_t(rsn);
+        if(plan.sae && !plan.pmksa && !plan.passwordLength)return false; // no password and nothing cached
+        if(plan.sae && plan.h2e){plan.stationRSNXE[0]=244;plan.stationRSNXE[1]=1;plan.stationRSNXE[2]=0x20;plan.stationRSNXELength=3;}
+        (void)n;
+        return true;
+    }
+    // Starts the 4-way handshake with the PMK now in pending.pmk.
+    bool beginSupplicant(uint64_t nowMs){
+        (void)nowMs;
+        uint8_t nonce[32]{};
+        const Network &n=joined;
+        bool ok;
+        if(!pending.extended)ok=Crypto::random(nonce,32) && supplicant.begin(pending.pmk,nonce,stationAddr,n.bssid,n.rsn,n.rsnLength);
+        else ok=Crypto::random(nonce,32) && supplicant.begin(pending.pmk,nonce,stationAddr,n.bssid,n.rsn,n.rsnLength,pending.akm,pending.stationRSN,pending.stationRSNLength,pending.mfpc,
+            n.rsnxeLength?n.rsnxe:nullptr,n.rsnxeLength,pending.stationRSNXELength?pending.stationRSNXE:nullptr,pending.stationRSNXELength,pending.havePMKID?pending.pmkid:nullptr);
+        AthSecurity::wipe(nonce,32);
+        supplicantActive=ok;
+        return ok;
+    }
+    void computePMKID(uint8_t *out) const {
+        const char label[]="PMK Name";uint8_t data[8+12];memcpy(data,label,8);memcpy(data+8,joinBSSID,6);memcpy(data+14,stationAddr,6);
+        uint8_t digest[32]{};
+        if(AthSecurity::akmSHA256(pending.akm)){AthSHA256::HMAC h(pending.pmk,32);h.update(data,sizeof(data));h.final(digest);}
+        else Crypto::hmac(pending.pmk,32,data,sizeof(data),digest);
+        memcpy(out,digest,16);AthSecurity::wipe(digest,sizeof(digest));
+    }
+    void cacheEnterprisePMKSA(uint64_t nowMs){
+        if(pending.pmksa)return; // the entry in use stays
+        uint8_t id[16];computePMKID(id);pmksa.add(joinBSSID,pending.akm,pending.pmk,id,nowMs);AthSecurity::wipe(id,sizeof(id));
+    }
+    bool pmksaFallback(){
+        if(!pending.pmksa || assocNotified)return false;
+        // The AP refused the PMKSA (status 53) or the association failed: drop it, run full authentication once.
+        pmksa.remove(joinBSSID,pending.akm);
+        pending.pmksa=pending.havePMKID=false;
+        if(pending.sae && !pending.passwordLength)return false;
+        pmksaFallbackTried=true;joinPhase=JoinPhase::Prepare;joinCancelMs=joinScanCancelMs=0;
+        supplicant.reset();supplicantActive=false;pendingLength=0;
+        return true;
+    }
+    // --- SAE (Commit/Confirm through SendAuth/ReceiveAuth; Ath10kSAE.hpp) -----
+    enum class SAEPhase : uint8_t { Begin, WaitCommit, WaitConfirm, Done, Failed };
+    static constexpr uint64_t kSAERetryMs=500;static constexpr unsigned kSAEMaxSends=6;
+    void resetSAE(){sae.reset();AthSecurity::wipe(saeFrame,sizeof(saeFrame));saeFrameLength=0;saePhase=SAEPhase::Begin;saeSends=0;saeSendMs=0;saeFramePending=false;}
+    // Authentication frame body: algorithm 3 (SAE), transaction, status, payload.
+    bool buildSAEFrame(uint16_t transaction,uint16_t statusCode,size_t payload){
+        put16(saeFrame,3);put16(saeFrame+2,transaction);put16(saeFrame+4,statusCode);
+        saeFrameLength=6+payload;saeFramePending=true;saeSends=0;return saeFrameLength<=sizeof(saeFrame);
+    }
+    void sendSAEFrame(uint64_t nowMs){
+        if(!saeFrameLength)return;
+        const int rc=call(AthControl::SendAuth,0,saeFrame,uint32_t(saeFrameLength));
+        if(rc==kSuccess){saeFramePending=false;++saeSends;saeSendMs=nowMs?nowMs:1;}
+        else if(rc!=kBusy && rc!=kNotReady){setError("sae-send-failed");saeFail(saeFailureReason);}
+    }
+    bool sendCommit(uint64_t nowMs){
+        const size_t n=sae.buildCommit(saeFrame+6,sizeof(saeFrame)-6);
+        if(!n || !buildSAEFrame(1,sae.authStatus(),n)){setError(sae.error);saeFail(saeFailureReason);return false;}
+        saePhase=SAEPhase::WaitCommit;sendSAEFrame(nowMs);return saePhase!=SAEPhase::Failed;
+    }
+    bool sendConfirm(uint64_t nowMs){
+        const size_t n=sae.buildConfirm(saeFrame+6,sizeof(saeFrame)-6);
+        if(!n || !buildSAEFrame(2,0,n)){setError(sae.error);saeFail(saeFailureReason);return false;}
+        saePhase=SAEPhase::WaitConfirm;sendSAEFrame(nowMs);return saePhase!=SAEPhase::Failed;
+    }
+    void saeFail(uint16_t reason){
+        saePhase=SAEPhase::Failed;sae.reset();call(AthControl::AuthResult,0);
+        joinPhase=JoinPhase::Associate;finishJoin(1,reason,kError);
+    }
+    void saeComplete(uint64_t nowMs){
+        memcpy(pending.pmk,sae.pmk,32);pending.havePMKID=true;memcpy(pending.pmkid,sae.pmkid,16);
+        pmksa.add(joinBSSID,pending.akm,pending.pmk,pending.pmkid,nowMs);
+        AthSecurity::wipe(pending.password,sizeof(pending.password));pending.passwordLength=0;
+        AthSecurity::wipe(pending.key,sizeof(pending.key));pending.keyLength=0; // the password's other copy: the PMK replaces it
+        saePhase=SAEPhase::Done;sae.reset();
+        call(AthControl::AuthResult,1);
+        if(!beginSupplicant(nowMs)){setError("supplicant-begin-failed");requestCancel();finishJoin(1,1,kError);}
+    }
+    void saeReceive(const uint8_t *frame,uint32_t length,uint64_t nowMs){
+        if(length<6)return;
+        const uint16_t algorithm=le16(frame),sequence=le16(frame+2),statusCode=le16(frame+4);
+        if(algorithm!=3)return;
+        const uint8_t *body=frame+6;const uint32_t bodyLength=length-6;
+        if(sequence==1 && saePhase==SAEPhase::WaitCommit){
+            if(statusCode==AthSAE::kStatusAntiCloggingTokenRequired){
+                if(!sae.receiveCommit(body,bodyLength,statusCode)){setError(sae.error);saeFail(saeFailureReason);return;}
+                sendCommit(nowMs);return;
+            }
+            if(!sae.receiveCommit(body,bodyLength,statusCode)){setError(sae.error);saeFail(saeFailureReason);return;}
+            sendConfirm(nowMs);
+        }else if(sequence==2 && saePhase==SAEPhase::WaitConfirm){
+            if(statusCode || !sae.receiveConfirm(body,bodyLength)){setError(statusCode?"sae-confirm-rejected":sae.error);saeFail(saeFailureReason);return;}
+            saeComplete(nowMs);
+        }
+    }
+    void serviceSAE(uint64_t nowMs){
+        if(saePhase==SAEPhase::Done || saePhase==SAEPhase::Failed)return;
+        if(saePhase==SAEPhase::Begin){
+            if(!pending.passwordLength || !sae.begin(status.local,joinBSSID,pending.password,pending.passwordLength,nullptr,0,pending.ssid,pending.ssidLength,pending.h2e)){
+                setError(sae.error);saeFail(saeFailureReason);return;}
+            sendCommit(nowMs);return;
+        }
+        for(unsigned i=0;i<4 && saePhase!=SAEPhase::Done && saePhase!=SAEPhase::Failed;++i){
+            AthControl::Response rx{};
+            if(call(AthControl::ReceiveAuth,rx)!=kSuccess)break;
+            saeReceive(rx.data,rx.length,nowMs);
+            AthSecurity::wipe(rx.data,sizeof(rx.data));
+        }
+        if(saePhase==SAEPhase::Done || saePhase==SAEPhase::Failed)return;
+        if(saeFramePending || (saeSendMs && nowMs>=saeSendMs+kSAERetryMs)){
+            if(saeSends>=kSAEMaxSends){setError("sae-no-response");saeFail(saeFailureReason);return;}
+            sendSAEFrame(nowMs);
+        }
+    }
+    AthSAE::Session<Crypto::random> sae{};
+    SAEPhase saePhase=SAEPhase::Begin;
+    uint8_t saeFrame[512]{};size_t saeFrameLength=0;bool saeFramePending=false;unsigned saeSends=0;uint64_t saeSendMs=0;
+    static constexpr uint16_t saeFailureReason=23; // 802.1X auth failed: macOS asks for the password again
+    PMKSACache pmksa{};
+    bool supplicantActive=false,pmksaFallbackTried=false;
+    uint8_t stationAddr[6]{};
+#endif
     // Returns false when the join has been failed.
     bool serviceSupplicant(){
         using S=AthSecurity::Supplicant<Crypto>;
+#if AIRPORT_ATH10K_WPASEC
+        if(!supplicantActive)return true; // no PMK yet: the core keeps EAPOL-Key frames queued
+#endif
         for(unsigned i=0;i<4 && !rekeyKeysReady && !rekeyResponsePending;++i){
             AthControl::Response rx{};
             if(call(AthControl::ReceiveEAPOL,rx)!=kSuccess)break;
             const auto result=supplicant.receive(rx.data,rx.length);
             AthSecurity::wipe(rx.data,sizeof(rx.data));
-            if(result==S::Fatal){setError(supplicant.error);fail(23);return false;}
+            if(result==S::Fatal){setError(supplicant.error);
+#if AIRPORT_ATH10K_WPASEC
+                if(pending.pmksa){pmksa.remove(joinBSSID,pending.akm);pending.pmksa=pending.havePMKID=false;}
+#endif
+                fail(23);return false;}
             if(result==S::Keys){
                 AthControl::Request keys{};keys.length=kKeyPayloadBytes;memcpy(keys.data,supplicant.keys,keys.length);
                 AthControl::Response o{};keys.operation=AthControl::InstallKeys;

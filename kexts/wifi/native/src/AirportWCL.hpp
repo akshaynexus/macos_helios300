@@ -15,6 +15,10 @@
 #include <stddef.h>
 #include <string.h>
 
+#ifndef AIRPORT_ATH10K_WPASEC
+#define AIRPORT_ATH10K_WPASEC 0 // see src/shared/Ath10kControl.hpp
+#endif
+
 namespace AirportWCL {
 
 enum class MacUpdate { Invalid, Unchanged, Busy, Change };
@@ -473,6 +477,10 @@ inline bool decodeScan(const void *buffer, size_t length, ScanRequest &out) {
     return true;
 }
 
+// WCLJoinRequest::checkValidationForApple80211Key (26.7.2): key_len <= 64; the
+// apple80211_key copied at 0x40 has key bytes 0x10..0x4f, rsc length at 0x50.
+// Only the gated build reads past 32 (a password: APPLE80211_CIPHER_PWD).
+constexpr size_t kJoinKeyMax = AIRPORT_ATH10K_WPASEC ? 64 : 32;
 struct JoinRequest {
     uint32_t lowerAuth;
     uint32_t upperAuth;
@@ -481,7 +489,7 @@ struct JoinRequest {
     uint32_t keyLength;
     uint32_t keyCipher;
     uint16_t keyIndex;
-    uint8_t key[32];
+    uint8_t key[kJoinKeyMax];
     uint8_t bssid[6];
     uint16_t channelSpec;
     uint16_t rsnLength;
@@ -510,7 +518,10 @@ inline bool validRSNOverride(const uint8_t *ie, size_t length) {
         ie[4] == 0xf2 && ie[5] == 1 && ie[6] == 1 && ie[7] == 0;
 }
 
-enum class LegacyAuth { Invalid, Open, Wep, Personal, Enterprise };
+enum class LegacyAuth { Invalid, Open, Wep, Personal, Enterprise, Sae };
+constexpr uint32_t kCipherPWD = 10;                       // APPLE80211_CIPHER_PWD
+constexpr uint32_t kAuthWPA3SAE = 1u << 12;               // APPLE80211_AUTHTYPE_WPA3_SAE
+constexpr uint32_t kAuthWPA3Enterprise = 1u << 14;        // APPLE80211_AUTHTYPE_WPA3_ENTERPRISE
 inline LegacyAuth classifyLegacyAuth(const JoinRequest &j) {
     // Values from apple80211_authtype/cipher_type, used by the WCL association request.
     if (!validRSNOverride(j.rsn, j.rsnLength)) return LegacyAuth::Invalid;
@@ -523,9 +534,26 @@ inline LegacyAuth classifyLegacyAuth(const JoinRequest &j) {
         return LegacyAuth::Invalid;
     }
     const uint32_t personal = (1u << 1) | (1u << 3) | (1u << 10);
+#if AIRPORT_ATH10K_WPASEC
+    const uint32_t enterprise = (1u << 0) | (1u << 2) | (1u << 11) | kAuthWPA3Enterprise;
+    if (j.upperAuth & ~(personal | enterprise | kAuthWPA3SAE)) return LegacyAuth::Invalid;
+    const bool personalSide = (j.upperAuth & (personal | kAuthWPA3SAE)) != 0;
+    if (personalSide && (j.upperAuth & enterprise)) return LegacyAuth::Invalid;
+    if (j.upperAuth & kAuthWPA3SAE) {
+        if (j.keyCipher == kCipherPWD && j.keyLength >= 1 && j.keyLength <= kJoinKeyMax)
+            return LegacyAuth::Sae;
+        // A transition join keeps its PSK side only with a PMK from airportd.
+        if ((j.upperAuth & personal) && j.keyLength == 32 && (j.keyCipher == 6 || j.keyCipher == 7))
+            return LegacyAuth::Personal;
+        if (!(j.upperAuth & personal))
+            return LegacyAuth::Sae; // no password: PMKSA cache or refused by planJoin
+        return LegacyAuth::Invalid;
+    }
+#else
     const uint32_t enterprise = (1u << 0) | (1u << 2) | (1u << 11);
     if (j.upperAuth & ~(personal | enterprise)) return LegacyAuth::Invalid;
     if ((j.upperAuth & personal) && (j.upperAuth & enterprise)) return LegacyAuth::Invalid;
+#endif
     if (j.upperAuth & personal)
         return j.keyLength == 32 && (j.keyCipher == 6 || j.keyCipher == 7) ?
             LegacyAuth::Personal : LegacyAuth::Invalid;
@@ -543,7 +571,7 @@ inline bool decodeJoin(const void *buffer, size_t length, JoinRequest &out) {
     uint32_t keyLength = read32(p + 0x44);
     uint16_t rsnLength = read16(p + 0xd4);
     if (!count || count > 10 || !ssidLength || ssidLength > 32 ||
-        keyLength > 32 || rsnLength > 257 || length < 0x218 + size_t(count) * 18)
+        keyLength > kJoinKeyMax || rsnLength > 257 || length < 0x218 + size_t(count) * 18)
         return false;
     if (p[0x21c] & 1)
         return false;

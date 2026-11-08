@@ -271,6 +271,9 @@ private:
     uint32_t mirroredState=~0u,mirroredReason=~0u,mirroredErrorSerial=~0u;
     uint32_t mirroredScanMs=~0u,mirroredJoinMs=~0u,mirroredScans=~0u,mirroredNetworks=~0u,mirroredWake=~0u,mirroredRoams=~0u,mirroredRoamMs=~0u;
     uint32_t mirroredTxPackets=~0u,mirroredTxFull=~0u,mirroredTxStarts=~0u,mirroredCandidates=~0u;uint64_t txMirroredMs=0;
+#if AIRPORT_ATH10K_WPASEC
+    uint32_t mirroredPMKSA=~0u;
+#endif
     int reportedQuality=-3;
     uint16_t scanHomeAwayMs=0;
 };
