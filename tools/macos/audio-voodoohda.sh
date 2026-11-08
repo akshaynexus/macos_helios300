@@ -1,18 +1,28 @@
 #!/bin/bash
-# Audio option 1 for the Helios 300 on macOS 26.7.2 (25G332): VoodooHDA 3.6.8 in /Library/Extensions, no AppleHDA,
-# no root-volume change. See docs/HARDWARE.md "Audio on macOS 26".
+# SPDX-License-Identifier: GPL-2.0-only
+# Audio option 1 (fallback) for the Helios 300 on macOS 26.7.2 (25G332): VoodooHDA 3.6.8 in /Library/Extensions, no
+# AppleHDA, no root-volume change, no HDMI audio. Option 2 (audio-applehda.sh) is the recommended route: it sounds
+# better because AppleALC layout 29 brings Apple's speaker EQ, limiter and crossover, which VoodooHDA has no
+# equivalent of. See docs/HARDWARE.md "Audio on macOS 26".
 #
 # Run on the Mac. MODE selects what happens (default: dry-run, which changes nothing):
-#   MODE=dry-run   checks + downloads/verifies the kext into a temp dir, prints what install would do
-#   MODE=install   copies VoodooHDA.kext to /Library/Extensions (root:wheel 755) and loads it with kmutil
+#   MODE=dry-run   checks + downloads/verifies the kext into a temp dir, applies TUNE/NODES there, prints the plan
+#   MODE=install   copies VoodooHDA.kext to /Library/Extensions (root:wheel 755) and rebuilds the auxiliary collection
+#                  with it (falls back to kmutil load -p); also the way to change TUNE on an installed copy. Restart.
 #   MODE=revert    removes /Library/Extensions/VoodooHDA.kext (+ prefPane) and rebuilds the auxiliary collection
-#   MODE=status    what is installed/loaded now (after the reboot)
-# NODES=1 (with dry-run/install) writes the ALC255 pin fallback into the kext's NodesToPatch and re-signs it ad hoc;
-# use it only if the first boot with the stock kext has no headphone output or no microphone.
+#   MODE=status    what is installed/loaded now, with the installed copy's tuning values
+# TUNE=1 (default) writes the sound profile below into the kext's Info.plist and re-signs it ad hoc; TUNE=0 installs
+# the release's Info.plist unchanged (sha256-pinned). Values: VHDA_PCM (default 90), VHDA_REC (75), VHDA_INHIBIT (true).
+# NODES=1 also writes the ALC255 pin fallback into NodesToPatch; use it only if the headphones or a microphone are
+# missing with the BIOS pins.
 # Over SSH: { echo MODE=dry-run; cat tools/macos/audio-voodoohda.sh; } | ~/.config/helios300-ssh/hbmac
 set -euo pipefail
 MODE=${MODE:-dry-run}
 NODES=${NODES:-0}
+TUNE=${TUNE:-1}
+VHDA_PCM=${VHDA_PCM:-90}
+VHDA_REC=${VHDA_REC:-75}
+VHDA_INHIBIT=${VHDA_INHIBIT:-true}
 
 # Pinned: CloverHackyColor/VoodooHDA GitHub release "Release368" (2026-09-18), VoodooHDA 3.6.8, built with the
 # macOS 26.5 SDK on 25G83, ad-hoc signed. It carries AppleALC's pin tables and is newer than the 3.0.3 in
@@ -25,6 +35,11 @@ DEST=/Library/Extensions/VoodooHDA.kext
 PREFPANE_SYS=/Library/PreferencePanes/VoodooHDA.prefPane
 PREFPANE_USER="$HOME/Library/PreferencePanes/VoodooHDA.prefPane"
 BUILD_WANT=25G332
+EXT=/Library/Extensions
+AUX=/Library/KernelCollections/AuxiliaryKernelExtensions.kc
+KB=/System/Library/KernelCollections/BootKernelExtensions.kc
+KS=/System/Library/KernelCollections/SystemKernelExtensions.kc
+STATE=/Library/Helios300/audio-voodoohda
 
 R() { if declare -F asroot >/dev/null; then asroot "$@"; else sudo "$@"; fi; }
 say() { printf '%s\n' "$*"; }
@@ -68,7 +83,8 @@ preflight() {
 	for k in "$PREFPANE_SYS" "$PREFPANE_USER" "$DEST"; do
 		if [ -e "$k" ]; then say "already present: $k ($(defaults read "$k/Contents/Info" CFBundleShortVersionString 2>/dev/null || echo '?'))"; fi
 	done
-	ls -d /Library/Extensions/*HDA*.kext /Library/Extensions/*ALC*.kext 2>/dev/null | grep -v "^$DEST\$" | sed 's/^/other audio kext in \/Library\/Extensions: /' || true
+	local o; for o in "$EXT"/*HDA*.kext "$EXT"/*ALC*.kext; do
+		[ -e "$o" ] && [ "$o" != "$DEST" ] && say "other audio kext in $EXT: $o"; done
 	say "loaded:"; kmutil showloaded 2>/dev/null | grep -E 'Lilu|AppleALC|NMHDA|IOAudioFamily|VoodooHDA|WhateverGreen' | sed 's/^/  /' || true
 
 	step "Device"
@@ -100,7 +116,14 @@ stage() {
 	/usr/libexec/PlistBuddy -c 'Print :OSBundleLibraries' "$K/Contents/Info.plist" | sed 's/^/  /'
 	say "(IOAudioFamily 740.1 and IOGraphicsFamily 600 are in SystemKernelExtensions.kc only: this kext cannot be"
 	say " OpenCore-injected; /Library/Extensions -> auxiliary collection is the route)"
+	if [ "$TUNE" = 1 ]; then tune_patch "$K"; fi
 	if [ "$NODES" = 1 ]; then nodes_patch "$K"; fi
+	if [ "$TUNE" = 1 ] || [ "$NODES" = 1 ]; then
+		plutil -lint "$K/Contents/Info.plist" >/dev/null || die "patched Info.plist does not lint"
+		codesign -f -s - "$K" 2>&1 | sed 's/^/  /'
+		codesign --verify --strict "$K" || die "re-signing failed"
+		say "Info.plist changed, kext re-signed ad hoc (binary unchanged: $BIN_SHA)"
+	fi
 	step "kmutil print-diagnostics on a root:wheel copy in a temp dir"
 	local d; d=$(mktemp -d "${TMPDIR:-/tmp}/vhda-diag.XXXXXX")
 	R ditto "$K" "$d/VoodooHDA.kext"; R chown -R root:wheel "$d/VoodooHDA.kext"; R chmod -R 755 "$d/VoodooHDA.kext"
@@ -125,10 +148,33 @@ nodes_patch() {
 			-c "Add $base:$i:Config integer $((c))" -c "Add $base:$i:Comment string ${nc##*:}" "$pl"
 		i=$((i + 1))
 	done
-	plutil -lint "$pl" >/dev/null || die "patched Info.plist does not lint"
-	codesign -f -s - "$k" 2>&1 | sed 's/^/  /'
-	codesign --verify --strict "$k" || die "re-signing failed"
 	/usr/libexec/PlistBuddy -c "Print $base" "$pl" | sed 's/^/  /'
+}
+
+# Why the stock 3.6.8 sounds bad on this laptop, and what TUNE changes (docs/HARDWARE.md "Option 1 sound"):
+# - No speaker processing. AppleHDA with layout 29 runs Apple's DSP chain for the internal speakers (EQ filters,
+#   limiter, crossover: layout29.xml SignalProcessing/SoftwareDSP); VoodooHDA sends the raw signal, so the small
+#   speakers sound thin and harsh, and full-scale content drives them into distortion. Not fixable here: option 2.
+# - Gain: the ALC255's only output gain stage is the DAC amp (NID 0x02, 0.75 dB steps, 0 dB max); VoodooHDA sets it
+#   to Main x PCM (VoodooHDADevice.cpp audioCtlOssMixerSet), PCM 95 = near 0 dB at full volume, no headroom.
+#   PCM 90 keeps ~4 dB more headroom at the top of the slider (VHDA_PCM).
+# - DMA: stream buffers are mapped cached unless InhibitCache (allocateDmaMemory); the release turns it on only for
+#   its HDMI personality. Uncached stream buffers are the usual cure for crackle/static (VHDA_INHIBIT).
+# - Recording: Rec 95 is the release's capture level; 75 (the driver's own table default, Tables.c) lowers the
+#   DMIC's hiss and clipping (VHDA_REC).
+# Unchanged on purpose: Boost 1 (a x1 multiply, no effect), Noise 0 (no noise gate), Vectorize, iMix 95 (the
+# playback mixer path, must not be 0), iGain 0 (analog loopback muted), the volume-curve "fixes" (they only remap
+# the slider). Mixer values are read once at load: a change needs MODE=install and a restart.
+tune_patch() {
+	local pl="$1/Contents/Info.plist" base=":IOKitPersonalities:VoodooHDA"
+	step "Sound profile (TUNE=1): PCM $VHDA_PCM, Rec $VHDA_REC, InhibitCache $VHDA_INHIBIT"
+	case "$VHDA_PCM$VHDA_REC" in *[!0-9]*) die "VHDA_PCM/VHDA_REC must be numbers 0-100";; esac
+	[ "$VHDA_PCM" -ge 50 ] && [ "$VHDA_PCM" -le 100 ] || die "VHDA_PCM $VHDA_PCM: use 50-100"
+	[ "$VHDA_REC" -le 100 ] || die "VHDA_REC $VHDA_REC: use 0-100"
+	case "$VHDA_INHIBIT" in true|false) ;; *) die "VHDA_INHIBIT must be true or false";; esac
+	/usr/libexec/PlistBuddy -c "Set $base:MixerValues:PCM $VHDA_PCM" -c "Set $base:MixerValues:Rec $VHDA_REC" \
+		-c "Set $base:InhibitCache $VHDA_INHIBIT" "$pl"
+	/usr/libexec/PlistBuddy -c "Print $base:MixerValues" -c "Print $base:InhibitCache" "$pl" | sed 's/^/  /'
 }
 
 install_kext() {
@@ -141,10 +187,42 @@ install_kext() {
 		[ "$(sha "$DEST/Contents/MacOS/VoodooHDA")" = "$BIN_SHA" ] || die "installed binary differs"
 		[ "$(stat -f %Su:%Sg "$DEST")" = root:wheel ] || die "ownership not root:wheel"
 	fi
-	step "Load (adds it to the auxiliary kernel collection; same procedure as PG106FB)"
-	run kmutil load -p "$DEST"
-	say "If kmutil says approval is needed: System Settings > Privacy & Security > Allow, then restart."
-	say "Then restart either way, and run MODE=status."
+	step "Auxiliary kernel collection with it (kmutil create, as audio-applehda.sh / docs/MULTI-GPU.md)"
+	local rc=0; aux_rebuild || rc=$?
+	if [ "$rc" != 0 ]; then
+		step "Fallback: kmutil load -p (kernelmanagerd adds it to the auxiliary collection; the first install's route)"
+		run kmutil load -p "$DEST"
+		say "If kmutil says approval is needed: System Settings > Privacy & Security > Allow, then restart."
+	fi
+	say "Restart, and run MODE=status."
+}
+
+# The auxiliary collection from every kext in /Library/Extensions against the running boot/system collections:
+# kmutil create -n aux ... -p <each> -A <file> -z, kmutil inspect, then publish (previous copy kept in $STATE).
+aux_rebuild() {
+	local k ids="" a=(create -n aux --volume-root / --allow-missing-kdk -a x86_64 -B "$KB")
+	[ -s "$KS" ] && a+=(-S "$KS")
+	[ -f /System/Library/Kernels/kernel ] && a+=(--kernel /System/Library/Kernels/kernel)
+	a+=(--repository "$EXT")
+	for k in "$EXT"/*.kext; do
+		[ -d "$k" ] || continue
+		if [ "$k" = "$DEST" ] && [ "$MODE" = revert ]; then continue; fi
+		a+=(-p "$k"); ids="$ids $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$k/Contents/Info.plist" 2>/dev/null)"
+	done
+	if [ "$MODE" = install ] && [ ! -d "$DEST" ]; then a+=(-p "$DEST"); ids="$ids org.voodoo.driver.VoodooHDA"; fi
+	if [ -z "$ids" ]; then run rm -f "$AUX"; say "no kexts left in $EXT: auxiliary collection removed"; return 0; fi
+	local W2; W2=$(mktemp -d "${TMPDIR:-/tmp}/vhda-aux.XXXXXX")
+	a+=(-A "$W2/aux.kc" -z)
+	if [ "$MODE" != install ] && [ "$MODE" != revert ]; then say "would run: kmutil ${a[*]}; kmutil inspect; publish to $AUX"; return 0; fi
+	say "+ kmutil ${a[*]}"
+	if ! R kmutil "${a[@]}" > "$W2/log" 2>&1; then sed 's/^/    /' "$W2/log" | tail -15; R rm -rf "$W2"; return 1; fi
+	R kmutil inspect -a x86_64 -A "$W2/aux.kc" > "$W2/inspect" 2>&1 || { tail -5 "$W2/inspect"; R rm -rf "$W2"; return 1; }
+	for k in $ids; do grep -q "$k" "$W2/inspect" || { say "  $k missing from the built collection"; R rm -rf "$W2"; return 1; }; done
+	R mkdir -p "$STATE"
+	if [ -f "$AUX" ]; then R cp -p "$AUX" "$STATE/aux-previous.kc"; fi
+	R cp "$W2/aux.kc" "$AUX"; R chown root:wheel "$AUX"; R chmod 644 "$AUX"
+	say "  published $AUX with$ids (previous: $STATE/aux-previous.kc)"
+	R rm -rf "$W2"
 }
 
 revert() {
@@ -152,11 +230,9 @@ revert() {
 	for k in "$DEST" "$PREFPANE_SYS" "$PREFPANE_USER"; do
 		if [ -e "$k" ]; then run rm -rf "$k"; fi
 	done
-	# Rebuild the auxiliary collection from what is left in /Library/Extensions (PG106FB, PG106Accel), the
-	# command OpenCore Legacy Patcher uses for an aux-only rebuild.
-	run kmutil create --allow-missing-kdk --new aux \
-		--boot-path /System/Library/KernelCollections/BootKernelExtensions.kc \
-		--system-path /System/Library/KernelCollections/SystemKernelExtensions.kc || say "aux rebuild failed; the restart rebuilds it (kernelmanagerd)"
+	# Rebuild the auxiliary collection from what is left in /Library/Extensions (PG106FB, PG106Accel).
+	step "Auxiliary kernel collection without it"
+	aux_rebuild || say "aux rebuild failed (log above): PG106FB/PG106Accel may still be built with VoodooHDA; after the restart, sudo kmutil load -p them"
 	say "Restart. If the machine does not reach the desktop with VoodooHDA: boot safe mode (OpenCore picker,"
 	say "Shift+Enter; safe mode does not load /Library/Extensions kexts) and run MODE=revert there."
 }
@@ -164,6 +240,11 @@ revert() {
 status() {
 	step "Status"
 	say "installed: $( [ -e "$DEST" ] && defaults read "$DEST/Contents/Info" CFBundleShortVersionString || echo no)"
+	if [ -e "$DEST" ]; then
+		say "tuning: $(/usr/libexec/PlistBuddy -c 'Print :IOKitPersonalities:VoodooHDA:MixerValues' "$DEST/Contents/Info.plist" 2>/dev/null | tr -s ' \n' ' ')" \
+			"InhibitCache $(/usr/libexec/PlistBuddy -c 'Print :IOKitPersonalities:VoodooHDA:InhibitCache' "$DEST/Contents/Info.plist" 2>/dev/null)" \
+			"($( [ "$(sha "$DEST/Contents/Info.plist")" = "$PLIST_SHA" ] && echo 'release Info.plist' || echo 'changed by TUNE/NODES'))"
+	fi
 	kmutil showloaded 2>/dev/null | grep -E 'VoodooHDA|IOAudioFamily|AppleALC|NMHDA|PG106' | sed 's/^/  /' || true
 	ioreg -rw0 -c VoodooHDADevice -d1 2>/dev/null | head -5 || true
 	say "audio engines:"; ioreg -rw0 -c IOAudioEngine -l 2>/dev/null | grep -E '"IOAudioEngineDescription"|"IOAudioEngineState"' | sed 's/^/  /' | head -10 || true

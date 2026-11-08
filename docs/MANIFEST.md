@@ -89,7 +89,8 @@ What to do on the Mac once macOS 26 runs, in `order`. A consumer copies every no
 | `script` | the artifact that does it (one of `artifacts`) |
 | `run` | the exact command lines: `check` (dry run, changes nothing), `install`, `revert`, `status`. The scripts call `sudo` themselves; run them as the logged-in user |
 | `cwd` | where to run it when the script needs the files next to it |
-| `group`, `choice` | alternatives: do exactly one step of a group. `audio`: choice 1 `audio-voodoohda` (VoodooHDA in /Library/Extensions, reversible, no HDMI audio), choice 2 `audio-applehda` (AppleHDA on the root volume, HDMI audio through NMHDA) |
+| `group`, `choice` | alternatives: do exactly one step of a group. `audio`: choice 2 `audio-applehda` (AppleHDA on the root volume, AppleALC layout 29, HDMI audio through NMHDA; recommended, listed first), choice 1 `audio-voodoohda` (VoodooHDA in /Library/Extensions, reversible, no speaker EQ, no HDMI audio; the fallback) |
+| `recommended` | `true` on the step of a group to take unless it cannot be used (`audio-applehda`) |
 | `reboot` | restart after `install` / `revert` |
 | `needs` | what must be true first (the script checks it and stops otherwise), e.g. FileVault off for option 2 |
 | `rerun_after_macos_update` | a macOS update undoes it (option 2: the update boots a new sealed snapshot without AppleHDA) |
@@ -97,7 +98,7 @@ What to do on the Mac once macOS 26 runs, in `order`. A consumer copies every no
 
 The 0.1.1 steps: `gpu` (`install-gpu.sh`: PG106FB + PG106Accel into /Library/Extensions, the Metal plugin + NVK into
 /Library/GPUBundles with the per-app allow list `/Library/GPUBundles/nvmtl-allow.txt`; every zip and its inner files
-checked against `manifest.json` before anything is unzipped), then **one** of `audio-voodoohda` / `audio-applehda`.
+checked against `manifest.json` before anything is unzipped), then **one** of `audio-applehda` (recommended) / `audio-voodoohda`.
 
 ## `config`
 

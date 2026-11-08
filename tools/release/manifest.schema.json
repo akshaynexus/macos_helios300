@@ -124,6 +124,7 @@
                                "order": {"type": "integer", "minimum": 0},
                                "group": {"type": "string", "pattern": "^[a-z0-9-]+$"},
                                "choice": {"type": "integer", "minimum": 1},
+                               "recommended": {"type": "boolean"},
                                "script": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+\\.sh$"},
                                "run": {"type": "object", "additionalProperties": false, "minProperties": 1,
                                        "properties": {"check": {"type": "string"}, "install": {"type": "string"},
