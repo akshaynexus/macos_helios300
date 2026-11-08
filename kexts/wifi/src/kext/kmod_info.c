@@ -4,7 +4,7 @@
 extern kern_return_t _start(kmod_info_t *, void *);
 extern kern_return_t _stop(kmod_info_t *, void *);
 
-KMOD_EXPLICIT_DECL(br.com.jonasw8.driver.ath10kmac, "0.1.0", _start, _stop)  /* macOS-host Makefile only; tools/cross-build-kext.sh generates its own */
+KMOD_EXPLICIT_DECL(br.com.jonasw8.driver.ath10kmac, "0.1.1", _start, _stop)  /* macOS-host Makefile only; tools/cross-build-kext.sh generates its own */
 
 static kern_return_t ath10kmac_module_start(kmod_info_t *ki, void *data)
 {

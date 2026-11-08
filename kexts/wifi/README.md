@@ -164,7 +164,7 @@ properties and network status; remove SSIDs and MACs before sharing) and
 
 1. **Load.** `kmutil showloaded | grep -i -e ath10k -e airportath10k` lists both.
    `ioreg -r -c Ath10kPCIDevice -l -w0 | grep -E 'Ath10k(PreparedBoardKey|DriverVersion|BoardUploadStatus|NativeReady)'`
-   shows the board key `…11ad,subsystem-device=0807`, `0.1.0`, a successful board upload and
+   shows the board key `…11ad,subsystem-device=0807`, `0.1.1`, a successful board upload and
    `Ath10kNativeReady = Yes`. `ioreg -r -c AirportAth10k -l -w0 | head -40` shows the front end
    and `ifconfig` an `en` interface with the card's MAC.
 2. **Menu.** The Wi-Fi menu-bar item and Settings › Wi-Fi show the card on; within about 4 s
