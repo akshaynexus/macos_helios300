@@ -74,7 +74,7 @@ release is a contract.
 | | `libnvmtl_translate.dylib`, AIR→SPIR-V (optional) | gpu-bundles `nvmtl/` | | |
 | | `NVK-Pascal`: `libvulkan_nouveau.dylib` + `nvk_icd.json` (optional) | gpu-bundles `nvmtl/` | | |
 | | `NVIDIA-firmware-LICENCE.txt`, `Mesa-license.rst` | stick-only | | |
-| | `audio-voodoohda.sh`, `audio-applehda.sh`, `install-gpu.sh` (optional until it exists), from `tools/macos/` | stick-only (`EFI/Helios300`) | | |
+| | `audio-voodoohda.sh`, `audio-applehda.sh`, `install-gpu.sh`, from `tools/macos/` | stick-only (`EFI/Helios300`) | | |
 
 ## `post_install[]`
 
@@ -95,7 +95,8 @@ What to do on the Mac once macOS 26 runs, in `order`. A consumer copies every no
 | `notes` | anything else the person needs: limits, the way back |
 
 The 0.1.1 steps: `gpu` (`install-gpu.sh`: PG106FB + PG106Accel into /Library/Extensions, the Metal plugin + NVK into
-/Library/GPUBundles with the per-app allow list), then **one** of `audio-voodoohda` / `audio-applehda`.
+/Library/GPUBundles with the per-app allow list `/Library/GPUBundles/nvmtl-allow.txt`; every zip and its inner files
+checked against `manifest.json` before anything is unzipped), then **one** of `audio-voodoohda` / `audio-applehda`.
 
 ## `config`
 

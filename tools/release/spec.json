@@ -207,8 +207,8 @@
       "name": "install-gpu.sh", "kind": "script",
       "source": {"tree": "self", "path": "tools/macos/install-gpu.sh"},
       "built_by": "copy", "licence": "GPL-2.0-only",
-      "status": "installs PG106FB, PG106Accel, the Metal plugin and NVK from the files next to it, each checked against manifest.json",
-      "install": "stick-only", "requires": [], "optional": true
+      "status": "installs PG106FB, PG106Accel, the Metal plugin, the translator, NVK and the per-app allow list (/Library/GPUBundles/nvmtl-allow.txt) from the files next to it, each zip and every file inside it checked against manifest.json; MODE=dry-run|install|revert|status",
+      "install": "stick-only", "requires": []
     },
     {
       "name": "NVIDIA-firmware-LICENCE.txt", "kind": "firmware-licence",
@@ -267,7 +267,9 @@
      "cwd": "the folder holding the release files and manifest.json (EFI/Helios300 on the stick, or a copy of it)",
      "reboot": true,
      "needs": ["SIP: csr-active-config with 0x1 (CSR_ALLOW_UNTRUSTED_KEXTS); 1401 sets 030A0000"],
-     "notes": ["If the Mac does not come up: Shift+Enter in the OpenCore picker (safe mode, -x): PG106, PG106FB and PG106Accel stand down; then MODE=revert"]},
+     "notes": ["If the Mac does not come up: Shift+Enter in the OpenCore picker (safe mode, -x): PG106, PG106FB and PG106Accel stand down; then MODE=revert",
+               "Which apps render on the GTX 1060: /Library/GPUBundles/nvmtl-allow.txt (one process name per line, an app's CFBundleExecutable; written only if none exists, system UI denied, no app allowed). One launch without a rule: NVMTL_ENABLE=1 /Applications/Foo.app/Contents/MacOS/Foo",
+               "ONLY=PG106FB (then PG106Accel, then \"plugin xlate nvk allow\") installs one part per boot"]},
     {"step": "audio-voodoohda", "order": 20, "group": "audio", "choice": 1,
      "what": "Audio option 1: VoodooHDA 3.6.8 into /Library/Extensions (sha256-pinned download). Reversible, no root-volume change; speakers, headphones and microphones through the ALC255; NO HDMI audio",
      "artifacts": ["audio-voodoohda.sh"],
