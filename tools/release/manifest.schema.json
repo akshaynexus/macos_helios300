@@ -200,7 +200,7 @@
       "additionalProperties": false,
       "properties": {
         "name": {"type": "string"},
-        "kind": {"enum": ["kext", "ssdt", "dylib", "bundle", "app", "firmware-licence", "script"]},
+        "kind": {"enum": ["kext", "ssdt", "dylib", "bundle", "app", "firmware-licence", "script", "doc"]},
         "version": {"type": "string"},
         "bundle_id": {"type": "string"},
         "file": {"type": "string", "pattern": "^[A-Za-z0-9_.+-]+$"},
@@ -229,7 +229,7 @@
                                                           "properties": {"arg": {"$ref": "#/$defs/boot_arg"}, "what": {"type": "string"}}}},
         "source": {"type": "object", "required": ["tree", "path"], "additionalProperties": false,
                    "properties": {"tree": {"enum": ["self", "driver"]}, "path": {"type": "string"}}},
-        "built_by": {"enum": ["cross", "iasl", "copy"]},
+        "built_by": {"enum": ["cross", "iasl", "copy", "generated"]},
         "signed": {"enum": ["ad-hoc (rcodesign)", "unsigned"]}
       },
       "allOf": [

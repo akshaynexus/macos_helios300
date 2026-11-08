@@ -40,11 +40,11 @@ release is a contract.
 | key | meaning |
 |---|---|
 | `name` | bundle or file name (`PG106.kext`, `SSDT-PG106-HDAU.aml`, `NVK-Pascal`) |
-| `kind` | `kext` · `ssdt` · `dylib` · `bundle` · `app` · `firmware-licence` · `script` (a post-install shell script, run on the Mac) |
+| `kind` | `kext` · `ssdt` · `dylib` · `bundle` · `app` · `firmware-licence` · `script` (a post-install shell script, run on the Mac) · `doc` (read on the Mac: `POST-INSTALL.md`) |
 | `file`, `sha256`, `size`, `url` | the release file. A directory is shipped as `<name>.zip`, deterministic (sorted entries, 1980-01-01 timestamps, 0755/0644 modes), with the bundle at the top: `PG106.kext/Contents/...` |
 | `contents_sha256` | `{path inside the bundle: sha256}` for zips |
 | `version`, `bundle_id` | from the built `Info.plist` (`CFBundleShortVersionString`, `CFBundleIdentifier`). For plain files, the release version. |
-| `install` | `opencore` (EFI/OC), `library-extensions` (AuxKC, after install), `gpu-bundles` (`/Library/GPUBundles`), `applications`, `stick-only` (licences) |
+| `install` | `opencore` (EFI/OC), `library-extensions` (AuxKC, after install), `gpu-bundles` (`/Library/GPUBundles`), `applications`, `stick-only` (licences, scripts, `POST-INSTALL.md`) |
 | `install_path` | the destination for the non-OpenCore kinds |
 | `opencore` | for kexts: the exact `Kernel → Add` entry, `BundlePath`, `ExecutablePath`, `PlistPath`, `Arch` (`x86_64`), `MinKernel`, `MaxKernel`, `Enabled`, `Comment`, plus `order`. Consumers insert entries **in `order`, after every kext they `require`**. |
 | `acpi` | for SSDTs: the `ACPI → Add` entry (`Path`, `Enabled`, `Comment`, `order`) |
@@ -53,7 +53,7 @@ release is a contract.
 | `hardware` | the device(s) it is for. Added only when the scan shows one. |
 | `boot_args_optional` | boot-args the artifact understands. **Never added by default**; documented for rollback and diagnostics. |
 | `licence`, `licence_files`, `contains_firmware`, `status` | what applies to the file, and how far it has been tested |
-| `source`, `built_by`, `signed` | tree (`self` / `driver`) and path; `cross` / `iasl` / `copy`; `ad-hoc (rcodesign)` or `unsigned` |
+| `source`, `built_by`, `signed` | tree (`self` / `driver`) and path; `cross` / `iasl` / `copy` / `generated` (written by release.sh from the spec: `POST-INSTALL.md`); `ad-hoc (rcodesign)` or `unsigned` |
 | `optional` | may be absent from a release (listed under `release.missing`) |
 | `third_party` | code from elsewhere inside a bundle: `path` in the bundle, `what`, `licence`, `notices` (licence files in the bundle; make_manifest refuses the bundle if any is absent), `source_url`, `source_sha256` |
 | `personality` | values baked into the built kext's `IOKitPersonalities` at release time, e.g. Ath10kMac `{"Ath10kCountryCode": {"string": "IN"}}` (`release.sh --wifi-country`) |
@@ -75,7 +75,8 @@ release is a contract.
 | | `libnvmtl_translate.dylib`, AIR→SPIR-V (optional) | gpu-bundles `nvmtl/` | | |
 | | `NVK-Pascal`: `libvulkan_nouveau.dylib` + `nvk_icd.json` (optional) | gpu-bundles `nvmtl/` | | |
 | | `NVIDIA-firmware-LICENCE.txt`, `Mesa-license.rst` | stick-only | | |
-| | `audio-voodoohda.sh`, `audio-applehda.sh`, `install-gpu.sh`, from `tools/macos/` | stick-only (`EFI/Helios300`) | | |
+| | `audio-voodoohda.sh`, `audio-applehda.sh`, `install-gpu.sh`, from `tools/macos/`; `gpu-apps.sh` from the driver's `tools/macos/` | stick-only (`EFI/Helios300`) | | |
+| | `POST-INSTALL.md`: every `post_install` step in order with its commands, and every file on the stick (`tools/release/post_install_doc.py`) | stick-only (`EFI/Helios300`) | | |
 
 ## `post_install[]`
 
@@ -142,7 +143,10 @@ tools/release.sh --version 0.1.1 --dry-run --real-kc ~/pascal-build/macos-26.7.2
   Delete (policy 2c), so a boot-arg added to a new config.plist never reaches a Mac that already has boot-args
   in NVRAM; the kext OpenCore injects carries the value on every boot. `ath10k_cc=XX` still overrides it; `00` =
   world rules. Someone in another country builds with their own code.
-- **Post-install scripts** (`--skip scripts` key): `tools/macos/*.sh` copied as release files after `bash -n`.
+- **Post-install scripts** (`--skip scripts` key): `audio-voodoohda.sh`, `audio-applehda.sh`, `install-gpu.sh` (this repo's
+  `tools/macos/`) and `gpu-apps.sh` (the driver's `tools/macos/`) copied as release files after `bash -n`;
+  `POST-INSTALL.md` generated from `spec.json` by `tools/release/post_install_doc.py` (so it matches the manifest).
+  `tools/macos/test-stdin.sh` is a Linux test and does not ship.
 - **The Metal plugin's AIR reader** (part of the `plugin` step): `NVMTLDriver.bundle/Contents/MacOS/air-runtime/libLLVM.dylib`.
   The plugin (driver `plugin/NVMTLLibraryLoad.m`) dlopens it and reads every Metal library's AIR bitcode in process
   through the LLVM **C API only** (56 functions resolved by name), then hands the printed IR to the translator;

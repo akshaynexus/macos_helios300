@@ -256,14 +256,19 @@ b_nvk() {
 	echo "NVK-Pascal: $(sha256sum "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" | cut -c1-16)"
 }
 b_scripts() {
-	# Post-install scripts (run on the Mac; docs/MANIFEST.md post_install).
-	local f n=0
-	for f in audio-voodoohda.sh audio-applehda.sh install-gpu.sh; do
-		[ -f "$SELF/tools/macos/$f" ] || { echo "tools/macos/$f missing in ${SELF_COMMIT:0:12}"; return 1; }
-		bash -n "$SELF/tools/macos/$f"
-		put "$SELF/tools/macos/$f" "$f"; chmod 0755 "$STAGE/$f"; n=$((n + 1))
+	# Post-install scripts (run on the Mac; docs/MANIFEST.md post_install): this repo's tools/macos installers, the
+	# driver's gpu-apps.sh (which apps get the GTX 1060), and POST-INSTALL.md generated from spec.json's post_install.
+	local f src n=0
+	for f in self:audio-voodoohda.sh self:audio-applehda.sh self:install-gpu.sh driver:gpu-apps.sh; do
+		case "$f" in self:*) src=$SELF/tools/macos/${f#self:};; driver:*) src=$DRV/tools/macos/${f#driver:};; esac
+		f=${f#*:}
+		[ -f "$src" ] || { echo "tools/macos/$f missing in the ${src#"$WORK/"} tree"; return 1; }
+		bash -n "$src"
+		put "$src" "$f"; chmod 0755 "$STAGE/$f"; n=$((n + 1))
 	done
-	echo "scripts: $n post-install scripts"
+	python3 -I "$SELF/tools/release/post_install_doc.py" --spec "$SELF/tools/release/spec.json" --version "$VERSION" \
+		--out "$STAGE/POST-INSTALL.md"
+	echo "scripts: $n post-install scripts + POST-INSTALL.md"
 }
 b_licences() {
 	cp "$DRV/licenses/NVIDIA-firmware-LICENCE.txt" "$STAGE/NVIDIA-firmware-LICENCE.txt"
@@ -283,7 +288,7 @@ step plugin NVMTLDriver.bundle -- b_plugin
 step xlate libnvmtl_translate.dylib -- b_xlate
 step nvk NVK-Pascal -- b_nvk
 step licences NVIDIA-firmware-LICENCE.txt Mesa-license.rst -- b_licences
-step scripts audio-voodoohda.sh audio-applehda.sh install-gpu.sh -- b_scripts
+step scripts audio-voodoohda.sh audio-applehda.sh install-gpu.sh gpu-apps.sh POST-INSTALL.md -- b_scripts
 collect_steps
 
 # Real-collection gate (before signing: the audit reads what was linked). A real release stops on any finding.
