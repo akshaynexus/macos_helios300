@@ -46,7 +46,12 @@ struct Response {
 // index 0 fails the connection. All three need the external-auth stage.
 // BSS: same prefix, [40]=channel, [41]=supported WPA2, [42..43]=RSN length, [44..]=RSN.
 // Extensions keep ABI 1 and structure sizes; Status flag 512 advertises them.
-// Scan: index 0 starts a fresh passive scan, index 1 cancels the active scan.
+// Scan: index 0 starts a fresh scan, index 1 cancels the active scan. Channels
+// the regulatory rules let this host transmit on (no DFS, no NO-IR, or a
+// beacon heard there before) are probed actively (40 ms), the rest passively
+// (110 ms). Optional 42-byte block (Info capability 2048): channel mask u64
+// over the kWMIScanPlan order (0 = all), flags u8 (1 = passive only), SSID
+// length u8, SSID[32] probed by name besides the wildcard (hidden networks).
 // RekeyGroup/RekeyPair: same 56-byte layout as InstallKeys. Same keys are rejected.
 // Info data: [0] capabilities u32, [4] scan generation u32, [8] last channel u32,
 // [12] RSSI signed u32 (INT32_MIN unavailable), [16] width u32, [20] NSS u32,
@@ -79,6 +84,9 @@ struct Response {
 // GTK index[1], GTK RSC[6]. Never persisted/logged. Length 81 appends the IGTK
 // block: present[1], key id LE16, IPN[6], IGTK[16] (BIP-CMAC-128, verified in
 // software by the core like Linux ath10k/mac80211). RekeyGroup/RekeyPair alike.
+// Connect: kIOReturnUnsupported carries the reason in error (e.g.
+// "configured-bss-not-found": the BSSID is not in the last scan's cache; a
+// cancelled scan's partial cache is accepted).
 // Disconnect: asynchronous, completed association only. Wait for flag 64 to clear.
 // Flag 128 advertises reusable disconnect support; 64 means teardown in progress.
 // Flags: 1 runtime, 2 scan done, 4 link, 8 TX busy, 16 secure, 32 EAPOL TX failed.

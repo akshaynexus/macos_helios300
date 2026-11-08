@@ -283,11 +283,11 @@ void Ath10kPCIDevice::cancelDeferredProbe()
     // returning is safe: the running execution holds its own reference
     // (xnu-12377 osfmk/kern/thread_call.c thread_call_free).
     if (!thread_call_cancel(_deferredProbeCall)) {
-        for (UInt32 waited = 0; _deferredProbeState != 2; waited += 10) {
-            if (waited && waited % 10000 == 0)
-                IOLog("Ath10kMac: still waiting for the deferred probe to finish (%u ms)\n", waited);
+        // No log line inside the wait (PG106 lesson): one before, none per pass.
+        if (_deferredProbeState != 2)
+            IOLog("Ath10kMac: waiting for the deferred probe to finish\n");
+        while (_deferredProbeState != 2)
             IOSleep(10);
-        }
     }
     if (!thread_call_free(_deferredProbeCall))
         IOLog("Ath10kMac: deferred probe worker could not be released\n");
@@ -1258,6 +1258,9 @@ void Ath10kPCIDevice::publishWMIRuntimeProperties()
     setProperty("Ath10kWMIScanSucceeded",_wmiScan.completed);
     setProperty("Ath10kWMIScanTxDMAOwned",_wmiScan.txOwned);
     setProperty("Ath10kWMIScanGeneration",_wmiScan.generation,32);
+    setProperty("Ath10kWMIScanProbedChannels",static_cast<UInt32>(__builtin_popcountll(_scanProbeMask)),32);
+    setProperty("Ath10kWMIScanBeaconHints",_wmiBSS.onChannelMask,64);
+    setProperty("Ath10kWMIScanRequestChannels",_scanOptions.channels?static_cast<UInt32>(__builtin_popcountll(_scanOptions.channels)):Ath10k::regulatoryScanCount(&_regulatory),32);
     setProperty("Ath10kWMIScanID",_wmiScan.id,32);
     setProperty("Ath10kWMIScanCancelRequested",_wmiScan.cancelRequested);
     setProperty("Ath10kWMIScanStopConsumed",_wmiScan.stopConsumed);
@@ -2553,6 +2556,13 @@ const char *Ath10kPCIDevice::serviceWMIScanChannels(UInt64 nowMs)
 {
     auto &state=_wmiScanChannels;
     if (state.completed) return nullptr;
+    if (!state.attempted && _scanChannelsResend) {
+        // A re-send waits for CE3 and the WMI credit to be idle instead of
+        // failing the runtime on a transient owner.
+        Ath10k::CESnapshot idle{};
+        if (_wmi.credits.outstanding || _connection.wmiOwned || !Ath10k::readCESnapshot(_regs,3,idle) ||
+            idle.currentSrcRead!=idle.srcWriteIndex) return nullptr;
+    }
     if (!state.attempted) {
         state.attempted=true;state.startedMs=nowMs;state.status="scan-channels-prerequisite";
         if (!_wmiLive.active || !_runtimeActive || !_wmiRadio[0].completed || !_wmiRadio[1].completed || !_wmiRadio[4].completed || !_wmiRadio[4].txConsumed ||
@@ -2563,12 +2573,16 @@ const char *Ath10kPCIDevice::serviceWMIScanChannels(UInt64 nowMs)
         Ath10k::CESnapshot snap{};
         const UInt32 entries=Ath10k::kCEHostConfig[3].srcEntries;
         state.status="scan-channels-ce3-state";
+        // At boot the list directly follows the last radio command; a re-send
+        // (Scan control op, beacon hints changed the probe mask) only needs CE3 idle.
         if (!Ath10k::readCESnapshot(_regs,3,snap) || !validateBMIPipeStructure(3,snap) ||
             snap.srcWriteIndex>=entries || snap.currentSrcRead!=snap.srcWriteIndex ||
-            snap.srcWriteIndex!=_wmiRadio[4].txNext || !_ceSrcRings[3].syncFromDevice()) return state.status;
+            (!_scanChannelsResend && snap.srcWriteIndex!=_wmiRadio[4].txNext) || !_ceSrcRings[3].syncFromDevice()) return state.status;
         state.status="scan-channels-build";
+        const UInt64 probe=_scanChannelsResend?_scanOptions.probe:Ath10k::wmiScanProbeMask(&_regulatory,_wmiBSS.onChannelMask);
         if (!Ath10k::buildWMIScanChannels(static_cast<UInt8 *>(_wmiTxBuffer.virtualAddress()),
-            static_cast<UInt32>(_wmiTxBuffer.length()),_htcWMIControl.endpoint,&_regulatory)) return state.status;
+            static_cast<UInt32>(_wmiTxBuffer.length()),_htcWMIControl.endpoint,&_regulatory,probe)) return state.status;
+        _scanProbeMask=probe;_scanOptions.probe=probe;
         const UInt32 frameBytes=8+Ath10k::htcReadLE16(static_cast<const UInt8 *>(_wmiTxBuffer.virtualAddress())+2);
         state.txSlot=snap.srcWriteIndex;state.txNext=Ath10k::ceRingNext(state.txSlot,entries);
         auto *ring=static_cast<Ath10k::CEDescriptor32 *>(_ceSrcRings[3].virtualAddress());
@@ -2586,8 +2600,8 @@ const char *Ath10kPCIDevice::serviceWMIScanChannels(UInt64 nowMs)
         if (!_regs.write32(doorbell,state.txNext) || !_regs.read32(doorbell,back) || back!=state.txNext)
             return state.status;
         state.submitted=true;state.status="waiting-for-tx-and-credit";
-        IOLog("Ath10kMac: WMI SCAN_CHAN_LIST SUBMITTED channels=%u bands=2.4+5GHz passive=yes sequence=8 bytes=%u credits=%u outstanding=%u\n",
-              Ath10k::regulatoryScanCount(&_regulatory),Ath10k::htcReadLE16(static_cast<UInt8 *>(_wmiTxBuffer.virtualAddress())+2)+8,_wmi.credits.available,_wmi.credits.outstanding);
+        IOLog("Ath10kMac: WMI SCAN_CHAN_LIST SUBMITTED channels=%u bands=2.4+5GHz probed=%u resend=%s sequence=8 bytes=%u credits=%u outstanding=%u\n",
+              Ath10k::regulatoryScanCount(&_regulatory),static_cast<UInt32>(__builtin_popcountll(probe)),_scanChannelsResend?"yes":"no",Ath10k::htcReadLE16(static_cast<UInt8 *>(_wmiTxBuffer.virtualAddress())+2)+8,_wmi.credits.available,_wmi.credits.outstanding);
     }
     if (!state.submitted) return state.status; // No retry after any failed attempt.
     state.elapsedMs=nowMs-state.startedMs;
@@ -2602,7 +2616,7 @@ const char *Ath10kPCIDevice::serviceWMIScanChannels(UInt64 nowMs)
         return state.status;
     }
     if (state.txConsumed && state.creditReturned) {
-        state.completed=true;state.status="transport-complete-scan-not-started";
+        state.completed=true;state.status="transport-complete-scan-not-started";_scanChannelsResend=false;
         // Transport completion does not prove channel acceptance or scan success.
         IOLog("Ath10kMac: WMI SCAN_CHAN_LIST TRANSPORT PASS channels=%u bands=2.4+5GHz passive=yes tx-consumed=yes credit-returned=yes elapsed=%llu ms; scan not started; channel acceptance not confirmed\n",
               Ath10k::regulatoryScanCount(&_regulatory),static_cast<unsigned long long>(state.elapsedMs));
@@ -2630,7 +2644,7 @@ const char *Ath10kPCIDevice::serviceWMIScan(UInt64 nowMs)
             (!state.generation && snap.srcWriteIndex!=_wmiScanChannels.txNext) || !_ceSrcRings[3].syncFromDevice()) return state.status;
         state.status="scan-build";
         if (!Ath10k::buildWMIScan(static_cast<UInt8 *>(_wmiTxBuffer.virtualAddress()),
-            static_cast<UInt32>(_wmiTxBuffer.length()),_htcWMIControl.endpoint,state.id,_connection.stage==Ath10k::LinkStage::Connected,&_regulatory)) return state.status;
+            static_cast<UInt32>(_wmiTxBuffer.length()),_htcWMIControl.endpoint,state.id,_connection.stage==Ath10k::LinkStage::Connected,&_regulatory,&_scanOptions)) return state.status;
         const UInt32 frameBytes=8+Ath10k::htcReadLE16(static_cast<const UInt8 *>(_wmiTxBuffer.virtualAddress())+2);
         state.txSlot=snap.srcWriteIndex;state.txNext=Ath10k::ceRingNext(state.txSlot,entries);
         auto *ring=static_cast<Ath10k::CEDescriptor32 *>(_ceSrcRings[3].virtualAddress());
@@ -2648,8 +2662,9 @@ const char *Ath10kPCIDevice::serviceWMIScan(UInt64 nowMs)
         if (!_regs.write32(doorbell,state.txNext) || !_regs.read32(doorbell,back) || back!=state.txNext)
             return state.status;
         state.submitted=true;state.status="waiting-for-scan-events";
-        IOLog("Ath10kMac: WMI START_SCAN SUBMITTED id=0x%x request=0xa001 vdev=0 channels=%u passive=yes sequence=9 bytes=%u credits=%u outstanding=%u\n",
-              state.id,Ath10k::regulatoryScanCount(&_regulatory),Ath10k::htcReadLE16(static_cast<UInt8 *>(_wmiTxBuffer.virtualAddress())+2)+8,_wmi.credits.available,_wmi.credits.outstanding);
+        IOLog("Ath10kMac: WMI START_SCAN SUBMITTED id=0x%x request=0xa001 vdev=0 channels=%u probed=%u ssid=%u passive-only=%s sequence=9 bytes=%u credits=%u outstanding=%u\n",
+              state.id,Ath10k::wmiReadLE32(static_cast<const UInt8 *>(_wmiTxBuffer.virtualAddress())+80),static_cast<UInt32>(__builtin_popcountll(_scanOptions.probe&(_scanOptions.channels?_scanOptions.channels:~0ull))),
+              _scanOptions.ssidLength,_scanOptions.passiveOnly?"yes":"no",Ath10k::htcReadLE16(static_cast<UInt8 *>(_wmiTxBuffer.virtualAddress())+2)+8,_wmi.credits.available,_wmi.credits.outstanding);
     }
     if (!state.submitted) return state.status; // No retry after any failed attempt.
     state.elapsedMs=nowMs-state.startedMs;

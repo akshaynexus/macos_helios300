@@ -35,7 +35,7 @@ as Wi-Fi in Network settings.
 | Regulatory | EEPROM regdomain `0x6c` (world) as on Linux; `ath10k_cc=XX` or `Ath10kCountryCode` picks the country | host tests |
 | Private Wi-Fi Address (per-network MAC) | done: WCL sets the address before each join; the BSD interface takes it at once and the core recreates vdev 0 with it (VDEV_DELETE/CREATE + ECHO barrier) before VDEV_START, as Linux ath10k does for a MAC change | host tests (`test_connection`, `test_control`, bridge); macOS only for the join |
 | WPA3-SAE only, required PMF (802.11w), WEP, TKIP pairwise, WPA1, Enterprise (802.1X), AP/IBSS, AWDL/AirDrop, 6 GHz, 160 MHz | **not supported** | see below and `docs/WIFI-SECURITY.md` |
-| Directed/active scans | the core scans passively on all 38 channels (~20 s); WCL's channel lists and SSID filters are accepted and applied to the results | — |
+| Active and directed scans | probe requests (40 ms dwell) on channels the regulatory rules let the host transmit on (non-DFS, no NO-IR, or a beacon already heard there, like Linux beacon hints), passive 110 ms elsewhere; WCL's channel lists and SSIDs go to the firmware; cached results are posted at once. World domain: ~3.5 s per full sweep (was ~19 s); `ath10k_cc=IN` probes 5 GHz from the first scan | host tests (`test_wmi_scan`, `test_native_bridge`); macOS only for timing |
 
 ### Not supported, and why
 
@@ -133,8 +133,12 @@ Keep Ethernet (RTL8111) or a USB adapter available.
      registry, so no verbose console is needed: on the nub `AirportAth10kLastStep` and
      `AirportAth10kLastMessage`, on the controller `AirportAth10kJoinState`
      (offline/ready/joining/connected/leaving/restarting), `AirportAth10kLastError` and
-     `AirportAth10kLastDisconnectReason` (802.11 reason code; 255 = driver-initiated):
-     `ioreg -l -w0 | grep AirportAth10k`. Nothing is logged from the 100 ms poll.
+     `AirportAth10kLastDisconnectReason` (802.11 reason code; 255 = driver-initiated),
+     `AirportAth10kLastScanMs` / `AirportAth10kLastJoinMs` (last core scan; last successful join,
+     WCL request to authorized port), `AirportAth10kScanCount`, `AirportAth10kCachedNetworks`:
+     `ioreg -l -w0 | grep AirportAth10k`. Nothing is logged from the poll (20 ms while a scan or
+     join runs, 100 ms otherwise). The core adds `Ath10kWMIScanProbedChannels`,
+     `Ath10kWMIScanBeaconHints` and `Ath10kWMIScanRequestChannels`.
    - `pg106_hda=0`-style GPU args are unrelated; the core needs no `-v`.
 4. AppleVTD (`Kernel › Quirks › DisableIoMapper`): the core allocates DMA through the
    system mapper when one is active and works without it; leave your existing setting. If
@@ -160,8 +164,9 @@ properties and network status; remove SSIDs and MACs before sharing) and
    shows the board key `…11ad,subsystem-device=0807`, `0.1.0`, a successful board upload and
    `Ath10kNativeReady = Yes`. `ioreg -r -c AirportAth10k -l -w0 | head -40` shows the front end
    and `ifconfig` an `en` interface with the card's MAC.
-2. **Menu.** The Wi-Fi menu-bar item and Settings › Wi-Fi show the card on; after about 20 s
-   the first scan lists 2.4 and 5 GHz networks with lock icons and signal bars.
+2. **Menu.** The Wi-Fi menu-bar item and Settings › Wi-Fi show the card on; within about 4 s
+   the first scan lists 2.4 and 5 GHz networks with lock icons and signal bars (later menus fill
+   from the cache at once). `AirportAth10kLastScanMs` on the controller has the last scan's duration.
    `networksetup -listallhardwareports` lists it as "Wi-Fi".
 3. **Join the home AP** (WPA2, 5 GHz channel 44) from the menu, entering the password once.
    Expect the handshake to finish within 5 s, then DHCP: `ifconfig en<n>` shows an address,

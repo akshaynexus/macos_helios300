@@ -61,6 +61,9 @@ struct WMIBSSCache {
     WMIBSS entries[kWMIBSSMax]{};
     UInt32 count=0, accepted=0, malformed=0, rxErrors=0, ignored=0, overflow=0;
     UInt32 beacons=0, probeResponses=0, lastStatus=0, lastChannel=0, lastBytes=0;
+    // Plan-index bits of the channels on which a BSS was heard on its own
+    // channel (beacon hints, wmiScanProbeMask). Kept across scans by the core.
+    UInt64 onChannelMask=0;
 };
 inline void rejectBSS(WMIBSSCache &c,BSSReject reason){++c.malformed;++c.rejects[reason];c.lastReject=reason;}
 // Pure bounded 802.11 management decoder. RF input errors are counted and dropped;
@@ -145,6 +148,17 @@ inline void recordWMIBSS(WMIBSSCache &cache, const UInt8 *f, UInt32 bytes,
         bool same=true;for(UInt32 i=0;i<6;++i)if(cache.entries[n].bssid[i]!=candidate.bssid[i])same=false;
         if(same){slot=n;break;}
     }
+    // Signal from a frame heard on another channel (adjacent-channel leakage
+    // while the scan dwells next to the BSS) is not the BSS's signal: keep the
+    // last on-channel sample, as cfg80211 does (signal_valid = rx channel ==
+    // BSS channel). Without it the 2.4/5 GHz entries carried the weakest
+    // reading of a sweep and WCL chose the wrong BSS.
+    const bool onChannel=!candidate.advertisedChannel || candidate.advertisedChannel==channel;
+    if(slot<cache.count && !onChannel){
+        const WMIBSS &old=cache.entries[slot];
+        if(old.snr && old.rxChannel==(old.advertisedChannel?old.advertisedChannel:old.rxChannel)){candidate.snr=old.snr;candidate.rxChannel=old.rxChannel;}
+    }
+    if(onChannel){const UInt32 index=wmiScanPlanIndex(channel);if(index<kWMIScanChannelCount)cache.onChannelMask|=1ull<<index;}
     if(slot==cache.count){
         if(cache.count==kWMIBSSMax){++cache.overflow;return;}
         ++cache.count;

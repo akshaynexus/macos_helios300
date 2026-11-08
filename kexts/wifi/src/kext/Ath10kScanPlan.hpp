@@ -72,6 +72,30 @@ inline UInt32 regulatoryScanCount(const RegulatoryPolicy *p){
     for(const auto &c:kWMIScanPlan)if(regulatoryScanChannel(*p,c.channel))++count;
     return count;
 }
+// Active scanning (probe requests) where this host may initiate transmission:
+// a non-DFS channel whose regdb rule for the country (and the board's country)
+// carries neither DFS nor NO-IR, the rule the core already applies to its AP
+// liveness probe; every other channel is scanned passively (Linux ath10k
+// update_channel_list: passive = NO_IR | radar). Like Linux cfg80211 beacon
+// hints, NO-IR is lifted on a non-DFS channel once a beacon was received on
+// that channel itself (`hints`, plan-index bits from the BSS cache).
+inline bool regulatoryProbeChannel(const RegulatoryPolicy &p,UInt32 c,bool hinted=false){
+    if(!regulatoryScanChannel(p,c) || channelNeedsDFS(c) || !regulatoryPower(p,c,c,20,true))return false;
+    if(hinted)return true;
+    return countryPower(p.country,c,20,p.indoor,true,p.stationDFS,true)!=0 &&
+        (!p.boardCountry || countryPower(p.boardCountry,c,20,p.indoor,true,p.stationDFS,true)!=0);
+}
+inline UInt64 wmiScanProbeMask(const RegulatoryPolicy *p,UInt64 hints=0){
+    if(!p)return 0;
+    UInt64 mask=0;
+    for(UInt32 i=0;i<kWMIScanChannelCount;++i)
+        if(regulatoryProbeChannel(*p,kWMIScanPlan[i].channel,((hints>>i)&1)!=0))mask|=1ull<<i;
+    return mask;
+}
+inline UInt32 wmiScanPlanIndex(UInt32 channel){
+    for(UInt32 i=0;i<kWMIScanChannelCount;++i)if(kWMIScanPlan[i].channel==channel)return i;
+    return kWMIScanChannelCount;
+}
 // WMI channel packed power bytes: min, max, regulatory, class;
 // antenna gain, max TX, reserved, reserved. Powers use half-dBm.
 inline void writeChannelPower(UInt8 *reg0,UInt8 *reg1,UInt8 halfDbm){

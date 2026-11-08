@@ -330,7 +330,9 @@ inline bool buildWMIRegdomain(UInt8 *f,UInt32 capacity,UInt8 endpoint,const Regu
     htcWriteLE32(f+32,p.ctl2);htcWriteLE32(f+36,p.ctl5);return true;
 }
 static constexpr UInt32 kWMIScanChannelsFrameBytes=24+28*kWMIScanChannelCount;
-inline bool buildWMIScanChannels(UInt8 *f, UInt32 capacity, UInt8 endpoint,const RegulatoryPolicy *policy=nullptr) {
+// probe: plan-index bits of the channels scanned actively (wmiScanProbeMask);
+// every other channel carries WMI_CHAN_FLAG_PASSIVE, DFS channels also DFS.
+inline bool buildWMIScanChannels(UInt8 *f, UInt32 capacity, UInt8 endpoint,const RegulatoryPolicy *policy=nullptr,UInt64 probe=0) {
     const UInt32 count=regulatoryScanCount(policy),frameBytes=24+28*count;
     if (!f || !count || capacity<frameBytes || !endpoint || endpoint==255) return false;
     htcZero(f,frameBytes);
@@ -345,7 +347,9 @@ inline bool buildWMIScanChannels(UInt8 *f, UInt32 capacity, UInt8 endpoint,const
         UInt8 *ch=f+24+28*slot++;
         htcWriteLE16(ch,24);htcWriteLE16(ch+2,80);
         htcWriteLE32(ch+4,wmiScanFrequency(i));htcWriteLE32(ch+8,wmiScanFrequency(i));
-        htcWriteLE32(ch+16,wmiScanFrequency(i)<3000?0x81:(channelNeedsDFS(wmiScanChannel(i))?0x480:0x80)); // PASSIVE | MODE_11G(1) / MODE_11A(0).
+        // MODE_11G(1) / MODE_11A(0), PASSIVE (0x80) unless probed, DFS (0x400).
+        const bool probed=((probe>>i)&1) && !channelNeedsDFS(wmiScanChannel(i));
+        htcWriteLE32(ch+16,(wmiScanFrequency(i)<3000?1u:0u)|(probed?0u:0x80u)|(channelNeedsDFS(wmiScanChannel(i))?0x400u:0u));
         // wmi_channel reginfo0: min/max/reg/class; reginfo1: antenna/max_tx/reserved.
         writeChannelPower(ch+20,ch+24,policy?regulatoryPower(*policy,wmiScanChannel(i),wmiScanChannel(i),20,false):channelPowerHalfDbm(wmiScanChannel(i)));
         // min, antenna gain, regulatory class and reserved bytes remain zero.
@@ -372,8 +376,27 @@ struct WMIScanState {
     UInt64 startedMs=0, elapsedMs=0;
     const char *status="not-run";
 };
-static constexpr UInt32 kWMIScanFrameBytes=140+4*kWMIScanChannelCount;
+// Probe request IEs (the firmware adds the SSID): Supported Rates 1, 2, 5.5,
+// 11, 6, 9, 12, 18 Mb/s and Extended Supported Rates 24, 36, 48, 54 Mb/s, one
+// blob for both bands as mac80211 builds it for SINGLE_SCAN_ON_ALL_BANDS.
+static constexpr UInt8 kWMIScanProbeIEs[16]={1,8,0x02,0x04,0x0b,0x16,0x0c,0x12,0x18,0x24,50,4,0x30,0x48,0x60,0x6c};
+// Dwell: 40 ms on channels probed actively, 110 ms on passive ones (one
+// 102.4 ms beacon interval; mac80211's passive channel time), Linux ath10k's
+// min/max rest times. A full world-domain sweep is ~3.5 s instead of ~19 s.
+static constexpr UInt32 kWMIScanActiveDwellMs=40, kWMIScanPassiveDwellMs=110;
+static constexpr UInt32 kWMIScanFrameBytes=140+4*kWMIScanChannelCount+2*36+sizeof(kWMIScanProbeIEs);
 static constexpr UInt32 kWMIScanId=0xa036, kWMIScanRequestId=0xa001;
+// One scan request: channels (plan-index bits, 0 = every regulatory scan
+// channel), the probe mask the firmware channel list was built with, an
+// optional directed SSID (hidden networks) and a passive-only request.
+struct WMIScanOptions {
+    UInt64 channels=0,probe=0;
+    UInt8 ssid[32]{};UInt8 ssidLength=0;bool passiveOnly=false;
+};
+inline bool wmiScanSelected(const RegulatoryPolicy *policy,const WMIScanOptions *o,UInt32 i){
+    if(i>=kWMIScanChannelCount || (policy && !regulatoryScanChannel(*policy,wmiScanChannel(i))))return false;
+    return !o || !o->channels || ((o->channels>>i)&1);
+}
 inline bool buildWMIStopScan(UInt8 *f,UInt32 capacity,UInt8 endpoint,UInt32 id,UInt8 sequence){
     if(!f || capacity<32 || !endpoint || endpoint==255 || (id&0xf000)!=0xa000)return false;
     htcZero(f,32);f[0]=endpoint;f[1]=1;f[5]=sequence;
@@ -382,27 +405,44 @@ inline bool buildWMIStopScan(UInt8 *f,UInt32 capacity,UInt8 endpoint,UInt32 id,U
     // wmi_stop_scan_cmd order is requestor, scan_id, req_type, vdev_id.
     return true;
 }
-inline bool buildWMIScan(UInt8 *f, UInt32 capacity, UInt8 endpoint,UInt32 id=kWMIScanId,bool connected=false,const RegulatoryPolicy *policy=nullptr) {
-    const UInt32 count=regulatoryScanCount(policy),frameBytes=140+4*count;
+// Linux ath10k_wmi_tlv_op_gen_start_scan: common, burst, num_channels,
+// num_bssids, num_ssids, ie_len, num_probes (3), MAC/mask; then the channel,
+// SSID (wmi_ssid: len u32 + 32 bytes), BSSID and IE arrays. Without SSIDs the
+// scan is passive (WMI_SCAN_FLAG_PASSIVE), as mac80211 requests it with
+// n_ssids == 0; with the wildcard SSID the firmware probes on the channels the
+// channel list leaves active. FILTER_PROBE_REQ is inverted on WMI-TLV.
+inline bool buildWMIScan(UInt8 *f, UInt32 capacity, UInt8 endpoint,UInt32 id=kWMIScanId,bool connected=false,const RegulatoryPolicy *policy=nullptr,const WMIScanOptions *o=nullptr) {
+    UInt32 count=0;bool active=false;
+    for(UInt32 i=0;i<kWMIScanChannelCount;++i)if(wmiScanSelected(policy,o,i)){
+        ++count;if(o && !o->passiveOnly && ((o->probe>>i)&1) && !channelNeedsDFS(wmiScanChannel(i)))active=true;}
+    if(o && o->ssidLength>32)return false;
+    const UInt32 ssids=active?(o->ssidLength?2u:1u):0u,ieBytes=active?static_cast<UInt32>(sizeof(kWMIScanProbeIEs)):0u;
+    const UInt32 frameBytes=140+4*count+36*ssids+ieBytes;
     if (!f || !count || capacity<frameBytes || !endpoint || endpoint==255) return false;
     htcZero(f,frameBytes);
     f[0]=endpoint;f[1]=1;f[5]=9;
     htcWriteLE16(f+2,frameBytes-8);htcWriteLE32(f+8,0x3001);
     htcWriteLE16(f+12,100);htcWriteLE16(f+14,77);
     // Fixed common: IDs, VDEV, priority, event mask, dwell/rest/probe times,
-    // bounded firmware scan time, PASSIVE | CHAN_STAT_EVENT plus TLV filter inversion.
-    const UInt32 common[15]={id,kWMIScanRequestId,0,1,0x1ff,50,connected?100u:kWMIScanDwellMs,connected?150u:50u,500,0,0,0,kWMIScanFirmwareMs,5,0x31};
+    // bounded firmware scan time, CHAN_STAT_EVENT plus TLV filter inversion,
+    // PASSIVE when nothing is probed.
+    const UInt32 common[15]={id,kWMIScanRequestId,0,1,0x1ff,kWMIScanActiveDwellMs,kWMIScanPassiveDwellMs,connected?150u:50u,500,0,0,0,kWMIScanFirmwareMs,5,active?0x30u:0x31u};
     for(UInt32 i=0;i<15;++i)htcWriteLE32(f+16+4*i,common[i]);
     htcWriteLE32(f+80,count); // num_channels; burst_duration at 76 remains zero.
-    htcWriteLE32(f+84,1); // num_bssids; num_ssids, IE length, probes and MAC/mask zero.
+    htcWriteLE32(f+84,1); // num_bssids
+    htcWriteLE32(f+88,ssids);htcWriteLE32(f+92,ieBytes);htcWriteLE32(f+96,active?3u:0u); // num_ssids, ie_len, num_probes; MAC/mask zero
     htcWriteLE16(f+116,4*count);htcWriteLE16(f+118,16);
     UInt32 slot=0;for(UInt32 i=0;i<kWMIScanChannelCount;++i)
-        if(!policy || regulatoryScanChannel(*policy,wmiScanChannel(i)))htcWriteLE32(f+120+4*slot++,wmiScanFrequency(i));
-    const UInt32 tail=120+4*count;
-    htcWriteLE16(f+tail+2,19); // empty SSID ARRAY_FIXED_STRUCT
-    htcWriteLE16(f+tail+4,8);htcWriteLE16(f+tail+6,19);
-    for(UInt32 i=0;i<6;++i)f[tail+8+i]=255; // broadcast BSSID
-    htcWriteLE16(f+tail+18,17); // empty IE ARRAY_BYTE
+        if(wmiScanSelected(policy,o,i))htcWriteLE32(f+120+4*slot++,wmiScanFrequency(i));
+    UInt32 at=120+4*count;
+    htcWriteLE16(f+at,36*ssids);htcWriteLE16(f+at+2,19);at+=4; // SSID ARRAY_FIXED_STRUCT
+    if(ssids==2){htcWriteLE32(f+at,o->ssidLength);for(UInt32 i=0;i<o->ssidLength;++i)f[at+4+i]=o->ssid[i];at+=36;}
+    if(ssids)at+=36; // wildcard SSID: length 0
+    htcWriteLE16(f+at,8);htcWriteLE16(f+at+2,19);
+    for(UInt32 i=0;i<6;++i)f[at+4+i]=255; // broadcast BSSID
+    at+=12;
+    htcWriteLE16(f+at,ieBytes);htcWriteLE16(f+at+2,17);at+=4; // IE ARRAY_BYTE
+    for(UInt32 i=0;i<ieBytes;++i)f[at+i]=kWMIScanProbeIEs[i];
     return true;
 }
 

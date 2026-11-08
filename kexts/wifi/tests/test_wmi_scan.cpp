@@ -25,16 +25,21 @@ public:
             auto *p=static_cast<UInt8 *>(_wmiTxBuffer.virtualAddress());
             if(Ath10k::wmiReadLE32(p+8)!=0x3001){prior();return;}
             ++scans;assert(_wmiScanChannels.completed && _wmiScan.txOwned && _wmi.credits.outstanding==1);
-            assert(p[0]==2 && p[1]==1 && p[5]==9 && Ath10k::htcReadLE16(p+2)==284);
+            // Active scan (Linux ath10k_wmi_tlv_op_gen_start_scan): world rules probe channels 1-11,
+            // so the wildcard SSID, num_probes 3 and the rate IEs are present, PASSIVE is clear;
+            // dwell 40 ms active / 110 ms passive.
+            assert(p[0]==2 && p[1]==1 && p[5]==9 && Ath10k::htcReadLE16(p+2)==336);
             assert(Ath10k::htcReadLE16(p+12)==100 && Ath10k::htcReadLE16(p+14)==77);
-            const UInt32 fixed[25]={0xa036,0xa001,0,1,0x1ff,50,500,50,500,0,0,0,30000,5,0x31,0,38,1,0,0,0,0,0,0,0};
+            const UInt32 fixed[25]={0xa036,0xa001,0,1,0x1ff,40,110,50,500,0,0,0,30000,5,0x30,0,38,1,1,16,3,0,0,0,0};
             for(unsigned i=0;i<25;++i)assert(Ath10k::wmiReadLE32(p+16+4*i)==fixed[i]);
             assert(Ath10k::htcReadLE16(p+116)==152 && p[118]==16);
             for(unsigned i=0;i<38;++i)assert(Ath10k::wmiReadLE32(p+120+4*i)==expectedScanFrequencies[i]);
-            const UInt8 tail[20]={0,0,19,0,8,0,19,0,255,255,255,255,255,255,0,0,0,0,17,0};
-            assert(!memcmp(p+272,tail,20));
+            assert(Ath10k::htcReadLE16(p+272)==36 && p[274]==19);
+            for(unsigned i=0;i<36;++i)assert(!p[276+i]); // wildcard SSID
+            const UInt8 tail[16]={8,0,19,0,255,255,255,255,255,255,0,0,16,0,17,0};
+            assert(!memcmp(p+312,tail,16) && !memcmp(p+328,Ath10k::kWMIScanProbeIEs,16));
             auto *ring=static_cast<Ath10k::CEDescriptor32 *>(_ceSrcRings[3].virtualAddress());
-            assert(ring[_wmiScan.txSlot].nbytes==292 && ring[_wmiScan.txSlot].flags==8);
+            assert(ring[_wmiScan.txSlot].nbytes==344 && ring[_wmiScan.txSlot].flags==8);
             if(scanCredit)deliver(1,{0,2,8,0,8,0,0,0,1,4,0,0,2,1,0,0});
         };
     }
@@ -51,7 +56,7 @@ public:
         const UInt32 cmd=Ath10k::wmiReadLE32(f+8);
         if(cmd==0x3001){
             ++starts;assert(Ath10k::wmiReadLE32(f+16)==0xa037);
-            assert(Ath10k::wmiReadLE32(f+40)==100 && Ath10k::wmiReadLE32(f+44)==150);
+            assert(Ath10k::wmiReadLE32(f+40)==110 && Ath10k::wmiReadLE32(f+44)==150);
         }else{
             ++stops;assert(cmd==0x3002 && f[14]==78 && Ath10k::htcReadLE16(f+2)==24);
             assert(Ath10k::wmiReadLE32(f+16)==0xa001 && Ath10k::wmiReadLE32(f+20)==0xa037);
@@ -87,6 +92,16 @@ int main() {
     late.deliver(2,scanPacket(2));late.tick(1050);assert(late._wmiScan.terminal && !late._wmiScan.completed);
     late.deliver(1,{0,2,8,0,8,0,0,0,1,4,0,0,2,1,0,0});late.tick(1060);
     assert(late._wmiScan.completed);late.releaseWMIRuntime();
+    { // Channel-list re-send before a scan (the Scan op found a changed probe mask): only CE3
+      // idle is required (not "directly after the radio commands"), then the scan follows.
+        ScanDriver r;r.launch();r.deliver(2,scanPacket(1));r.tick(1040);r.deliver(2,scanPacket(2));r.tick(1050);
+        assert(r._wmiScan.completed && r.lists==1 && r.scans==1 && r._scanProbeMask==0x7ff);
+        r._wmiScanChannels={};r._scanChannelsResend=true;r._scanOptions=Ath10k::WMIScanOptions{};r._scanOptions.probe=0x7ff;
+        r._wmiScan={};r._wmiScan.generation=1;
+        for(unsigned i=0;i<6 && r.scans<2;++i)r.tick(1060+10*i);
+        assert(r.lists==2 && r._wmiScanChannels.completed && !r._scanChannelsResend && r.scans==2 && r._wmiLive.active);
+        r.releaseWMIRuntime();
+    }
     for(unsigned mode=0;mode<4;++mode){
         ScanDriver t;t.scanCredit=mode!=1;t.tick(1000);t.tick(1010);t.tick(1020);
         t._regs.tx3Timeout=mode==0;t.tick(1030);
@@ -199,6 +214,28 @@ int main() {
         auto event=scanPacket(8);Ath10k::htcWriteLE32(event.data()+24,freq);
         assert(Ath10k::parseWMIInitResponse(event.data(),event.size(),2,cr,ev,nullptr,&st));
         assert(!st.visitedMask);
+    }
+    { // Options: channel subset, directed SSID first then the wildcard, passive-only, DFS never probed.
+        Ath10k::RegulatoryPolicy world{};Ath10k::WMIScanOptions o{};
+        o.channels=(1ull<<5)|(1ull<<15)|(1ull<<17);o.probe=Ath10k::wmiScanProbeMask(&world,1ull<<15);memcpy(o.ssid,"home",4);o.ssidLength=4;
+        assert(o.probe==(0x7ffull|(1ull<<15)));
+        UInt8 f[Ath10k::kWMIScanFrameBytes+1];memset(f,0xee,sizeof(f));
+        assert(Ath10k::buildWMIScan(f,Ath10k::kWMIScanFrameBytes,2,0xa040,false,&world,&o));
+        const UInt32 bytes=Ath10k::htcReadLE16(f+2)+8;assert(bytes==140+12+72+16 && f[bytes]==0xee);
+        assert(Ath10k::wmiReadLE32(f+80)==3 && Ath10k::wmiReadLE32(f+88)==2 && Ath10k::wmiReadLE32(f+92)==16 && Ath10k::wmiReadLE32(f+96)==3 && Ath10k::wmiReadLE32(f+72)==0x30);
+        assert(Ath10k::wmiReadLE32(f+120)==2437 && Ath10k::wmiReadLE32(f+124)==5220 && Ath10k::wmiReadLE32(f+128)==5260);
+        assert(Ath10k::htcReadLE16(f+132)==72 && Ath10k::wmiReadLE32(f+136)==4 && !memcmp(f+140,"home",4) && !Ath10k::wmiReadLE32(f+172));
+        o.passiveOnly=true;assert(Ath10k::buildWMIScan(f,Ath10k::kWMIScanFrameBytes,2,0xa040,false,&world,&o));
+        assert(Ath10k::htcReadLE16(f+2)+8==140+12 && Ath10k::wmiReadLE32(f+72)==0x31 && !Ath10k::wmiReadLE32(f+88) && !Ath10k::wmiReadLE32(f+96));
+        o.passiveOnly=false;o.channels=1ull<<17;assert(Ath10k::buildWMIScan(f,Ath10k::kWMIScanFrameBytes,2,0xa040,false,&world,&o));
+        assert(Ath10k::wmiReadLE32(f+72)==0x31); // DFS channel only: passive
+        // A channel list built with the hint probes channel 44 (flags 0), DFS keeps PASSIVE|DFS.
+        UInt8 list[Ath10k::kWMIScanChannelsFrameBytes];assert(Ath10k::buildWMIScanChannels(list,sizeof(list),2,&world,o.probe|(1ull<<17)));
+        assert(Ath10k::wmiReadLE32(list+24+28*15+16)==0 && Ath10k::wmiReadLE32(list+24+28*17+16)==0x480 && Ath10k::wmiReadLE32(list+24+28*14+16)==0x80);
+        // Beacon hints never make a DFS channel active; NO-IR is lifted only by a hint.
+        assert(!(Ath10k::wmiScanProbeMask(&world,~0ull)&(1ull<<17)) && !(Ath10k::wmiScanProbeMask(&world,0)&(1ull<<15)));
+        Ath10k::RegulatoryPolicy india{};india.country=Ath10k::regulatoryCountry("IN");
+        assert(Ath10k::wmiScanProbeMask(&india,0)&(1ull<<15)); // IN: UNII-1 without NO-IR is probed from the first scan
     }
     UInt8 frame[293];memset(frame,0xaa,sizeof(frame));
     assert(Ath10k::buildWMIScan(frame,292,2) && frame[292]==0xaa);

@@ -22,7 +22,9 @@ public:
                 const auto *ch=p+24+28*i;
                 assert(Ath10k::htcReadLE16(ch)==24 && Ath10k::htcReadLE16(ch+2)==80);
                 assert(Ath10k::wmiReadLE32(ch+4)==expectedScanFrequencies[i] && Ath10k::wmiReadLE32(ch+8)==expectedScanFrequencies[i]);
-                assert(!Ath10k::wmiReadLE32(ch+12) && Ath10k::wmiReadLE32(ch+16)==(i<13?0x81u:((i>=17 && i<=32)?0x480u:0x80u)));
+                // World ("00") regdb: channels 1-11 carry no NO-IR and are probed (no PASSIVE flag);
+                // 12-13 and 5 GHz are NO-IR (passive until a beacon hint), 52-144 DFS.
+                assert(!Ath10k::wmiReadLE32(ch+12) && Ath10k::wmiReadLE32(ch+16)==(i<11?0x01u:(i<13?0x81u:((i>=17 && i<=32)?0x480u:0x80u))));
                 // World ("00") regdb: 20 dBm = 40 half-dBm on every scan channel (no host cap by default).
                 assert(Ath10k::wmiReadLE32(ch+20)==0x00282800 && Ath10k::wmiReadLE32(ch+24)==0x00002800);
                 assert(ch[20]==0 && ch[21]==40 && ch[22]==40 && ch[23]==0);

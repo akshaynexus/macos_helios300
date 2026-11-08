@@ -196,6 +196,12 @@ private:
     const char *serviceWMIScan(UInt64 nowMs);
     Ath10k::WMIScanState _wmiScan{};
     Ath10k::WMIBSSCache _wmiBSS{};
+    // Scan request of the control ABI (channels, directed SSID), the probe mask
+    // the firmware channel list was last built with, and a pending re-send of
+    // that list when beacon hints changed the mask (Ath10kScanPlan.hpp).
+    Ath10k::WMIScanOptions _scanOptions{};
+    UInt64 _scanProbeMask=0;
+    bool _scanChannelsResend=false;
     Ath10k::WMIEchoState _wmiEcho{};
     bool prepareWMIRuntime();
     const char *drainWMIRuntime();

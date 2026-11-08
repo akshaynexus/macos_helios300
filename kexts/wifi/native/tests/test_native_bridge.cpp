@@ -24,11 +24,13 @@ struct FakeSink:B::Sink{
 };
 // Simulated core: the subset of Ath10kUserClient.cpp controlAction the front end uses.
 struct FakeCore:B::Core{
-    bool reachable=true,runtime=true,scanDone=true,scanning=false,link=false,txBusy=false,disconnecting=false;
+    bool reachable=true,runtime=true,scanDone=true,scanning=false,link=false,txBusy=false,disconnecting=false,scanOptions=true;
     uint32_t stage=0,phase=0,generation=1,stateBits=0,psBits=0,beaconMisses=0;int32_t rssi=-55;
     std::vector<B::Network> bss;std::vector<std::vector<uint8_t>> eapolIn;std::vector<std::vector<uint8_t>> eapolOut;
     std::vector<uint8_t> installedKeys;bool authorized=false,secure=false,rejectConnect=false,failAfterConnect=false,connected=false;
-    unsigned scans=0,cancels=0,disconnects=0,restarts=0,psRequests=0,macChanges=0;uint32_t lastPS=9;int connectIndex=-1;std::string error="none";uint8_t stationMAC[6]={2,1,2,3,4,5};
+    unsigned scans=0,scanCancels=0,cancels=0,disconnects=0,restarts=0,psRequests=0,macChanges=0,connects=0,scanBusy=0;uint32_t lastPS=9;int connectIndex=-1;std::string error="none";uint8_t stationMAC[6]={2,1,2,3,4,5};
+    uint32_t lastScanLength=0;uint64_t lastScanMask=0;uint8_t lastScanFlags=0;std::string lastScanSSID;
+    std::vector<std::vector<uint8_t>> missing; // BSSIDs the core's own cache lacks until its next scan
     static void le32(uint8_t *p,uint32_t v){for(int i=0;i<4;++i)p[i]=uint8_t(v>>(8*i));}
     int call(const AthControl::Request &r,AthControl::Response &o) override {
         using namespace AthControl;
@@ -37,7 +39,7 @@ struct FakeCore:B::Core{
         o.flags=128|512|(runtime?1:0)|(scanDone?2:0)|(link?4:0)|(txBusy?8:0)|(secure?16:0)|(disconnecting?64:0)|(scanning?256:0);
         strncpy(o.error,error.c_str(),95);
         if(r.operation==Status)return 0;
-        if(r.operation==Info){le32(o.data,0x2ff|256);le32(o.data+4,generation);le32(o.data+8,44);le32(o.data+12,uint32_t(rssi));le32(o.data+16,80);le32(o.data+20,2);
+        if(r.operation==Info){le32(o.data,0x2ff|256|(scanOptions?2048:0));le32(o.data+4,generation);le32(o.data+8,44);le32(o.data+12,uint32_t(rssi));le32(o.data+16,80);le32(o.data+20,2);
             le32(o.data+28,stateBits);le32(o.data+84,psBits);le32(o.data+88,beaconMisses);le32(o.data+92,46);le32(o.data+108,scanDone?1:0);o.data[112]='U';o.data[113]='S';o.data[115]=1;o.length=116;return 0;}
         if(r.operation==BSS){
             if(r.index>=bss.size())return B::kNotFound;
@@ -49,7 +51,14 @@ struct FakeCore:B::Core{
             o.length=at+105;return 0;}
         if(r.operation==Restart){++restarts;runtime=false;return 0;}
         if(!runtime)return B::kNotReady;
-        if(r.operation==Scan){if(r.index==1){scanning=false;return 0;}if(stage && !(stage==10 && link))return B::kBusy;++scans;scanDone=false;scanning=true;++generation;return 0;}
+        if(r.operation==Scan){
+            if(r.index==1){if(scanning)++scanCancels;scanning=false;scanDone=true;return 0;}
+            if(scanBusy){--scanBusy;return B::kBusy;}
+            if(stage && !(stage==10 && link))return B::kBusy;
+            if(r.length && (!scanOptions || r.length!=42))return B::kBadArgument;
+            lastScanLength=r.length;lastScanMask=0;lastScanFlags=0;lastScanSSID.clear();
+            if(r.length){for(int i=0;i<8;++i)lastScanMask|=uint64_t(r.data[i])<<(8*i);lastScanFlags=r.data[8];lastScanSSID.assign((const char *)r.data+10,r.data[9]);}
+            ++scans;scanDone=false;scanning=true;++generation;missing.clear();return 0;}
         if(r.operation==RadioOptions){++psRequests;lastPS=r.index;psBits=r.index?3:0;return 0;}
         if(r.operation==Connect){
             if(stage)return B::kExclusiveAccess;
@@ -61,8 +70,9 @@ struct FakeCore:B::Core{
             } else if(r.length!=8u+r.data[0] || r.data[1]>1)return B::kBadArgument;
             if(r.data[1]>1)return B::kBadArgument;
             bool found=false;for(auto &b:bss)if(!memcmp(b.bssid,r.data+2,6))found=true;
-            if(!found || rejectConnect){error="bss-not-found";return B::kUnsupported;}
-            connectIndex=int(r.index);secure=r.data[1];stage=1;error="none";return 0;}
+            for(auto &m:missing)if(!memcmp(m.data(),r.data+2,6))found=false;
+            if(!found || rejectConnect){error="configured-bss-not-found";strncpy(o.error,error.c_str(),95);return B::kUnsupported;}
+            ++connects;connectIndex=int(r.index);secure=r.data[1];stage=1;error="none";return 0;}
         if(r.operation==Disconnect){if(stage!=10 || !link)return B::kBusy;++disconnects;disconnecting=true;link=false;return 0;}
         if(r.operation==Cancel){++cancels;stage=0;link=false;secure=false;return 0;}
         if(r.operation==ReceiveEAPOL){if(eapolIn.empty())return B::kNotReady;o.length=uint32_t(eapolIn.front().size());memcpy(o.data,eapolIn.front().data(),o.length);eapolIn.erase(eapolIn.begin());return 0;}
@@ -132,39 +142,56 @@ int main(){
         j=join(wpa,true);j.ssid[0]='x';assert(!strcmp(B::planJoin(j,&wpa,plan),"ssid-mismatch"));
         assert(!B::planJoin(join(wpa,true),nullptr,plan)); // unknown BSS: decided after a scan
     }
-    { // Full WPA2 join: ready, scan, join, in-kernel handshake, keys, link, LQM; then AP deauth.
+    { // Full WPA2 join: ready, scan (cache first), join, in-kernel handshake, keys, link, LQM; then AP deauth.
         FakeCore core;FakeSink sink;Session s(core,sink);core.bss={wpa,open};
         uint64_t t=1000;s.poll(t);
         assert(s.state()==Session::State::Ready && sink.count(W::DriverAvailable)==1 && sink.count(W::ResetInterface)==1 && s.networkCount()==2);
-        W::ScanRequest scan{};assert(s.startScan(scan,t)==B::kSuccess && core.scans==1 && s.scanning());
-        assert(s.startScan(scan,t)==B::kBusy);
-        s.poll(t+=100);assert(s.scanning());core.advance();s.poll(t+=100);
-        assert(!s.scanning() && sink.count(W::ScanResult)==2 && sink.count(W::ScanDone)==1 && *reinterpret_cast<const int *>(sink.last(W::ScanDone)->data.data())==0);
-        assert(s.startJoin(join(wpa,true),t)==B::kSuccess && s.joining());
+        W::ScanRequest scan{};scan.type=1;
+        assert(s.startScan(scan,t)==B::kSuccess && s.scanning() && core.scans==0);
+        assert(s.startScan(scan,t)==B::kSuccess); // merged into the owed scan, never busy
+        s.poll(t+=20); // the cached BSSes at once, then the core scan (all channels: the plain request)
+        assert(sink.count(W::ScanResult)==2 && core.scans==1 && core.lastScanLength==0 && sink.count(W::ScanDone)==0);
+        core.advance();s.poll(t+=20);
+        assert(!s.scanning() && sink.count(W::ScanResult)==4 && sink.count(W::ScanDone)==1 && *reinterpret_cast<const int *>(sink.last(W::ScanDone)->data.data())==0);
+        assert(s.lastScanMs==20 && s.scanCount==1);
+        assert(s.startJoin(join(wpa,true),t)==B::kSuccess && s.joining() && s.busy());
         assert(s.startJoin(join(wpa,true),t)==B::kBusy);
-        for(int i=0;i<12 && core.stage!=10;++i){s.poll(t+=100);core.advance();}
-        assert(core.stage==10 && core.connectIndex==0 && core.secure);
-        s.poll(t+=100); // M1 arrives -> M2 sent; assoc events
-        assert(sink.count(W::AssocComplete)==1 && sink.count(W::LinkStatus)==1 && sink.count(W::FirstBeacon)==1 && sink.links.size()==1 && sink.links[0]);
+        assert(!s.associated());
+        for(int i=0;i<12 && core.stage!=10;++i){s.poll(t+=20);core.advance();}
+        assert(core.stage==10 && core.connectIndex==0 && core.secure && core.connects==1);
+        s.poll(t+=20); // associated: AssocComplete, LinkStatus, FirstBeacon; M1 -> M2
+        assert(sink.count(W::AssocComplete)==1 && sink.count(W::LinkStatus)==1 && sink.count(W::FirstBeacon)==1);
+        // WCL's setCurrentBSS reads EXTENDED_BSS_INFO/BSS_INFO now (hardware run 6 failed here):
+        // the BSS is answered while the handshake runs, the BSD link waits for the port.
+        uint8_t info[2048];size_t n;
+        assert(s.associated() && !s.linkUp() && s.bssInfo(info,sizeof(info),n) && n>sizeof(W::BeaconMetadata) && sink.links.empty());
+        assert(reinterpret_cast<const W::BeaconMetadata *>(info)->rssi==-55);
         assert(core.eapolOut.size()==1 && core.eapolOut[0].size()==sizeof(v_m2) && !memcmp(core.eapolOut[0].data(),v_m2,sizeof(v_m2)));
-        core.advance();s.poll(t+=100); // M3 -> keys installed, M4 queued until phase 3
+        core.advance();s.poll(t+=20); // M3 -> keys installed, M4 queued until phase 3
         assert(core.installedKeys.size()==(AIRPORT_ATH10K_WPASEC?81u:56u) && !memcmp(core.installedKeys.data(),v_ptk+32,16) && !memcmp(core.installedKeys.data()+16,v_gtk,16) && core.installedKeys[48]==4);
         assert(core.eapolOut.size()==1);
-        core.advance();s.poll(t+=100); // phase 3: M4 sent and Authorize requested
+        core.advance();s.poll(t+=20); // phase 3: M4 sent and Authorize requested
         assert(core.eapolOut.size()==2 && core.eapolOut[1].size()==sizeof(v_m4) && !memcmp(core.eapolOut[1].data(),v_m4,sizeof(v_m4)) && core.authorized);
-        core.advance();s.poll(t+=100); // link up -> ConnectComplete(0)
-        assert(s.state()==Session::State::Connected && s.linkUp() && sink.count(W::ConnectComplete)==1);
+        core.advance();s.poll(t+=20); // port authorized -> BSD link, ConnectComplete(0)
+        assert(s.state()==Session::State::Connected && s.linkUp() && sink.count(W::ConnectComplete)==1 && sink.links.size()==1 && sink.links[0]);
         auto *c=reinterpret_cast<const W::ConnectionEvent *>(sink.last(W::ConnectComplete)->data.data());assert(c->status==0 && !memcmp(c->peers[0].bssid,v_ap,6));
+        assert(s.lastJoinMs>0 && s.lastJoinMs<=20*16 && !s.busy());
         assert(core.psRequests==1 && core.lastPS==1 && s.lqmQuality()==100);
         size_t lqm=sink.count(W::LqmUpdate);s.poll(t+=2500);assert(sink.count(W::LqmUpdate)==lqm+1);
-        uint8_t info[2048];size_t n;assert(s.bssInfo(info,sizeof(info),n) && n>sizeof(W::BeaconMetadata));
+        assert(s.bssInfo(info,sizeof(info),n) && n>sizeof(W::BeaconMetadata));
         assert(s.beaconInfo(info,sizeof(info),t) && s.beaconInfo(info,sizeof(info),t+100));
         assert(!strcmp(s.core_().country,"US") && s.core_().channel==44 && s.core_().width==80 && s.core_().nss==2);
+        // A scan while connected runs in the core (associated, port authorized).
+        assert(s.startScan(scan,t)==B::kSuccess);s.poll(t+=20);assert(core.scans==2);core.advance();s.poll(t+=20);assert(sink.count(W::ScanDone)==2);
         // AP drops the link: core reports stage 0 without a disconnect in progress.
         core.link=false;core.stage=0;core.secure=false;core.beaconMisses=5;s.poll(t+=100);
         assert(s.state()==Session::State::Ready && sink.count(W::Deauth)==1 && sink.links.size()==2 && !sink.links[1]);
         auto *d=reinterpret_cast<const W::DeauthEvent *>(sink.last(W::Deauth)->data.data());assert(d->reason==4 && !memcmp(d->bssid,v_ap,6));
         assert(s.lastDisconnectReason==4 && !strcmp(Session::stateName(s.state()),"ready")); // registry mirror (AirportAth10kLastDisconnectReason / JoinState)
+        // WCL rejoins (reconnect after the AP drop) without a new scan.
+        assert(s.startJoin(join(wpa,true),t)==B::kSuccess);core.eapolOut.clear();core.authorized=false;core.phase=0;
+        for(int i=0;i<30 && !s.linkUp();++i){s.poll(t+=20);core.advance();}
+        assert(s.linkUp() && sink.count(W::ConnectComplete)==2 && core.connects==2);
     }
     { // Private Wi-Fi Address: WCL sets a station MAC; the join carries it (extended Connect, flags 16),
       // the supplicant uses it, and clearing it (permanent address) sends a plain Connect again.
@@ -179,7 +206,8 @@ int main(){
         core.link=false;core.stage=0;core.secure=false;s.poll(t+=100);assert(s.state()==Session::State::Ready);
         // WCL restores the permanent address while the vdev still has the private one: the next join carries it.
         s.setStationMAC(permanent);
-        B::Network open2=open;core.bss={wpa,open2};s.poll(t+=100);
+        B::Network open2=open;core.bss={wpa,open2};
+        W::ScanRequest scan{};scan.type=1;s.startScan(scan,t);s.poll(t+=100);core.advance();s.poll(t+=100);
         assert(s.startJoin(join(open2,false),t)==B::kSuccess);
         for(int i=0;i<12 && core.stage!=10;++i){s.poll(t+=100);core.advance();}
         assert(core.macChanges==2 && !memcmp(core.stationMAC,permanent,6) && core.connectIndex==2);
@@ -189,18 +217,21 @@ int main(){
         for(int i=0;i<12 && core.stage!=10;++i){s.poll(t+=100);core.advance();}
         assert(core.macChanges==2 && core.connectIndex==0);
     }
-    { // Open join, voluntary leave, join of a BSS missing from the cache (scan first), rejection, timeout, abort.
+    { // Open join, voluntary leave, join of a BSS missing from the cache (directed scan first), rejection, timeout, abort.
         FakeCore core;FakeSink sink;Session s(core,sink);core.bss={open};
         uint64_t t=5000;s.poll(t);
         assert(s.startJoin(join(open,false),t)==B::kSuccess);
         for(int i=0;i<12 && !s.linkUp();++i){s.poll(t+=100);core.advance();}
-        s.poll(t+=100);assert(s.linkUp() && core.connectIndex==0 && !core.secure && sink.count(W::ConnectComplete)==1);
+        assert(s.linkUp() && core.connectIndex==0 && !core.secure && sink.count(W::ConnectComplete)==1 && sink.links.size()==1 && sink.links[0]);
         assert(s.leaveNetwork(t)==B::kSuccess && s.state()==Session::State::Leaving && core.disconnects==1 && sink.links.back()==false);
+        assert(s.leaveNetwork(t)==B::kSuccess && core.disconnects==1); // WCL repeats setDISASSOCIATE: harmless
         core.advance();s.poll(t+=100);assert(s.state()==Session::State::Ready);
-        // WCL asks for a BSSID that is not in the last scan: a scan runs first, then the join proceeds.
+        // WCL asks for a BSSID that is not in the last scan: a directed scan of its channel runs first.
         core.bss={open,wpa};
         assert(s.startJoin(join(wpa,true),t)==B::kSuccess && s.joining());
-        s.poll(t+=100);assert(core.scans==1 && s.scanning());core.advance();s.poll(t+=100);
+        s.poll(t+=20);s.poll(t+=20);
+        assert(core.scans==1 && s.coreScanning() && core.lastScanLength==42 && core.lastScanMask==B::channelBit(44) && core.lastScanSSID=="home");
+        core.advance();s.poll(t+=20);
         assert(!s.scanning() && sink.count(W::ScanDone)==0 && core.stage>=1);
         for(int i=0;i<30 && !s.linkUp();++i){s.poll(t+=100);core.advance();}
         assert(s.linkUp() && sink.count(W::ConnectComplete)==2);
@@ -208,16 +239,67 @@ int main(){
         core.link=false;core.stage=0;core.secure=false;s.poll(t+=100);assert(s.state()==Session::State::Ready);
         core.failAfterConnect=true;assert(s.startJoin(join(open,false),t)==B::kSuccess);
         for(int i=0;i<6 && s.joining();++i){s.poll(t+=100);core.advance();}
+        s.poll(t+=100);
         assert(!s.joining() && s.state()==Session::State::Ready && core.cancels>=1 && core.stage==0);
         auto *c=reinterpret_cast<const W::ConnectionEvent *>(sink.last(W::ConnectComplete)->data.data());assert(c->status==1);
         // Timeout: the core never associates.
         core.failAfterConnect=false;assert(s.startJoin(join(open,false),t)==B::kSuccess);s.poll(t+=100);
         s.poll(t+=31000);assert(!s.joining());c=reinterpret_cast<const W::ConnectionEvent *>(sink.last(W::ConnectComplete)->data.data());assert(c->status==1 && c->reason==1004);
         core.stage=0;
-        // Abort.
+        // Abort (accepted while the timed-out connection is still being torn down).
         assert(s.startJoin(join(open,false),t)==B::kSuccess);assert(s.abortJoin(t)==B::kSuccess && sink.count(W::JoinAbortComplete)==1 && !s.joining());
         // Unsupported requests are refused synchronously.
         W::JoinRequest j=join(wpa,true);j.upperAuth=1u<<12;assert(s.startJoin(j,t)==B::kUnsupported && !strcmp(s.lastError,"auth-not-supported"));
+    }
+    { // Scans: channel subsets and directed SSIDs reach the core, overlapping requests merge,
+      // passive requests stay passive, a busy core is retried, abort, the boot scan is adopted,
+      // and a request while a leave owns the radio is answered from the cache.
+        FakeCore core;FakeSink sink;Session s(core,sink);core.bss={wpa,open};uint64_t t=20000;s.poll(t);
+        W::ScanRequest one{};one.type=1;one.channelCount=1;one.channels[0]|=1u<<6;memcpy(one.ssid,"cafe",4);one.ssidLength=4;
+        assert(s.startScan(one,t)==B::kSuccess);s.poll(t+=20);
+        assert(sink.count(W::ScanResult)==1 && core.scans==1 && core.lastScanLength==42 && core.lastScanMask==B::channelBit(6) && core.lastScanSSID=="cafe" && !core.lastScanFlags);
+        W::ScanRequest all{};all.type=1;assert(s.startScan(all,t)==B::kSuccess); // widened while the first runs
+        core.advance();s.poll(t+=20);
+        assert(sink.count(W::ScanDone)==0 && core.scans==2 && core.lastScanMask==(B::allChannelMask()&~B::channelBit(6)) && core.lastScanSSID.empty());
+        core.advance();s.poll(t+=20);assert(sink.count(W::ScanDone)==1 && !s.scanning());
+        W::ScanRequest passive{};passive.type=2;assert(s.startScan(passive,t)==B::kSuccess);s.poll(t+=20);
+        assert(core.scans==3 && core.lastScanLength==42 && core.lastScanFlags==1 && !core.lastScanMask);
+        core.advance();s.poll(t+=20);assert(sink.count(W::ScanDone)==2);
+        core.scanBusy=3;assert(s.startScan(all,t)==B::kSuccess);
+        for(int i=0;i<3;++i){s.poll(t+=20);assert(core.scans==3 && s.scanning());}
+        s.poll(t+=20);assert(core.scans==4);core.advance();s.poll(t+=20);assert(sink.count(W::ScanDone)==3);
+        assert(s.startScan(all,t)==B::kSuccess);s.poll(t+=20);assert(core.scans==5);
+        s.abortScan();assert(sink.count(W::ScanDone)==4 && *reinterpret_cast<const int *>(sink.last(W::ScanDone)->data.data())==B::kAborted && core.scanCancels==1);
+        s.poll(t+=20);assert(!s.scanning());
+        // A core without scan options gets the plain request.
+        core.scanOptions=false;s.poll(t+=20);assert(s.startScan(one,t)==B::kSuccess);s.poll(t+=20);assert(core.scans==6 && core.lastScanLength==0);
+        core.advance();s.poll(t+=20);assert(sink.count(W::ScanDone)==5);core.scanOptions=true;
+        // The core's own scan (boot) is adopted instead of being refused or repeated.
+        FakeCore b;FakeSink bs;Session sb(b,bs);b.bss={open};b.scanning=true;b.scanDone=false;sb.poll(t);
+        assert(sb.startScan(all,t)==B::kSuccess);sb.poll(t+=20);assert(b.scans==0 && sb.scanning());
+        b.advance();sb.poll(t+=20);assert(bs.count(W::ScanDone)==1 && bs.count(W::ScanResult)==1 && b.scans==0);
+        // Leaving owns the radio: cached results now, ScanDone after the grace period, no core scan.
+        assert(s.startJoin(join(open,false),t)==B::kSuccess);
+        for(int i=0;i<12 && !s.linkUp();++i){s.poll(t+=20);core.advance();}
+        assert(s.linkUp() && s.leaveNetwork(t)==B::kSuccess && s.state()==Session::State::Leaving);
+        const unsigned scans=core.scans;const size_t results=sink.count(W::ScanResult),done=sink.count(W::ScanDone);
+        assert(s.startScan(all,t)==B::kSuccess);s.poll(t+=20);assert(sink.count(W::ScanResult)==results+2 && sink.count(W::ScanDone)==done);
+        s.poll(t+=1600);assert(sink.count(W::ScanDone)==done+1 && core.scans==scans && !s.scanning());
+    }
+    { // Join robustness: a running WCL scan is cancelled for the join (and answered), a BSS the
+      // core's own cache lacks is rescanned, and a join is accepted while a leave completes.
+        FakeCore core;FakeSink sink;Session s(core,sink);core.bss={wpa,open};uint64_t t=40000;s.poll(t);
+        W::ScanRequest all{};all.type=1;assert(s.startScan(all,t)==B::kSuccess);s.poll(t+=20);assert(core.scans==1 && core.scanning);
+        assert(s.startJoin(join(open,false),t)==B::kSuccess);s.poll(t+=20);assert(core.scanCancels==1);
+        s.poll(t+=20);assert(sink.count(W::ScanDone)==1 && core.connects==1);
+        for(int i=0;i<12 && !s.linkUp();++i){s.poll(t+=20);core.advance();}
+        assert(s.linkUp());
+        // Join another BSS straight away: the session disconnects, waits, then connects.
+        core.missing={{v_ap,v_ap+6}};
+        assert(s.leaveNetwork(t)==B::kSuccess && s.startJoin(join(wpa,true),t)==B::kSuccess);
+        core.eapolOut.clear();core.authorized=false;core.phase=0;
+        for(int i=0;i<40 && !s.linkUp();++i){s.poll(t+=20);core.advance();}
+        assert(s.linkUp() && core.scans==2 && core.lastScanMask==B::channelBit(44) && core.connects==2 && sink.count(W::ConnectComplete)==2);
     }
     { // Offline core, wake restart request, power off.
         FakeCore core;FakeSink sink;Session s(core,sink);core.bss={open};core.reachable=false;
@@ -233,9 +315,12 @@ int main(){
         assert(p.startJoin(join(open,false),t)==B::kSuccess);
         for(int i=0;i<12 && !p.linkUp();++i){p.poll(t+=100);c2.advance();}
         p.poll(t+=100);assert(p.linkUp());
-        assert(p.setPower(false,t)==B::kSuccess && p.state()==Session::State::Leaving && !p.powered());
+        // A scan owed at power-off is completed (offline), the link goes down.
+        scan.type=1;assert(p.startScan(scan,t)==B::kSuccess);
+        assert(p.setPower(false,t)==B::kSuccess && p.state()==Session::State::Leaving && !p.powered() && !p.scanning());
+        assert(*reinterpret_cast<const int *>(k2.last(W::ScanDone)->data.data())==B::kOffline && k2.links.back()==false);
         assert(p.startScan(scan,t)==B::kNotReady);c2.advance();p.poll(t+=100);
         assert(p.setPower(true,t)==B::kSuccess && p.startScan(scan,t)==B::kSuccess);
     }
-    puts("Native bridge tests passed (WCL request mapping, scan-result conversion, in-kernel WPA2 join/key install, link events, leave, scan-first join, rejection, timeout, abort, offline/restart, power).");
+    puts("Native bridge tests passed (WCL request mapping, scan-result conversion, cache-first/merged/directed/passive scans, in-kernel WPA2 join with BSS info during the handshake, key install, link events, leave, rescans, rejection, timeout, abort, offline/restart, power).");
 }

@@ -44,8 +44,8 @@ Decisions:
    The control ABI the menu-bar app used is now called in-kernel (`controlRequest` takes an
    `OSObject` owner), extended with the BSS details WCL needs (capabilities, interval, rates,
    HT/VHT elements) and the country code.
-2. **Polling, not callbacks.** The front end polls the core every 100 ms on the IO80211 work
-   queue, under the same gate as the WCL commands, so the session logic is single-threaded
+2. **Polling, not callbacks.** The front end polls the core every 100 ms (20 ms while a scan
+   or join runs) on the IO80211 work queue, under the same gate as the WCL commands, so the session logic is single-threaded
    and the core gained no new locks. EAPOL frames reach the kernel supplicant the same way the
    app received them.
 3. **Supplicant in the kernel.** `src/shared/Ath10kSupplicant.hpp` is unchanged; it gets a
@@ -159,6 +159,46 @@ during a join are the family's own (`PLATFORM_CONFIG`, `VIRTUAL_IF_PARENT`), `SS
 while unassociated, and WCL configuration sets AirportItlwm also leaves unsupported; `MCS` now
 answers.
 
+Sixth real boot (26.7.2, core 4535d42b, front end 2d2a4880): en1 is Wi-Fi, power on, networks
+listed, the Private Wi-Fi Address set; every join failed and macOS asked for the password again.
+The core associated (WMI commands up to stage 10, connected-open, then torn down by the leave), but
+WCL's join manager, right after `JOIN_ASSOC_COMPLETE`, reads `APPLE80211_IOC_WCL_EXTENDED_BSS_INFO`
+in `setCurrentBSS`, and the front end answered `kIOReturnNotReady` because it only reported the
+BSS once the 4-way handshake had authorized the port: "Fail to get EXTENDED_BSS_INFO" → "leave
+network due to <Update Bss fail>" → join failure (statusCode 1, extendedCode 3). AirportItlwm
+answers from net80211 RUN (associated). Fixed, with the rest of the join and scan path (hardware
+run 7 pending):
+- EXTENDED_BSS_INFO, BSS_INFO, BEACON_INFO, CHANNEL, RSSI, RATE, MCS and TXPOWER answer from
+  AssocComplete on; the BSD link follows the authorized port (DHCP no longer starts before the
+  handshake); ConnectComplete after the keys are installed and the port is open.
+- Join: setWCL_ASSOCIATE waits for the core to be idle (disconnects/cancels a previous
+  connection, cancels a running scan), scans the candidate's channel by SSID when the core's BSS
+  cache lacks the BSSID ("configured-bss-not-found", reported in the response now), retries a
+  Connect the core is not ready for instead of failing, and is accepted while a leave completes.
+- Scans: never refused as busy. Cached results (heard in the last 30 s) are posted at once,
+  results stream while the core scans, overlapping requests merge, the core's own boot scan is
+  adopted, a request during a join/leave is answered from the cache after 1.5 s. The core probes
+  actively (wildcard + directed SSID, rate IEs as mac80211 builds them, 40 ms dwell) on channels
+  the regulatory rules allow it to transmit on, passive 110 ms elsewhere (was 500 ms passive
+  everywhere, ~19 s per sweep); world domain lifts NO-IR per channel once a beacon was heard on it
+  (Linux cfg80211 beacon hints), which re-sends the firmware channel list once.
+- RSSI: a BSS heard on an adjacent channel during the sweep keeps its last on-channel signal
+  (cfg80211 `signal_valid`); before, the last (weakest, leaked) reading won, which is how WCL
+  picked a -87 dBm 2.4 GHz BSS over the AP's 5 GHz channel 44.
+- The front end polls every 20 ms while a scan or join runs (100 ms otherwise) and immediately
+  after each WCL command; nothing in the join path waits on a fixed delay.
+- `AirportAth10kLastError` could point into a stack response after a rejected Connect (the
+  registry mirror then read dead stack); errors are copied now.
+- Registry: `AirportAth10kLastScanMs`, `AirportAth10kLastJoinMs`, `AirportAth10kScanCount`,
+  `AirportAth10kCachedNetworks`.
+
+Sleep/wake is unchanged in this build: after wake the core still asks for the guarded restart
+(terminate + rematch), which takes the controller with it. The teardown panic of that path is
+fixed (ac7d33a); whether the black screen after wake was that panic, the GPU, or something else
+is unknown (no log survived). Reloading the firmware in place on wake (Linux ath10k
+`ath10k_pci_resume` → `hif_power_up` + core restart) needs every runtime service state of the
+core reset without terminating it; that is the next step once a wake log exists.
+
 Only macOS can verify (not done): that WCL accepts the capability bits and event sequence,
 DHCP over the Skywalk interface, sleep/wake, Settings details. The reconstructed headers are
 now proven against 26.7.2; another point release can still move slots, so rerun the build
@@ -170,5 +210,5 @@ WPA3-SAE/PMF, Enterprise and the Private Wi-Fi Address are in progress behind th
 `AIRPORT_ATH10K_WPASEC` (off in releases; paused by the owner): [`WIFI-SECURITY.md`](WIFI-SECURITY.md).
 
 WPA3-SAE / PMF, Enterprise, WEP, Private Wi-Fi Address (random MAC), AWDL/AirDrop/Continuity,
-P2P/hotspot, 6 GHz, 160 MHz, active/directed probing, roaming between BSSIDs of one SSID (WCL
+P2P/hotspot, 6 GHz, 160 MHz, roaming between BSSIDs of one SSID (WCL
 asks for a new join; the core disconnects and reconnects).

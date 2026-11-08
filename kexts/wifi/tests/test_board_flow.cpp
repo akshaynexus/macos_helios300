@@ -243,6 +243,7 @@ public:
     Ath10k::WMIVdevCreateState _wmiVdevCreate{};
     const char *serviceWMIScanChannels(UInt64 nowMs);
     Ath10k::WMIScanChannelsState _wmiScanChannels{};
+    Ath10k::WMIScanOptions _scanOptions{};UInt64 _scanProbeMask=0;bool _scanChannelsResend=false;
     Ath10k::RegulatoryPolicy _regulatory{};
     Ath10k::WMIScanChannelsState _wmiRadio[5]{};
     const char *serviceWMIRadio(UInt64 nowMs, UInt32 index);

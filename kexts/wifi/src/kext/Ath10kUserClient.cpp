@@ -61,7 +61,8 @@ bool Ath10kPCIDevice::requestDeviceRestart(){
  return true;
 }
 void Ath10kPCIDevice::fillControlInfo(AthControl::Response &o){
- Ath10k::htcWriteLE32(o.data,0x2ff|(AIRPORT_ATH10K_WPASEC?1024u:0u)|(_regulatory.stationDFS?256u:0u));Ath10k::htcWriteLE32(o.data+4,_wmiScan.generation);
+ // Capability 2048: Scan takes the 42-byte options block (channels, SSID, passive).
+ Ath10k::htcWriteLE32(o.data,0x2ff|2048u|(AIRPORT_ATH10K_WPASEC?1024u:0u)|(_regulatory.stationDFS?256u:0u));Ath10k::htcWriteLE32(o.data+4,_wmiScan.generation);
  Ath10k::htcWriteLE32(o.data+8,_connection.operatingChannel);
  Ath10k::htcWriteLE32(o.data+12,static_cast<UInt32>(_connection.signalDbm));
  Ath10k::htcWriteLE32(o.data+16,_connection.width);Ath10k::htcWriteLE32(o.data+20,_connection.nss);
@@ -154,6 +155,17 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   if(self->_controlOwner && self->_controlOwner!=who)return kIOReturnNotPermitted;
   if(r.index>1)return kIOReturnBadArgument;
   if(r.index==1){if(!self->_wmiScan.completed)self->_wmiScan.cancelRequested=true;return kIOReturnSuccess;}
+  // Options (length 42): channel mask u64 (kWMIScanPlan indices, 0 = all),
+  // flags u8 (1 = passive only), SSID length u8, SSID[32] (directed probe).
+  Ath10k::WMIScanOptions options{};
+  if(r.length){
+   if(r.length!=42 || (r.data[8]&~1u) || r.data[9]>32)return kIOReturnBadArgument;
+   for(unsigned i=0;i<8;++i)options.channels|=UInt64(r.data[i])<<(8*i);
+   if(options.channels>>Ath10k::kWMIScanChannelCount)return kIOReturnBadArgument;
+   options.passiveOnly=(r.data[8]&1)!=0;options.ssidLength=r.data[9];bcopy(r.data+10,options.ssid,options.ssidLength);
+   bool any=false;for(UInt32 i=0;i<Ath10k::kWMIScanChannelCount;++i)if(Ath10k::wmiScanSelected(&self->_regulatory,&options,i))any=true;
+   if(!any)return kIOReturnUnsupported;
+  }
   if(self->_wmiEvents.rfKill)return kIOReturnNotReady;
   if(s.stats.step || s.maintenance.step || s.radio.step || s.csa.phase!=Ath10k::ChannelSwitchPhase::Idle || !self->_wmiScan.completed || s.wmiOwned || s.txOwned || self->_wmi.credits.outstanding ||
      (s.stage!=Ath10k::LinkStage::Disabled && (s.stage!=Ath10k::LinkStage::Connected || !s.portAuthorized)))return kIOReturnBusy;
@@ -161,15 +173,23 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   // The reported double-fault frame matches the 28496-byte cache plus
   // call overhead. A shared prologue can reserve that temporary even for
   // read-only Status/Info calls that never execute the Scan branch.
+  // Probe where regulatory rules allow it, plus beacon hints from earlier
+  // scans; a changed mask re-sends the firmware channel list first.
+  const UInt64 hints=self->_wmiBSS.onChannelMask;
+  options.probe=Ath10k::wmiScanProbeMask(&self->_regulatory,hints);
+  if(options.probe!=self->_scanProbeMask){self->_wmiScanChannels=Ath10k::WMIScanChannelsState{};self->_scanChannelsResend=true;}
+  self->_scanOptions=options;
   const UInt32 generation=self->_wmiScan.generation+1;
   Ath10k::resetInPlace(self->_wmiScan);self->_wmiScan.generation=generation;
-  self->_wmiScan.id=0xa000|((0x36+generation)&0xfff);Ath10k::resetInPlace(self->_wmiBSS);
+  self->_wmiScan.id=0xa000|((0x36+generation)&0xfff);Ath10k::resetInPlace(self->_wmiBSS);self->_wmiBSS.onChannelMask=hints;
   return kIOReturnSuccess;
  }
  if(r.operation==Connect){
   if(self->_wmiEvents.rfKill)return kIOReturnNotReady;
   if(self->_controlOwner || s.stage!=Ath10k::LinkStage::Disabled)return kIOReturnExclusiveAccess;
-  if(!self->_wmiScan.completed || self->_wmiScan.failed || self->_wmiScan.cancelRequested || !self->_networkEnabled)return kIOReturnNotReady;
+  // A scan cancelled for this join still left the BSSes it heard in the cache;
+  // selectOpenBSS below requires the selected BSSID to be among them.
+  if(!self->_wmiScan.completed || self->_wmiScan.failed || !self->_networkEnabled)return kIOReturnNotReady;
   if(r.index>3 || r.length<9 || !r.data[0] || r.data[0]>32 || r.length<8u+r.data[0] || r.data[1]>1 || (r.data[2]&1))return kIOReturnBadArgument;
   const bool extended=(r.index&2)!=0;const UInt8 *x=r.data+8+r.data[0];const UInt32 xBytes=r.length-8u-r.data[0];
   if(!extended && xBytes)return kIOReturnBadArgument;
@@ -203,7 +223,8 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   s.firmwareHT=self->_wmi.htCapability;s.firmwareVHT=self->_wmi.vhtCapability;
   s.rfChains=static_cast<UInt8>(self->_wmiInit.requestedChainMask==1?1:2);
   const char *error=Ath10k::selectOpenBSS(s,self->_wmiBSS);
-  if(error){s.error=error;return kIOReturnUnsupported;}
+  // o.error was filled before the request ran: report this rejection's reason.
+  if(error){s.error=error;strlcpy(o.error,error,sizeof(o.error));return kIOReturnUnsupported;}
   self->_controlOwner=static_cast<OSObject *>(who);s.error="none";s.stage=Ath10k::LinkStage::Scan;
   self->publishConnection();return kIOReturnSuccess;
  }

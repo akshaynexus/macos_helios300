@@ -61,6 +61,16 @@ int main(){
         Ath10k::recordWMIBSS(perChannel,frame.data(),frame.size(),channel,42,0);
         assert(perChannel.count==1 && perChannel.entries[0].rxChannel==channel);
     }
+    { // A BSS heard off its channel (adjacent-channel leakage) keeps its on-channel signal
+      // (cfg80211 signal_valid); on-channel receptions are the beacon hints.
+        Ath10k::WMIBSSCache h;auto f=beacon(); // DS channel 1
+        Ath10k::recordWMIBSS(h,f.data(),f.size(),1,40,0);
+        Ath10k::recordWMIBSS(h,f.data(),f.size(),3,8,0);
+        assert(h.count==1 && h.entries[0].snr==40 && h.entries[0].rxChannel==1 && h.entries[0].seen==2 && h.onChannelMask==1ull);
+        Ath10k::recordWMIBSS(h,f.data(),f.size(),1,30,0);assert(h.entries[0].snr==30);
+        Ath10k::WMIBSSCache first;Ath10k::recordWMIBSS(first,f.data(),f.size(),3,8,0);
+        assert(first.entries[0].snr==8 && first.entries[0].rxChannel==3 && !first.onChannelMask);
+    }
     // 5 GHz beacons with HT Operation and no DS Parameter Set.
     for(UInt8 channel:{36,40,44,48,52,56,60,64,100,104,108,112,116,120,124,128,132,136,140,144,149,153,157,161,165}){
         auto frame=beacon({'F','i','v','e'},channel);

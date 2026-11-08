@@ -253,6 +253,7 @@ private:
     uint64_t nowMs() const;
     void updateLinkQuality();
     void mirrorState();
+    void kick();
     IOReturn fillRateSet(apple80211_rate_set_data *);
     IOReturn fillMCSSet(apple80211_mcs_index_set_data *);
     AirportAth10k *controller=nullptr;
@@ -262,7 +263,8 @@ private:
     uint8_t permanentMAC[6]{};
     bool stopping=false,started=false;
     AirportRegistration::Blocks registration{};
-    uint32_t mirroredState=~0u,mirroredReason=~0u;const char *mirroredError=nullptr;
+    uint32_t mirroredState=~0u,mirroredReason=~0u,mirroredErrorSerial=~0u;
+    uint32_t mirroredScanMs=~0u,mirroredJoinMs=~0u,mirroredScans=~0u,mirroredNetworks=~0u;
     int reportedQuality=-3;
     uint16_t scanHomeAwayMs=0;
 };

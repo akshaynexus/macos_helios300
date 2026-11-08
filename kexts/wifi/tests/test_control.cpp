@@ -19,6 +19,7 @@ public:
  Ath10k::RegulatoryPolicy _regulatory{};
  struct {bool active=true;} _wmiLive;
  Ath10k::WMIScanState _wmiScan{};
+ Ath10k::WMIScanChannelsState _wmiScanChannels{};Ath10k::WMIScanOptions _scanOptions{};UInt64 _scanProbeMask=0;bool _scanChannelsResend=false;
  Ath10k::WMIInitState _wmiEvents{};
  struct {UInt8 mac[6]{2,1,2,3,4,5};UInt32 requestedChainMask=3;} _wmiInit;UInt8 _vdevMAC[6]{2,1,2,3,4,5};
  struct {UInt32 htCapability=1,vhtCapability=0,rfChains=1;Ath10k::HTCCreditState credits{};} _wmi;
@@ -49,6 +50,22 @@ static void extensionTests(){
  s.txOwned=true;assert(call(Scan)==kIOReturnBusy);s.txOwned=false;
  assert(call(Scan)==0 && d._wmiScan.generation==2 && s.portAuthorized);
  d._wmiScan.completed=true;
+ { // Scan options (Info capability 2048): channel mask, passive-only flag, directed SSID; beacon
+   // hints survive the cache reset and a changed probe mask re-sends the channel list.
+  assert(!d._scanOptions.channels && !d._scanOptions.ssidLength && d._scanChannelsResend && d._scanOptions.probe==0x7ff);
+  d._scanProbeMask=d._scanOptions.probe;d._scanChannelsResend=false;d._wmiScanChannels.completed=true;
+  r.length=42;memset(r.data,0,42);r.data[0]=1<<5;r.data[1]=1<<6;r.data[9]=4;memcpy(r.data+10,"home",4); // channels 6 and 40 (plan indices 5, 14)
+  d._wmiBSS.onChannelMask=1ull<<14;
+  assert(call(Scan)==0 && d._scanOptions.channels==((1ull<<5)|(1ull<<14)) && d._scanOptions.ssidLength==4 && !memcmp(d._scanOptions.ssid,"home",4) && !d._scanOptions.passiveOnly);
+  assert(d._scanOptions.probe==(0x7ffull|(1ull<<14)) && d._scanChannelsResend && !d._wmiScanChannels.completed && d._wmiBSS.onChannelMask==(1ull<<14));
+  d._scanProbeMask=d._scanOptions.probe;d._scanChannelsResend=false;d._wmiScanChannels.completed=true;d._wmiScan.completed=true;
+  r.data[8]=1;assert(call(Scan)==0 && d._scanOptions.passiveOnly && !d._scanChannelsResend);d._wmiScan.completed=true;
+  r.data[8]=2;assert(call(Scan)==kIOReturnBadArgument);r.data[8]=0;
+  r.data[9]=33;assert(call(Scan)==kIOReturnBadArgument);r.data[9]=0;
+  r.length=41;assert(call(Scan)==kIOReturnBadArgument);r.length=42;
+  memset(r.data,0,8);r.data[4]=0x80;assert(call(Scan)==kIOReturnBadArgument); // bit 39: beyond the 38-channel plan
+  r.length=0;memset(r.data,0,42);
+ }
  r.index=1;assert(call(SecurityHold)==0 && s.eapolPause);
  r.index=0;assert(call(SecurityHold)==0 && !s.eapolPause && s.txWakePending);
  r.length=56;r.data[48]=AthSecurity::cipherCCMP;r.data[49]=1;memset(r.data,0x25,16);memset(r.data+16,0x45,16);
@@ -85,8 +102,8 @@ int main(){
  // Binding a supplied SSID to a hidden BSSID is explicit and preserves RSN/security checks.
  ap.hidden=true;ap.ssidLength=0;r.index=1;r.length=9;r.data[0]=1;memcpy(r.data+2,ap.bssid,6);r.data[8]='T';
  d._wmiScan.failed=true;assert(call(Connect)==kIOReturnNotReady);d._wmiScan.failed=false;
- d._wmiScan.cancelRequested=true;assert(call(Connect)==kIOReturnNotReady);d._wmiScan.cancelRequested=false;
- assert(call(Connect)==0 && d._connection.hiddenSSID);
+ // A scan the front end cancelled for this join leaves the BSSes it heard usable.
+ d._wmiScan.cancelRequested=true;assert(call(Connect)==0 && d._connection.hiddenSSID);d._wmiScan.cancelRequested=false;
  d._controlOwner=nullptr;Ath10k::resetDisconnected(d._connection);ap.hidden=false;ap.ssidLength=1;r.index=0;
  { // Private Wi-Fi Address: the extended block carrying the station MAC alone is accepted in every build.
   r={};r.index=2;r.length=19;r.data[0]=1;memcpy(r.data+2,ap.bssid,6);r.data[8]='T';uint8_t *x=r.data+9;x[0]=16;

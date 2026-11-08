@@ -116,7 +116,16 @@ void AirportAth10kInterface::pollTimer(OSObject *owner,IOTimerEventSource *)
     self->session->poll(self->nowMs());
     if(before!=self->session->state() || linked!=self->session->linkUp())self->updateLinkQuality();
     self->mirrorState();
-    if(self->timer && !self->stopping)self->timer->setTimeoutMS(100);
+    // 20 ms while a scan or join waits on the core (each step of the join and
+    // of the 4-way handshake is taken on the next poll), 100 ms otherwise.
+    if(self->timer && !self->stopping)self->timer->setTimeoutMS(self->session->busy()?20:100);
+}
+
+// A WCL command changed what the session waits for: poll on the next turn of
+// the work queue instead of up to 100 ms later.
+void AirportAth10kInterface::kick()
+{
+    if(started && !stopping && timer)timer->setTimeoutMS(1);
 }
 
 // Registry mirror of the session (on the controller), written only on change:
@@ -127,8 +136,14 @@ void AirportAth10kInterface::mirrorState()
     if(!controller || !session || controller->isInactive())return;
     const uint32_t state=static_cast<uint32_t>(session->state());
     if(state!=mirroredState){mirroredState=state;controller->setProperty("AirportAth10kJoinState",AirportAth10kSession::stateName(session->state()));}
-    if(session->lastError!=mirroredError){mirroredError=session->lastError;controller->setProperty("AirportAth10kLastError",session->lastError?session->lastError:"none");}
+    if(session->errorSerial!=mirroredErrorSerial){mirroredErrorSerial=session->errorSerial;controller->setProperty("AirportAth10kLastError",session->lastError?session->lastError:"none");}
     if(session->lastDisconnectReason!=mirroredReason){mirroredReason=session->lastDisconnectReason;controller->setProperty("AirportAth10kLastDisconnectReason",mirroredReason,32);}
+    // Timing of the last core scan and of the last successful join (WCL
+    // request to authorized port), number of core scans, cached BSSes.
+    if(session->lastScanMs!=mirroredScanMs){mirroredScanMs=session->lastScanMs;controller->setProperty("AirportAth10kLastScanMs",mirroredScanMs,32);}
+    if(session->lastJoinMs!=mirroredJoinMs){mirroredJoinMs=session->lastJoinMs;controller->setProperty("AirportAth10kLastJoinMs",mirroredJoinMs,32);}
+    if(session->scanCount!=mirroredScans){mirroredScans=session->scanCount;controller->setProperty("AirportAth10kScanCount",mirroredScans,32);}
+    if(session->networkCount()!=mirroredNetworks){mirroredNetworks=session->networkCount();controller->setProperty("AirportAth10kCachedNetworks",mirroredNetworks,32);}
 }
 
 IOReturn AirportAth10kInterface::command(OSObject *,void *a0,void *a1,void *a2,void *)
@@ -146,7 +161,9 @@ IOReturn AirportAth10kInterface::command(OSObject *,void *a0,void *a1,void *a2,v
             for(const auto &c:AirportBridge::kChannels)if(AirportWCL::scanChannelSelected(scan.channels,true,c.number))usable=true;
             if(!usable)return kIOReturnUnsupported;
         }
-        return self->session->startScan(scan,now);}
+        const IOReturn r=self->session->startScan(scan,now);
+        if(r==kIOReturnSuccess)self->kick();
+        return r;}
     case OpScanAbort:self->session->abortScan();return kIOReturnSuccess;
     case OpJoin:{
         AirportWCL::JoinRequest join;
@@ -154,9 +171,10 @@ IOReturn AirportAth10kInterface::command(OSObject *,void *a0,void *a1,void *a2,v
         const IOReturn r=self->session->startJoin(join,now);
         AthSecurity::wipe(&join,sizeof(join));
         if(r!=kIOReturnSuccess)AIRPORT_LOG("join refused: %s (0x%x)",self->session->lastError,r);
+        else self->kick();
         return r;}
     case OpJoinAbort:return self->session->abortJoin(now);
-    case OpLeave:return self->session->leaveNetwork(now);
+    case OpLeave:{const IOReturn r=self->session->leaveNetwork(now);self->kick();return r;}
     case OpStop:self->session->stop();return kIOReturnSuccess;
     case OpPower:return self->session->setPower(a2!=nullptr,now);
     case OpPowerSave:return self->session->setPowerSave(a2!=nullptr);
@@ -249,7 +267,7 @@ IOReturn AirportAth10kInterface::getCHANNEL(apple80211_channel_data *cd)
 {
     if(!cd)return kIOReturnBadArgument;
     const auto *n=session?session->associated():nullptr;
-    if(!n || !session->linkUp())return kIOReturnNotReady;
+    if(!n)return kIOReturnNotReady;
     const auto &s=session->core_();
     memset(cd,0,sizeof(*cd));cd->version=APPLE80211_VERSION;cd->channel.version=APPLE80211_VERSION;
     cd->channel.channel=s.channel?s.channel:n->channel;
@@ -266,7 +284,7 @@ IOReturn AirportAth10kInterface::getPOWERSAVE(apple80211_powersave_data *pd)
 IOReturn AirportAth10kInterface::getTXPOWER(apple80211_txpower_data *td)
 {
     if(!td)return kIOReturnBadArgument;
-    if(!session || !session->linkUp())return kIOReturnNotReady;
+    if(!session || !session->associated())return kIOReturnNotReady;
     memset(td,0,sizeof(*td));td->version=APPLE80211_VERSION;td->txpower_unit=APPLE80211_UNIT_DBM;
     td->txpower=static_cast<int32_t>(session->core_().txHalfDbm/2);return kIOReturnSuccess;
 }
@@ -276,7 +294,7 @@ IOReturn AirportAth10kInterface::getTXPOWER(apple80211_txpower_data *td)
 IOReturn AirportAth10kInterface::getRATE(apple80211_rate_data *rd)
 {
     if(!rd)return kIOReturnBadArgument;
-    if(!session || !session->linkUp())return kIOReturnNotReady;
+    if(!session || !session->associated())return kIOReturnNotReady;
     const auto &s=session->core_();
     const uint32_t nss=s.nss?s.nss:1;
     uint32_t rate=s.width==80?433:(s.width==40?150:72);
@@ -290,7 +308,7 @@ IOReturn AirportAth10kInterface::getMCS(apple80211_mcs_data *md)
 {
     if(!md)return kIOReturnBadArgument;
     const auto *n=session?session->associated():nullptr;
-    if(!n || !session->linkUp())return kIOReturnNotReady;
+    if(!n)return kIOReturnNotReady;
     const auto &s=session->core_();
     const uint32_t nss=s.nss?s.nss:1;
     memset(md,0,sizeof(*md));md->version=APPLE80211_VERSION;
@@ -305,7 +323,7 @@ IOReturn AirportAth10kInterface::getOP_MODE(apple80211_opmode_data *od)
 IOReturn AirportAth10kInterface::getRSSI(apple80211_rssi_data *rd)
 {
     if(!rd)return kIOReturnBadArgument;
-    if(!session || !session->linkUp())return kIOReturnNotReady;
+    if(!session || !session->associated())return kIOReturnNotReady;
     int32_t rssi=session->core_().rssi;
     if(rssi==INT32_MIN){const auto *n=session->associated();if(!n)return kIOReturnNotReady;rssi=n->rssi();}
     memset(rd,0,sizeof(*rd));rd->version=APPLE80211_VERSION;rd->num_radios=1;rd->rssi_unit=APPLE80211_UNIT_DBM;
@@ -410,11 +428,15 @@ IOReturn AirportAth10kInterface::fillMCSSet(apple80211_mcs_index_set_data *ad)
 }
 // Layout after AirportItlwm (macOS 26): rate set, HT MCS set at 0xbc, VHT map
 // at 0xcc, HE version/map at 0xd4/0xd8, the negotiated RSN IE at 0x113.
+// WCL reads it right after AssocComplete (setCurrentBSS), before the 4-way
+// handshake: AirportItlwm answers once net80211 is in RUN (associated). Hardware
+// run 6 answered NotReady until the port was authorized, WCL left with
+// "Update Bss fail" and the join failed (statusCode 1, extendedCode 3).
 IOReturn AirportAth10kInterface::getWCL_EXTENDED_BSS_INFO(apple80211_extended_bss_info *data)
 {
     if(!data)return kIOReturnBadArgument;
     const auto *n=session?session->associated():nullptr;
-    if(!n || !session->linkUp())return kIOReturnNotReady;
+    if(!n)return kIOReturnNotReady;
     static_assert(sizeof(apple80211_rate_set_data)==0xbc,"Extended BSS rates size");
     static_assert(sizeof(apple80211_mcs_index_set_data)==0x10,"Extended BSS MCS size");
     auto *bytes=reinterpret_cast<uint8_t *>(data);
