@@ -249,6 +249,9 @@ struct ConnectionState {
     UInt32 txPauseMask=0,txPauseEvents=0;bool txWakePending=false;
     UInt32 txPauseLastId=0,txPauseLastAction=0,txPauseLastMap=0,txLinkDropped=0; // diagnostics (registry)
     bool wmiOwned=false,txOwned=false,txComplete=false,txManagement=false;
+#if AIRPORT_ATH10K_AWDL
+    bool lastTxAwdl=false;    // the in-flight frame on the shared TX path is AWDL's: its status is not the station's
+#endif
     UInt32 wmiNext=0,txNext=0,txStatus=0,associationStatus=0;
     UInt64 sinceMs=0,txSinceMs=0,lastBeaconMs=0;
     UInt32 txPackets=0,txErrors=0,rxPackets=0,rxDropped=0;

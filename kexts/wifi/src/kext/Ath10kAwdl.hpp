@@ -8,10 +8,16 @@
 // machine is driven there against a firmware model. Compiled only when
 // AIRPORT_ATH10K_AWDL is 1; with the gate off no byte of this file reaches a kext.
 //
-// What this does not establish (only a real run can): that WLAN.RM.4.4.1 accepts a
-// monitor vdev alongside the idle station vdev, that frames injected on it are
-// radiated, and that it passes other-BSS AWDL frames to the host. See
-// docs/WIFI-AWDL.md for the degraded modes and the on-device checklist.
+// Two placements (Owly's, https://github.com/t4t5/owly, MIT): "exclusive" (fixed), the original
+// mode, with the station vdev idle and the monitor vdev on a social channel; and "shared", with
+// the station associated on a social channel, the monitor vdev on that same channel using the
+// station's channel definition (Linux ath10k_monitor_vdev_start does the same) and the station's
+// MAC, so the station's receive path ACKs unicast addressed to it.
+//
+// What this does not establish (only a real run can): that WLAN.RM.4.4.1 accepts a monitor vdev
+// next to a joined station on the same channel, that frames injected on it are radiated, and that
+// it passes other-BSS AWDL frames to the host. Linux reaches the air through the station vdev for
+// frames carrying the station's MAC; this driver keeps to the monitor vdev (docs/WIFI-AWDL.md).
 #pragma once
 #ifndef AIRPORT_ATH10K_AWDL
 #define AIRPORT_ATH10K_AWDL 0
@@ -36,6 +42,8 @@ struct AwdlRadio {
     bool wmiSubmitted=false,eventPending=false;   // current command sent / reply outstanding
     bool startRequested=false,stopRequested=false;
     UInt8 mac[6]{};UInt8 channel=0,channelTarget=0;UInt8 powerHalfDbm=0;
+    // Shared placement: the station's channel definition, copied at start (center channel, WMI phymode word).
+    bool shared=false;UInt8 sharedCenter=0;UInt32 sharedPhy=0;
     UInt64 sinceMs=0;const char *error=nullptr;
     AwdlRxEntry rx[kAwdlRxSlots];UInt32 rxHead=0,rxCount=0;
     AwdlTxEntry tx[kAwdlTxSlots];UInt32 txHead=0,txCount=0;
@@ -44,7 +52,7 @@ struct AwdlRadio {
     AwdlCounters counters{};
     bool active() const {return step!=AwdlStep::Off && step!=AwdlStep::Failed;}
     bool running() const {return step==AwdlStep::Running;}
-    void reset(){step=AwdlStep::Off;wmiSubmitted=eventPending=startRequested=stopRequested=txOwned=false;deletesPending=0;error=nullptr;channel=channelTarget=0;
+    void reset(){step=AwdlStep::Off;wmiSubmitted=eventPending=startRequested=stopRequested=txOwned=shared=false;sharedCenter=0;sharedPhy=0;deletesPending=0;error=nullptr;channel=channelTarget=0;
         rxHead=rxCount=0;txHead=txCount=0;}
 };
 
@@ -60,6 +68,8 @@ inline bool awdlChannelAllowed(const RegulatoryPolicy &p,UInt8 channel){
     if(channel!=6 && channel!=44 && channel!=149)return false;
     return channelDefinitionAllowed(channel,channel,20,false) && regulatoryPower(p,channel,channel,20,true)!=0;
 }
+// Shared placement: the AP's channel is whatever the station joined; only the social-channel test applies here.
+inline bool awdlSharedChannelAllowed(UInt8 channel){return channel==6 || channel==44 || channel==149;}
 inline void awdlHeader(UInt8 *f,UInt8 endpoint,UInt8 sequence,UInt32 bytes,UInt32 command){
     f[0]=endpoint;f[1]=1;f[5]=sequence;htcWriteLE16(f+2,static_cast<UInt16>(bytes-8));htcWriteLE32(f+8,command);
 }
@@ -76,13 +86,19 @@ inline UInt32 buildAwdlRadioCommand(UInt8 *f,UInt32 capacity,UInt8 endpoint,UInt
         break;
     case AwdlStep::Start:
     case AwdlStep::Restart:{
-        const UInt8 limit=regulatoryPower(p,channel,channel,20,true);
-        if(!awdlChannelAllowed(p,channel) || !limit)return 0;
-        const UInt8 power=r.powerHalfDbm && r.powerHalfDbm<limit?r.powerHalfDbm:limit;
+        UInt8 power=0;UInt32 center=channel,phy=UInt32(awdlChannelPhyMode(channel))|(1u<<11);
+        if(r.shared){
+            if(!awdlSharedChannelAllowed(channel) || !r.powerHalfDbm || !r.sharedPhy || !r.sharedCenter)return 0;
+            power=r.powerHalfDbm;center=r.sharedCenter;phy=r.sharedPhy;
+        }else{
+            const UInt8 limit=regulatoryPower(p,channel,channel,20,true);
+            if(!awdlChannelAllowed(p,channel) || !limit)return 0;
+            power=r.powerHalfDbm && r.powerHalfDbm<limit?r.powerHalfDbm:limit;
+        }
         cmd=r.step==AwdlStep::Restart?0x5004:0x5003;bytes=120;connTLV(f+12,88,72);
         htcWriteLE32(f+16,kAwdlVdevId);
-        connTLV(f+88,80,24);htcWriteLE32(f+92,awdlChannelFrequency(channel));htcWriteLE32(f+96,awdlChannelFrequency(channel));
-        htcWriteLE32(f+104,UInt32(awdlChannelPhyMode(channel))|(1u<<11));
+        connTLV(f+88,80,24);htcWriteLE32(f+92,awdlChannelFrequency(channel));htcWriteLE32(f+96,awdlChannelFrequency(UInt8(center)));
+        htcWriteLE32(f+104,phy);
         writeChannelPower(f+108,f+112,power);connTLV(f+116,18,0);
         break;
     }
@@ -107,9 +123,21 @@ inline bool awdlStepExpectsEvent(AwdlStep s){return s==AwdlStep::Start || s==Awd
 
 inline bool awdlRequestStart(AwdlRadio &r,const UInt8 *mac,UInt8 channel,const RegulatoryPolicy &p){
     if(r.step==AwdlStep::Failed || !mac || (mac[0]&1) || !awdlChannelAllowed(p,channel))return false;
-    if(r.active()){r.stopRequested=false;for(UInt32 i=0;i<6;++i)r.mac[i]=mac[i];r.channelTarget=channel;return true;}
+    if(r.active()){
+        if(r.shared)return false;                      // the placement changes through a stop
+        r.stopRequested=false;for(UInt32 i=0;i<6;++i)r.mac[i]=mac[i];r.channelTarget=channel;return true;
+    }
     r.reset();for(UInt32 i=0;i<6;++i)r.mac[i]=mac[i];
     r.channel=r.channelTarget=channel;r.startRequested=true;return true;
+}
+// The channel definition of the station the monitor vdev shares (Ath10kAwdlService.cpp fills it in).
+struct AwdlSharedChannel{UInt8 channel=0,center=0;UInt32 phy=0;UInt8 power=0;};
+inline bool awdlRequestStartShared(AwdlRadio &r,const UInt8 *mac,const AwdlSharedChannel &c){
+    if(r.step==AwdlStep::Failed || !mac || (mac[0]&1) || !awdlSharedChannelAllowed(c.channel) || !c.power || !c.phy || !c.center)return false;
+    if(r.active())return r.shared && r.channel==c.channel;   // already there; a different placement changes through a stop
+    r.reset();for(UInt32 i=0;i<6;++i)r.mac[i]=mac[i];
+    r.channel=r.channelTarget=c.channel;r.shared=true;r.sharedCenter=c.center;r.sharedPhy=c.phy;r.powerHalfDbm=c.power;r.startRequested=true;
+    return true;
 }
 inline void awdlRequestStop(AwdlRadio &r){if(r.active())r.stopRequested=true;r.startRequested=false;}
 inline bool awdlRequestChannel(AwdlRadio &r,UInt8 channel,const RegulatoryPolicy &p){
@@ -150,13 +178,15 @@ inline void awdlStopped(AwdlRadio &r,UInt64 nowMs){
 }
 // What should the radio do next, with no command outstanding? Returns the step to
 // issue a command for (the step is set) or leaves it alone.
-inline void awdlPlan(AwdlRadio &r,bool infraIdle,UInt64 nowMs){
+inline void awdlPlan(AwdlRadio &r,bool infraIdle,bool infraJoined,UInt8 infraChannel,UInt64 nowMs){
     if(r.step==AwdlStep::Failed)return;
-    if(r.startRequested && r.step==AwdlStep::Off && infraIdle){r.startRequested=false;r.step=AwdlStep::Create;r.sinceMs=nowMs;return;}
+    // Exclusive needs the station vdev idle; shared needs the station joined on the channel the monitor vdev shares.
+    const bool allowed=r.shared?(infraJoined && infraChannel==r.channel):infraIdle;
+    if(r.startRequested && r.step==AwdlStep::Off && allowed){r.startRequested=false;r.step=AwdlStep::Create;r.sinceMs=nowMs;return;}
     if(r.step==AwdlStep::Running){
-        // An infrastructure join takes priority over AWDL: the monitor vdev goes away and
-        // the front end restarts it when the station vdev is idle again.
-        if(!infraIdle)r.stopRequested=true;
+        // Any infrastructure change takes priority over AWDL: the monitor vdev goes away and
+        // the front end restarts it in whatever placement then applies.
+        if(!allowed)r.stopRequested=true;
         if(r.stopRequested || r.channelTarget!=r.channel){r.step=AwdlStep::Down;r.sinceMs=nowMs;}
     }
 }

@@ -39,6 +39,17 @@ static UInt32 gSubType=0;bool fakeSub(IONetworkInterface *,uint32_t t){gSubType=
 extern "C" void fakeAwdl(IO80211Controller *,IO80211VirtualInterface *) __asm__("__ZN17IO80211Controller16setAwdlInterfaceEP23IO80211VirtualInterface");
 void fakeAwdl(IO80211Controller *,IO80211VirtualInterface *){gAwdlSet=true;rec("setAwdlInterface");}
 // the asm-renamed vtable slot (the Darwin name) is linked against this on the host; tests call outputStart directly
+// The family and kernel entry points the AWDL stack feed calls (AirportAth10kAwdlDriver.cpp).
+static int gBpfFeeds=0,gNeighborsUp=0,gNeighborsDown=0,gLinkCalls=0;static UInt8 gFedBody[64];static UInt32 gFedDlt=0;static size_t gFedMeta=0;
+extern "C" void fakeBpfMbuf(IO80211VirtualInterface *,mbuf_t m,unsigned dlt,void *,unsigned long n) __asm__("__ZN23IO80211VirtualInterface11bpfTapInputEP6__mbufjPvm");
+extern "C" void fakeBpfMbuf(IO80211VirtualInterface *,mbuf_t m,unsigned dlt,void *,unsigned long n){++gBpfFeeds;gFedDlt=dlt;gFedMeta=n;memcpy(gFedBody,mbuf_data(m),sizeof gFedBody<mbuf_pkthdr_len(m)?sizeof gFedBody:mbuf_pkthdr_len(m));}
+extern "C" void fakeNdUp(ifnet_t,struct sockaddr_in6 *,struct sockaddr_dl *,int32_t,int,int) __asm__("_nd6_alt_node_present");
+extern "C" void fakeNdUp(ifnet_t,struct sockaddr_in6 *,struct sockaddr_dl *,int32_t,int,int){++gNeighborsUp;}
+extern "C" void fakeNdDown(ifnet_t,struct sockaddr_in6 *,struct sockaddr_dl *) __asm__("_nd6_alt_node_absent");
+extern "C" void fakeNdDown(ifnet_t,struct sockaddr_in6 *,struct sockaddr_dl *){++gNeighborsDown;}
+extern "C" void fakeLinkState(IO80211VirtualInterface *,int,unsigned) __asm__("__ZN23IO80211VirtualInterface12setLinkStateE16IO80211LinkStatej");
+extern "C" void fakeLinkState(IO80211VirtualInterface *,int,unsigned){++gLinkCalls;}
+void *mbuf_datastart(mbuf_t m){return m->d.data();}
 extern "C" void fakeOutputStartAlias() __asm__("__ZN20AirportAth10kAwdlNet11outputStartEP18IONetworkInterfacej");
 void fakeOutputStartAlias(){}
 // mbufs and BSD input
@@ -69,8 +80,7 @@ static void testCreate(){
     auto *wq=new IO80211WorkQueue;auto *dev=new Ath10kPCIDevice;auto *c=new AirportAth10k;c->q=wq;c->dev=dev;
     auto *net=new AirportAth10kAwdlNet;
     assert(net->initWith(c));
-    assert((net->macAddress()[0]&2) && !(net->macAddress()[0]&1)); // locally administered unicast
-    assert(memcmp(net->macAddress(),c->hw,6));
+    assert(!memcmp(net->macAddress(),c->hw,6)); // AWDL-2 in shared mode: awdl0 carries the station's MAC so the station ACKs
     assert(net->attach(c));
     assert(net->start(c));
     assert(net->startedUp() && net->bsdInterface() && net->awdlInterface());
@@ -154,4 +164,25 @@ static void testCreate(){
 }
 bool gFailSkywalkStart=false;
 IOTimerEventSource *awdlTestTimer(AirportAth10kAwdlInterface *i){return i->awdlTestTimerForFakes();}
-int main(){testCreate();printf("AWDL interface tests passed.\n");return 0;}
+
+// The macOS stack feed: received action frames reach the family's peer manager (DLT 12, the 0x48-byte metadata, the action
+// body), valid peers get neighbor entries, OOB requests hand over the service records and unicast frames go out.
+static void testStackFeed(){
+    auto *wq=new IO80211WorkQueue;auto *dev=new Ath10kPCIDevice;auto *c=new AirportAth10k;c->q=wq;c->dev=dev;auto *net=new AirportAth10kAwdlNet;
+    assert(net->initWith(c) && net->attach(c) && net->start(c));
+    AirportAth10kAwdlInterface *a=net->awdlInterface();
+    a->startSession();
+    UInt8 frame[64]={0xd0,0};memcpy(frame+4,"\xff\xff\xff\xff\xff\xff",6);memcpy(frame+10,"\x02\xaa\xbb\xcc\xdd\xee",6);frame[24]=0x7f;frame[25]=0x00;frame[26]=0x17;frame[27]=0xf2;frame[28]=8;
+    a->port.hostActionFrame(frame,sizeof frame,44,-55);
+    assert(gBpfFeeds==1 && gFedDlt==12 && gFedMeta==0x48 && gFedBody[0]==0x7f && gFedBody[4]==8);
+    AirportAwdl::Peer peer{};peer.used=true;peer.valid=true;peer.addr=AirportAwdl::Addr::of(frame+10);peer.rssi=-55;
+    a->port.hostPeer(peer,true);assert(gNeighborsUp==1);a->port.hostPeer(peer,false);assert(gNeighborsDown==1);
+    apple80211_awdl_oob_request oob;memset(&oob,0,sizeof oob);oob.data_len=20;
+    UInt8 *r=reinterpret_cast<UInt8 *>(&oob);memcpy(r+0x16,"\x02\x11\x22\x33\x44\x66",6);
+    memcpy(r+0x30,"\x7f\x00\x17\xf2\x08\x10\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x01\x00\xaa",20);
+    assert(a->setAWDL_OOB_REQUEST(&oob)==kIOReturnSuccess);
+    assert(a->setAWDL_OOB_AUTO_REQUEST(&oob)==kIOReturnSuccess);
+    net->stop(c);net->detach(c);net->release();c->release();dev->release();delete wq;
+    printf("Stack feed: peer manager input, neighbor entries, OOB requests.\n");
+}
+int main(){testCreate();testStackFeed();printf("AWDL interface tests passed.\n");return 0;}

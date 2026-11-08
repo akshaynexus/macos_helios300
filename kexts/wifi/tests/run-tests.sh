@@ -123,6 +123,10 @@ ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-awdl"
     -Inative/src -Isrc/kext native/tests/test_native_awdl_radio.cpp -o "$test_tmp_dir/native-awdl-radio"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-awdl-radio"
 # awdl0 creation path: production AirportAth10kAwdlDriver.cpp against fake IOKit/IO80211 classes.
+# AWDL replay of Owly's iPhone captures: T-AWDL-1/3 (parsers and schedule against real traffic).
+"${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -Wno-misleading-indentation -fsanitize=address,undefined \
+    -Inative/src native/tests/test_native_awdl_capture.cpp -o "$test_tmp_dir/native-awdl-capture"
+ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-awdl-capture"
 CXX="${CXX:-c++}" bash native/tests/build-awdl-iface.sh "$test_tmp_dir/awdl-iface"
 "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \
     -I"$test_tmp_dir" -Isrc/kext -Ibuild/gen/test tests/test_rx_pipeline.cpp -o "$test_tmp_dir/rx-pipeline"

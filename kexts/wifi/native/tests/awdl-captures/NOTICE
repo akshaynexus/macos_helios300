@@ -1,0 +1,7 @@
+discovery-ios26.x-mt7925e-ch44-1.pcap is copied unchanged from Owly
+(https://github.com/t4t5/owly, tests/captures, commit 6f2e8ea), MIT License,
+Copyright (c) 2026 T4T5. Owly's capture corpus is anonymous by construction:
+MAC addresses are stand-ins, payloads zeroed, timestamps relative.
+
+test_native_awdl_capture.cpp reads this file, and the other corpus captures
+when OWLY_CAPTURES points at a checkout's tests/captures directory.

@@ -674,6 +674,9 @@ const char *Ath10kPCIDevice::submitNetworkPacket(const UInt8 *data,UInt32 bytes,
     _connection.txId=static_cast<UInt16>((_connection.txId+1)%1056);_connection.txComplete=false;_connection.txStatus=0;_connection.txManagement=mgmt;
     _connection.lastTxSpectrum=mgmt && _connection.spectrum.inFlight && data==_connection.spectrum.frame;
     _connection.lastTxProbe=mgmt && _connection.probe.active && bytes>=24 && Ath10k::htcReadLE16(data)==0x40;
+#if AIRPORT_ATH10K_AWDL
+    _connection.lastTxAwdl=false;
+#endif
 #if AIRPORT_ATH10K_WPASEC
     _connection.lastTxPMF=mgmt && _connection.pmfTx.inFlight && data==_connection.pmfTx.frame;
 #endif
@@ -742,6 +745,9 @@ const char *Ath10kPCIDevice::serviceConnection(UInt64 nowMs)
             if(s.txStatus){
                 if(s.lastTxEAPOL)s.eapolTxFailed=true;
                 ++s.txErrors;
+#if AIRPORT_ATH10K_AWDL
+                if(s.lastTxAwdl){}else
+#endif
 #if AIRPORT_ATH10K_WPASEC
                 if(s.txManagement && !s.lastTxProbe && !s.lastTxSpectrum && !s.lastTxPMF){
 #else

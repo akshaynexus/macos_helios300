@@ -16,12 +16,23 @@ IOReturn Ath10kPCIDevice::awdlControl(const AthControl::Request &r,AthControl::R
         const char *e=a.error?a.error:"";UInt32 n=static_cast<UInt32>(strnlen(e,64));o.data[2]=static_cast<UInt8>(n);
         const UInt32 c[]={a.counters.rxAction,a.counters.rxData,a.counters.rxDropped,a.counters.txAction,a.counters.txData,a.counters.txDropped,a.counters.txFailed,a.counters.channelSwitches,a.counters.failures};
         for(UInt32 i=0;i<9;++i)Ath10k::htcWriteLE32(o.data+3+4*i,c[i]);
-        bcopy(e,o.data+39,n);o.length=39+n;return kIOReturnSuccess;
+        const bool joined=_connection.stage==Ath10k::LinkStage::Connected && _connection.disconnect==Ath10k::DisconnectStage::None;
+        o.data[39]=joined?1:0;o.data[40]=joined?static_cast<UInt8>(_connection.operatingChannel):0;
+        bcopy(e,o.data+41,n);o.length=41+n;return kIOReturnSuccess;
     }
     if(!_wmiLive.active || _suspending || _power.reinitRunning)return kIOReturnNotReady;
     if(r.operation==AwdlRadioStart){
-        if(r.length!=7)return kIOReturnBadArgument;
+        // data: MAC[6], channel, placement (0 fixed/exclusive, 1 shared with the joined station)
+        if(r.length!=8)return kIOReturnBadArgument;
         if(!_awdl){_awdl=static_cast<Ath10k::AwdlRadio *>(IOMalloc(sizeof(Ath10k::AwdlRadio)));if(!_awdl)return kIOReturnNoMemory;new(_awdl)Ath10k::AwdlRadio();}
+        if(r.data[7]){
+            const auto &s=_connection;
+            if(s.stage!=Ath10k::LinkStage::Connected || s.disconnect!=Ath10k::DisconnectStage::None || s.operatingChannel!=r.data[6])return kIOReturnNotReady;
+            Ath10k::AwdlSharedChannel c{};c.channel=r.data[6];c.center=static_cast<UInt8>(s.centerChannel);
+            c.phy=Ath10k::connectionPhyMode(s)|(s.htEnabled?1u<<11:0)|(s.vhtEnabled?1u<<12:0);c.power=s.txPowerHalfDbm;
+            if(!Ath10k::awdlRequestStartShared(*_awdl,r.data,c))return _awdl->step==AwdlStep::Failed?kIOReturnNotReady:kIOReturnUnsupported;
+            return kIOReturnSuccess;
+        }
         if(!Ath10k::awdlRequestStart(*_awdl,r.data,r.data[6],_regulatory))return _awdl->step==AwdlStep::Failed?kIOReturnNotReady:kIOReturnUnsupported;
         return kIOReturnSuccess;
     }
@@ -54,7 +65,9 @@ const char *Ath10kPCIDevice::serviceAwdl(UInt64 nowMs)
     }
     // TX completion (the station path is idle, so it does not look at it).
     // A station bring-up that started meanwhile runs the shared completion logic itself.
-    if(r.txOwned && !s.txOwned)r.txOwned=false;
+    if(r.txOwned && !s.txOwned){   // the station path saw the completion first (shared placement)
+        r.txOwned=false;if(s.txStatus)++r.counters.txFailed;else if(r.txLastAction)++r.counters.txAction;else ++r.counters.txData;
+    }
     if(r.txOwned){
         Ath10k::CESnapshot snapshot{};
         if(!Ath10k::readCESnapshot(_regs,4,snapshot) || !validateBMIPipeStructure(4,snapshot) || snapshot.srcWriteIndex!=s.txNext){Ath10k::awdlFail(r,"awdl-tx-ce-state");return nullptr;}
@@ -68,8 +81,9 @@ const char *Ath10kPCIDevice::serviceAwdl(UInt64 nowMs)
     if(r.wmiSubmitted || r.eventPending)return nullptr;
     // The station path owns the rings whenever it is doing anything but idling.
     const bool infraIdle=s.stage==Ath10k::LinkStage::Disabled && s.disconnect==Ath10k::DisconnectStage::None && !s.macChange.step;
+    const bool infraJoined=s.stage==Ath10k::LinkStage::Connected && s.disconnect==Ath10k::DisconnectStage::None && !s.macChange.step && !s.csa.blocked;
     const bool busy=s.wmiOwned || s.txOwned || s.dataPending || _wmi.credits.outstanding || !_wmiScan.completed || _wmiScan.txOwned;
-    Ath10k::awdlPlan(r,infraIdle,nowMs);
+    Ath10k::awdlPlan(r,infraIdle,infraJoined,static_cast<UInt8>(s.operatingChannel),nowMs);
     const bool needsCommand=r.step==AwdlStep::Create || r.step==AwdlStep::Start || r.step==AwdlStep::Up || r.step==AwdlStep::Down ||
                             r.step==AwdlStep::Restart || r.step==AwdlStep::RestartUp || r.step==AwdlStep::Stop || r.step==AwdlStep::Delete;
     if(needsCommand){
@@ -89,7 +103,7 @@ const char *Ath10kPCIDevice::serviceAwdl(UInt64 nowMs)
         auto *frags=static_cast<UInt8 *>(_packetFragments.virtualAddress());bzero(frags,16);
         Ath10k::htcWriteLE32(frags,static_cast<UInt32>(_packetBuffer.dmaAddress()));Ath10k::htcWriteLE32(frags+4,e.length);
         s.txId=static_cast<UInt16>((s.txId+1)%1056);s.txComplete=false;s.txStatus=0;s.txManagement=e.action;
-        s.lastTxSpectrum=s.lastTxProbe=s.lastTxEAPOL=false;
+        s.lastTxSpectrum=s.lastTxProbe=s.lastTxEAPOL=false;s.lastTxAwdl=true;   // a failed AWDL frame must not fail the station link
         const UInt32 length=Ath10k::buildAwdlHTT(static_cast<UInt8 *>(_packetCommand.virtualAddress()),256,e.data,e.length,
             static_cast<UInt32>(_packetBuffer.dmaAddress()),static_cast<UInt32>(_packetFragments.dmaAddress()),_htcHTTData.endpoint,s.httSequence,s.txId,e.action);
         if(!length || !_packetBuffer.syncForDevice() || !_packetFragments.syncForDevice()){Ath10k::awdlFail(r,"awdl-tx-build");return nullptr;}

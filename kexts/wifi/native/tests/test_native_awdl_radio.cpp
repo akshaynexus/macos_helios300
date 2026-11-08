@@ -83,7 +83,7 @@ struct Fw {
     bool infraIdle=true;
     explicit Fw(AwdlRadio &a):r(a){}
     bool issue(){
-        awdlPlan(r,infraIdle,now);
+        awdlPlan(r,infraIdle,false,0,now);
         const bool cmd=r.step==AwdlStep::Create||r.step==AwdlStep::Start||r.step==AwdlStep::Up||r.step==AwdlStep::Down||r.step==AwdlStep::Restart||r.step==AwdlStep::RestartUp||r.step==AwdlStep::Stop||r.step==AwdlStep::Delete;
         if(!cmd||r.wmiSubmitted||r.eventPending)return false;
         UInt32 n=buildAwdlRadioCommand(buf,sizeof buf,2,0,r,p);assert(n);
@@ -211,7 +211,7 @@ struct SimRadio:RadioPort{
     struct Air *air=nullptr;RadioStep st=RadioStep::Off;uint8_t channel=0;int startDelay=0;int setChannels=0;
     uint8_t mac[6]{};bool failNext=false;std::vector<std::vector<uint8_t>> rx;std::vector<uint64_t> rxTimes;std::vector<int8_t> rxRssi;
     size_t txAction=0,txData=0;bool refuseStart=false;
-    bool radioStart(const uint8_t *m,uint8_t c) override {if(refuseStart)return false;if(failNext){failNext=false;st=RadioStep::Failed;return true;}memcpy(mac,m,6);channel=c;st=RadioStep::Running;return true;}
+    bool radioStart(const uint8_t *m,uint8_t c,bool) override {if(refuseStart)return false;if(failNext){failNext=false;st=RadioStep::Failed;return true;}memcpy(mac,m,6);channel=c;st=RadioStep::Running;return true;}
     void radioStop() override {st=RadioStep::Off;channel=0;}
     bool radioSetChannel(uint8_t c) override {channel=c;++setChannels;return true;}
     bool radioTransmit(const uint8_t *f,size_t n,bool action) override;
@@ -235,7 +235,7 @@ struct SimHost:HostPort{std::vector<std::vector<uint8_t>> eth;int added=0,remove
     void hostEthernet(const uint8_t *e,size_t n) override {eth.emplace_back(e,e+n);}
     void hostPeer(const Peer &,bool a) override {if(a)++added;else ++removed;}
     void hostSyncChanged() override {++syncs;}};
-struct SimNode{SimRadio radio;SimHost host;Session session;uint64_t next=0;SimNode():session(radio,host){}};
+struct SimNode{SimRadio radio;SimHost host;Session session;uint64_t next=0;SimNode():session(radio,host){session.setNeighbourEcho(false);}};
 
 static void run(SimNode **nodes,int count,uint64_t until){
     while(gNow<until){
@@ -308,4 +308,150 @@ static void testSession(){
     printf("Session over the radio model: discovery, election, sync (|error| <= %d TU), AW-scheduled Ethernet round trip, loss and recovery.\n",kSyncThresholdTu);
 }
 
-int main(){testCommands();testStateMachine();testRxFilter();testSession();printf("AWDL radio binding and session tests passed.\n");return 0;}
+
+// Shared placement in the core: the monitor vdev copies the station's channel definition, carries the station's MAC,
+// and stays only while the station is joined on that channel.
+static void testSharedRadio(){
+    RegulatoryPolicy p;auto *rp=newRadio();auto &r=*rp;Fw f(r);UInt8 b[256];
+    static const UInt8 sta[6]={0x00,0x03,0x7f,0x12,0x34,0x56};
+    AwdlSharedChannel c{};c.channel=44;c.center=46;c.phy=7u|(1u<<11)|(1u<<12);c.power=30;
+    assert(awdlRequestStartShared(r,sta,c));assert(r.shared && r.channel==44);
+    // refused while the station is not joined on the channel: stays requested, no command
+    f.infraIdle=true;awdlPlan(r,true,false,0,f.now);assert(r.step==AwdlStep::Off && r.startRequested);
+    awdlPlan(r,false,true,36,f.now);assert(r.step==AwdlStep::Off);
+    awdlPlan(r,false,true,44,f.now);assert(r.step==AwdlStep::Create);
+    UInt32 n=buildAwdlRadioCommand(b,sizeof b,2,5,r,p);
+    assert(n==36 && connLE32(b+8)==0x5001 && connLE32(b+20)==4 && !memcmp(b+28,sta,6));   // monitor vdev, the station's MAC
+    r.step=AwdlStep::Start;n=buildAwdlRadioCommand(b,sizeof b,2,6,r,p);
+    assert(n==120 && connLE32(b+92)==5220 && connLE32(b+96)==5230 && connLE32(b+104)==c.phy); // center and phy from the station
+    assert(connLE32(b+108)==(30u<<16));
+    // running: a join to another channel, or the station leaving, stops it
+    r.step=AwdlStep::Running;r.channelTarget=44;awdlPlan(r,false,true,44,f.now);assert(r.step==AwdlStep::Running);
+    awdlPlan(r,false,true,36,f.now);assert(r.step==AwdlStep::Down && r.stopRequested);
+    r.reset();assert(awdlRequestStartShared(r,sta,c));r.step=AwdlStep::Running;r.channelTarget=44;
+    awdlPlan(r,true,false,0,f.now);assert(r.step==AwdlStep::Down);
+    // no shared start on a non-social channel, without phy or power, or with a multicast MAC
+    AwdlSharedChannel bad=c;bad.channel=36;r.reset();assert(!awdlRequestStartShared(r,sta,bad));
+    bad=c;bad.phy=0;assert(!awdlRequestStartShared(r,sta,bad));
+    bad=c;bad.power=0;assert(!awdlRequestStartShared(r,sta,bad));
+    UInt8 mc[6]={1,2,3,4,5,6};assert(!awdlRequestStartShared(r,mc,c));
+    // exclusive plan unchanged
+    r.reset();assert(awdlRequestStart(r,sta,6,p));awdlPlan(r,true,false,0,f.now);assert(r.step==AwdlStep::Create);
+    delete rp;
+    printf("Shared placement: station channel definition and MAC on the monitor vdev, gated on the station's channel.\n");
+}
+// Session placement over the radio model.
+struct PlacementRadio:RadioPort{
+    RadioStep st=RadioStep::Off;uint8_t channel=0;bool shared=false;int starts=0,stops=0;StationInfo info{};std::vector<std::vector<uint8_t>> tx;
+    bool radioStart(const uint8_t *,uint8_t c,bool s) override {channel=c;shared=s;st=RadioStep::Running;++starts;return true;}
+    void radioStop() override {st=RadioStep::Off;++stops;}
+    bool radioSetChannel(uint8_t c) override {channel=c;return true;}
+    bool radioTransmit(const uint8_t *f,size_t n,bool) override {tx.emplace_back(f,f+n);return true;}
+    bool radioReceive(uint8_t *,size_t,RxFrame &) override {return false;}
+    RadioStep radioStep() override {return st;}
+    void radioStation(StationInfo &o) override {o=info;}
+};
+struct NullHost:HostPort{void hostEthernet(const uint8_t *,size_t) override {}void hostPeer(const Peer &,bool) override {}void hostSyncChanged() override {}};
+static void testPlacement(){
+    auto *pr=new PlacementRadio;PlacementRadio &r=*pr;NullHost h;auto *sp=new Session(r,h);Session &s=*sp;
+    static const uint8_t mac[6]={2,3,4,5,6,7};s.configure("placement",mac,6);s.setNeighbourEcho(false);
+    uint64_t t=1000;s.enable(t);s.poll(t);assert(r.starts==1 && !r.shared && r.channel==6);t+=1000;s.poll(t);
+    assert(s.running() && s.placement()==Session::Placement::Fixed && s.currentChannel()==6);
+    // joins on channel 44: tear down, come back shared on 44
+    r.info.associated=true;r.info.channel=44;t+=1000;s.poll(t);assert(r.stops==1 && r.st==RadioStep::Off);
+    t+=2000000;s.poll(t);assert(r.starts==2 && r.shared && r.channel==44);t+=1000;s.poll(t);
+    assert(s.running() && s.placement()==Session::Placement::Shared && s.currentChannel()==44);
+    // PSF/MIF go out with the station's MAC and the shared master channel
+    r.tx.clear();t+=300000;s.poll(t);assert(!r.tx.empty() && !memcmp(r.tx[0].data()+10,mac,6));
+    // a station on channel 36 is out of reach: the radio stops, nothing runs
+    r.info.channel=36;t+=1000;s.poll(t);assert(!s.running() && s.placement()==Session::Placement::None && r.st==RadioStep::Off);
+    int stops=r.stops;t+=1000000;s.poll(t);assert(r.stops==stops && r.st==RadioStep::Off);   // no spinning
+    // station gone: back to fixed on the configured channel
+    r.info.associated=false;r.info.channel=0;t+=2000000;s.poll(t);assert(!r.shared && r.channel==6 && r.st==RadioStep::Running);t+=1000;s.poll(t);assert(s.placement()==Session::Placement::Fixed);
+    delete sp;delete pr;
+    printf("Placement: follows the station (shared on its social channel, nothing elsewhere, fixed when idle) without spinning.\n");
+}
+// Owly's adopt_sequence (AWDL-12): advertise only the master's slots on our channel; keep ours if none match.
+static void testSharedSequence(){
+    auto *ep=new Engine;Engine &e=*ep;struct S:Sink{void setChannel(uint8_t) override {}bool transmit(const uint8_t *,size_t,bool) override {return true;}}sink;
+    static const uint8_t me[6]={2,0,0,0,0,9},master[6]={2,0,0,0,0,1};
+    e.start("x",Addr::of(me),Chan::opclass44(),1,&sink);e.setPresence(kPresenceShare,Chan::opclass44());
+    Peer *p=nullptr;bool ok=false;assert(e.state.peers.add(Addr::of(master),5,&p,&ok)>=0);p->valid=p->sentMif=true;p->version=0x34;p->devclass=1;p->seqEnc=kChanEncOpclass;
+    for(int i=0;i<kChanSeqLength;++i)p->sequence[i]=Chan::null();
+    p->sequence[1]=Chan::opclass44();p->sequence[9]=Chan::opclass44();p->sequence[3]=Chan::opclass6();
+    p->election.masterMetric=600;p->election.selfMetric=600;p->election.masterCounter=10;p->election.height=0;
+    e.state.peers.peers[0]=*p; // same slot table
+    assert(electionRun(e.state.election,e.state.peers,false) || e.state.election.syncAddr==Addr::of(master));
+    e.tick(2000000);assert(e.state.election.syncAddr==Addr::of(master));
+    for(int i=0;i<kChanSeqLength;++i){int n=chanNum(e.state.channel.sequence[i],e.state.channel.enc);assert(n==((i==1||i==9)?44:0));}
+    // a master that never names our channel: keep what we had (the phone must keep addressing us)
+    Peer &q=*e.state.peers.find(Addr::of(master));for(int i=0;i<kChanSeqLength;++i)q.sequence[i]=Chan::opclass6();
+    q.lastUpdate=3900000;e.tick(4000000);assert(e.state.noOverlap && chanNum(e.state.channel.sequence[1],e.state.channel.enc)==44);
+    // fixed: every slot; multicast in any slot with the 3 TU guard
+    e.setPresence(kPresenceFixed,Chan::opclass44());assert(isMulticastEaw(e.state,12345678) && multicastGuardTu(e.state)==kUnicastGuardTu);
+    delete ep;
+    printf("Shared sequence: the master's slots on our channel only (AWDL-12), no-overlap keeps the previous sequence.\n");
+}
+// The session rules Owly documents: OWLY-2 echo, AWDL-18 early SYN hold, A-MSDU bound, data keeps a peer alive,
+// and the service records from the macOS stack in MIFs (AWDL-2 addressing stays the station MAC).
+static void testSessionRules(){
+    Addr a=Addr::of((const uint8_t *)"\x02\x11\x22\x33\x44\x55"),b=Addr::of((const uint8_t *)"\x06\x77\x88\x99\xaa\xbb");
+    uint8_t f[120];size_t n=Session::buildEcho(f,sizeof f,a,b,0x1234);
+    assert(n==14+40+16 && !memcmp(f,b.b,6) && !memcmp(f+6,a.b,6) && f[12]==0x86 && f[13]==0xdd);
+    // fe80:: + modified EUI-64 of both ends, ICMPv6 echo request, hop limit 255, checksum verifies
+    assert(f[14+8]==0xfe && f[14+9]==0x80 && f[14+16]==(a.b[0]^2) && f[14+19]==0xff && f[14+20]==0xfe && f[14+7]==255 && f[14+6]==58);
+    assert(f[14+40]==128 && get16be(f+14+40+6)==0x1234);
+    uint32_t sum=0;for(size_t i=8;i<40;i+=2)sum+=get16be(f+14+i);sum+=16;sum+=58;for(size_t i=0;i<16;i+=2)sum+=get16be(f+14+40+i);while(sum>>16)sum=(sum&0xffff)+(sum>>16);assert((sum&0xffff)==0xffff);
+    // A-MSDU bound
+    auto *ep=new Engine;Engine &e=*ep;struct S:Sink{int frames=0;void setChannel(uint8_t) override {}bool transmit(const uint8_t *,size_t,bool) override {return true;}void data(const uint8_t *,size_t,const Addr &,const Addr &) override {++frames;}}sink;
+    e.start("n",a,Chan::opclass6(),1,&sink);e.state.filterRssi=false;
+    assert(e.state.peers.add(b,5,nullptr,nullptr)>=0);
+    uint8_t amsdu[3000];memset(amsdu,0,sizeof amsdu);put16le(amsdu,kFcQosData);memcpy(amsdu+4,a.b,6);memcpy(amsdu+10,b.b,6);memcpy(amsdu+16,kAwdlBssid,6);put16le(amsdu+24,kQosAmsduPresent);
+    uint8_t *q=amsdu+26;
+    for(int i=0;i<17;++i){memcpy(q,a.b,6);memcpy(q+6,b.b,6);put16be(q+12,8+8+4);q+=14;
+        memcpy(q,"\xaa\xaa\x03\x00\x17\xf2\x08\x00",8);put16le(q+8,kDataHead);put16be(q+14,kEtherTypeIPv6);q+=8+8+4+2;}
+    assert(rx(amsdu,size_t(q-amsdu),-40,10,e.state,&sink)==kRxUnexpectedFormat);   // 17 subframes: dropped
+    sink.frames=0;
+    // data frames count as hearing the peer
+    Peer *p=e.state.peers.find(b);uint64_t before=p->lastUpdate;
+    uint8_t d[80];memset(d,0,sizeof d);put16le(d,kFcData);memcpy(d+4,a.b,6);memcpy(d+10,b.b,6);memcpy(d+16,kAwdlBssid,6);uint8_t *m=d+24;memcpy(m,"\xaa\xaa\x03\x00\x17\xf2\x08\x00",8);put16le(m+8,kDataHead);put16be(m+14,kEtherTypeIPv6);
+    assert(rx(d,24+8+8+4,-40,777,e.state,&sink)==kRxOk && sink.frames==1 && p->lastUpdate==777 && before!=777);
+    delete ep;
+    // service records from the OOB frame end up in MIFs, the ARPA TLV replaces our host name
+    auto *r=new PlacementRadio;NullHost h;auto *sp=new Session(*r,h);Session &s=*sp;s.configure("hostname",a.b,6);s.setNeighbourEcho(false);
+    uint64_t t=1000;s.enable(t);s.poll(t);t+=1000;s.poll(t);assert(s.running());
+    uint8_t body[16+6+7+9],*w=body;memset(body,0,sizeof body);body[0]=kVendorSpecific;memcpy(body+1,kAwdlOui,3);body[4]=kAwdlType;body[5]=0x10;body[6]=3;
+    w+=16;w[0]=kTlvServiceResponse;put16le(w+1,3);memcpy(w+3,"abc",3);w+=6;w[0]=kTlvArpa;put16le(w+1,4);w[3]=3;w[4]=1;w[5]='m';w[6]='e';w+=7;w[0]=99;put16le(w+1,6);
+    assert(s.setServiceTlvsFromFrame(body,sizeof body)==2);
+    assert(s.setServiceTlvsFromFrame(body,10)<0);   // truncated TLV rejected
+    r->tx.clear();t+=2000000;for(int i=0;i<40;++i){s.poll(t);t+=64*1024;}
+    bool sawMif=false;for(auto &f2:r->tx)if(f2.size()>40 && f2[0]==0xd0 && f2[30]==3){sawMif=true;
+        bool found2=false,found16=false;size_t at=24+16;while(at+3<=f2.size()){uint8_t ty=f2[at];size_t l=f2[at+1]|(size_t(f2[at+2])<<8);if(at+3+l>f2.size())break;if(ty==2&&l==3&&!memcmp(f2.data()+at+3,"abc",3))found2=true;if(ty==16&&l==4&&f2[at+5]=='m')found16=true;at+=3+l;}
+        assert(found2&&found16);}
+    assert(sawMif);
+    delete sp;delete r;
+    printf("Session rules: OWLY-2 echo, data keeps a peer, A-MSDU bound, the macOS stack's service records in MIFs.\n");
+}
+// AWDL-18: a TCP SYN from a peer that is not valid yet is held and delivered once the peer turns valid.
+static void testEarlySyn(){
+    struct Host:HostPort{int up=0,eth=0;void hostEthernet(const uint8_t *,size_t) override {++eth;}void hostPeer(const Peer &p,bool added) override {if(added)++up;(void)p;}void hostSyncChanged() override {}}h;
+    auto *r=new PlacementRadio;auto *sp=new Session(*r,h);Session &s=*sp;
+    Addr self=Addr::of((const uint8_t *)"\x02\x11\x22\x33\x44\x55"),peer=Addr::of((const uint8_t *)"\x06\x77\x88\x99\xaa\xbb");
+    s.configure("n",self.b,6);s.setNeighbourEcho(false);uint64_t t=1000;s.enable(t);s.poll(t);t+=1000;s.poll(t);assert(s.running());
+    Engine &e=s.engine();e.state.filterRssi=false;
+    // data frame with an IPv6 TCP SYN from a known, not-yet-valid peer
+    Peer *p=nullptr;assert(e.state.peers.add(peer,t,&p,nullptr)>=0);
+    uint8_t d[120];memset(d,0,sizeof d);put16le(d,kFcData);memcpy(d+4,self.b,6);memcpy(d+10,peer.b,6);memcpy(d+16,kAwdlBssid,6);
+    uint8_t *m=d+24;memcpy(m,"\xaa\xaa\x03\x00\x17\xf2\x08\x00",8);put16le(m+8,kDataHead);put16be(m+14,kEtherTypeIPv6);m+=16;m[0]=0x60;m[6]=6;m[40+13]=0x02;
+    size_t len=24+16+40+20;
+    assert(e.receive(d,len,-40,t)==kRxOk);assert(s.stats().synsHeld==1 && h.eth==0);
+    // the peer turns valid: the host gets the neighbor first, then the SYN
+    s.poll(t);p=e.state.peers.find(peer);p->sentMif=true;p->version=0x34;p->devclass=1;bool valid=false;Peer *q=nullptr;e.state.peers.add(peer,t,&q,&valid);assert(valid);s.peerAdded(*q);
+    assert(h.up==1 && h.eth==1 && s.stats().synsDelivered==1);
+    // a held SYN expires after 2 s
+    Addr other=Addr::of((const uint8_t *)"\x06\x01\x02\x03\x04\x05");e.state.peers.add(other,t,nullptr,nullptr);memcpy(d+10,other.b,6);assert(e.receive(d,len,-40,t)==kRxOk);assert(s.stats().synsHeld==2);
+    t+=3000000;s.poll(t);assert(s.stats().synsExpired==1 && h.eth==1);
+    delete sp;delete r;
+    printf("Early SYN: held until the peer is valid, delivered after its neighbor entry, expired after 2 s.\n");
+}
+int main(){testCommands();testStateMachine();testRxFilter();testSession();testSharedRadio();testPlacement();testSharedSequence();testSessionRules();testEarlySyn();printf("AWDL radio binding and session tests passed.\n");return 0;}

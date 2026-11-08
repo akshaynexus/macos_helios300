@@ -1,267 +1,247 @@
-# AWDL / AirDrop on the QCA6174: research, feasibility, design, status
+# AWDL / AirDrop on the QCA6174: research, design, honest status
 
-**Owner requirement:** AirDrop (and the other Continuity features that ride on AWDL, Apple
-Wireless Direct Link) working on macOS 26 with the Helios 300's QCA6174 through
-`AirportAth10k.kext`.
+**Owner requirement:** AirDrop working natively (Finder and the Share Sheet) on macOS 26.7.2 with
+the Helios 300's QCA6174 through `AirportAth10k.kext`.
 
-**State (2026-11-08): research build, off by default, never run on hardware.**
-`AIRPORT_ATH10K_AWDL=0` (the default, `AWDL=1` at build) keeps the release builds free of any AWDL
-code. With `AWDL=1` the kexts carry the radio binding and the `awdl0` interface, enabled at
-run time with the boot-arg `ath10k_awdl=1`. Build: `AWDL=1 bash kexts/wifi/scripts/cross-build.sh`.
-With the option off the kexts are byte-identical to a build without this work (checked for this
-commit: `Ath10kMac` `d938c785...`, `AirportAth10k` `74e2df96...`, each equal with and without
-the AWDL source).
+**State (2026-11-08): research build, off by default, never run on hardware.** The whole thing is
+behind the build option `AIRPORT_ATH10K_AWDL` (`AWDL=1` at build) and the boot-arg `ath10k_awdl=1`.
+With the option off the kexts are byte-identical to a build without this work (`Ath10kMac`
+`d938c785...`, `AirportAth10k` `74e2df96...`).
 
-What exists and what proves it:
+What exists, and what proves it (host means Linux unit tests, no radio, no Mac):
 
 | Layer | State | Proof |
 |---|---|---|
-| Protocol engine | done (OWL port) | byte-exact against OWL vectors, two-node simulation |
-| Radio binding in the core (`Ath10kAwdl.hpp`, `Ath10kAwdlService.cpp`, ops 32-35) | written | firmware commands checked byte for byte; state machine against a firmware model (`native/tests/test_native_awdl_radio.cpp`) |
-| `awdl0` on macOS 26 (`AirportAth10kAwdlDriver.*`, `IO80211AWDLProtocol.h`) | written | kc-audit against 26.7.2 25G332: imports, 568-slot vtable, class sizes; creation order against fakes (`test_native_awdl_iface.cpp`) |
-| Data path, IPv6 link-local | hybrid path written (section 5c) | fakes only |
-| On the air / AirDrop | **nothing tested** | laptop off for about a week; the coordinator runs the checklist in section 7 |
+| Protocol engine (OWL port) | done | byte-exact against OWL vectors, two-node simulation |
+| Owly's rules: shared/fixed placements, sequence intersection, ranking, peer timeout, A-MSDU bound, OWLY-2 echo, AWDL-18 early-SYN hold | done | host tests; the Fixed/Shared logic mirrors Owly's `node.rs`/`channel.rs` |
+| Parsers against real iPhones | done | replay of Owly's three iPhone captures (`native/tests/test_native_awdl_capture.cpp`, T-AWDL-1/3 style): every action frame parses, the phone turns valid, schedule within 3 TU, 4,400+ data frames delivered |
+| Radio binding, shared + exclusive placements (`Ath10kAwdl.hpp`, `Ath10kAwdlService.cpp`) | written | commands byte-checked, state machine against a firmware model; **no firmware has seen it** |
+| `awdl0` on macOS 26 (`IO80211AWDLProtocol` subclass, hybrid BSD ifnet) | written | kc-audit vs 26.7.2 25G332; creation order against fakes; **never booted** |
+| Feeding Apple's stack (peer manager RX, service records, neighbor entries) | written | layouts read from the 26.7.2 binaries; exercised only against fakes |
+| AirDrop in Finder | **unknown** | needs a boot and a phone; see section 8 |
 
-No AWDL frame has been exchanged by this card on any OS yet. Nobody has `awdl0` on the WCL
-(1200.x) family with a non-Apple card, so this is research; read section 8 before expecting
-AirDrop to work.
+No AWDL frame has been exchanged by this card on any OS yet. Nothing in this document has run on the
+Helios. Read section 8 before expecting AirDrop.
 
-Earlier hardware runs (Linux, OWL, against a macOS 27 Mac with AirDrop open to Everyone):
-- **awdl-run1:** OWL never started. `iw dev wlan0 set type monitor` returned 0, but the
-  interface stayed managed.
-- **awdl-run2:** the `mon0` monitor vif worked and OWL created `awdl0`, but no regulatory
-  domain was set: channel 44 was no-IR ("Cannot inject frames on channel 44"), nothing
-  radiated, 0 peers. OpenDrop works with `setuptools<81`. The run was cut off mid-way.
-- **awdl-run3 (optional):** needs a Linux live USB now that CachyOS is erased: `iw reg set IN`
-  first, restore the previous value at the end, run under a `systemd-run` unit with a timed
-  restore. It would tell us whether this firmware radiates injected frames at all before
-  a macOS boot is spent on it.
+## 1. What AWDL needs from a Mac's Wi-Fi
 
-## 1. What AWDL is, and who does the work on a Mac
+AWDL (Stute et al., MobiCom '18; USENIX Sec '19) is Apple's ad-hoc link under AirDrop: 16 TU
+availability windows, 64 TU slots, a 16-slot channel sequence, an elected sync master, and vendor
+action frames (PSF, MIF) carrying TLVs. Data frames are ordinary 802.11 data frames on the AWDL BSSID
+`00:25:00:ff:94:73` with an LLC/AWDL header in front of the IPv6 packet. AirDrop itself is all userland
+(`sharingd`, `mDNSResponder`, `wifip2pd`/`airportd`) over link-local IPv6 on `awdl0`.
 
-AWDL (Stute et al., MobiCom '18 "One Billion Apples' Secret Sauce"; USENIX Sec '19 "A Billion
-Open Interfaces for Eve and Mallory") is Apple's ad-hoc protocol under AirDrop, AirPlay,
-Sidecar, Continuity Camera and the rest:
+On a Mac the MAC-layer schedule is in the Broadcom firmware and the kernel side is the family's
+`IO80211AWDLPeerManager`. A third-party driver has to be the firmware. That is what this code does.
 
-- **Frames.** Vendor-specific 802.11 action frames (category 127, OUI `00:17:f2`, type 8)
-  carry TLVs: synchronisation parameters, election parameters (v1 and v2), the channel
-  sequence, service parameters, HT capabilities, data-path state, the host name (ARPA) and
-  the version. Two subtypes: PSF (periodic sync frame, every 110 TU as master, 440 TU as
-  slave) and MIF (master indication frame, mid availability window). Data frames are normal
-  802.11 data frames to the AWDL BSSID `00:25:00:ff:94:73` with an LLC/SNAP + 8-byte AWDL
-  header carrying IPv6; A-MSDU is used.
-- **Time.** Availability windows (AW) of 16 TU; four AWs form an extended AW of 64 TU; the
-  channel sequence has 16 slots of one EAW each, so the sequence repeats every 1.05 s. A node
-  is on the slot's channel for the whole EAW. Social channels are 6, 44 and 149; a node also
-  lists its infrastructure channel so that it stays reachable while associated.
-- **Election and sync.** Every node advertises a metric and a counter; the node with the
-  highest (counter, metric) is the master, others synchronise their AW counter/phase to the
-  master's sync parameters (a sync tree with a maximum height). Masters send PSFs more often.
-- **Discovery and transfer.** mDNS over the AWDL IPv6 link-local addresses (`_airdrop._tcp`
-  with a Bloom-filter-based pre-discovery over BLE), then HTTPS on a mutual-TLS connection
-  for AirDrop itself. All of that is userspace on a Mac (`sharingd`, `mDNSResponder`,
-  `wifip2pd`/`awdld`, `airportd`); the kernel and the firmware only have to provide the
-  `awdl0` interface and the AWDL MAC-layer schedule.
+## 2. Prior art, as of 2026-11
 
-**On Apple's own hardware the AWDL engine (sync, election, channel hopping, action-frame
-TX/RX in the availability windows) runs in the Broadcom firmware.** The kernel driver only
-passes parameters down and events up. That is visible in the reconstructed IO80211 headers:
-about 100 `APPLE80211_IOC_AWDL_*` ioctls (sync params, election ID/metric, channel sequence,
-presence mode, master channel, BSSID, OOB action-frame requests, peer traffic registration,
-sync frame template, AF TX mode, …) and `IO80211VirtualInterface::postPeerPresence/
-postPeerAbsence/postSyncStateChanged/postNewMasterElected`. There is no mac80211-style
-"inject this frame now" interface; a third-party driver must therefore *be* the firmware
-for this purpose. That is what the engine below does.
+- **Owly** (https://github.com/t4t5/owly, MIT): the first AWDL proven with iPhones in software, on
+  Linux, on Intel, MediaTek, Atheros and Realtek cards, including real AirDrop. QCA6174/ath10k is not
+  listed (the `*` entry says it needs monitor-mode injection while associated). It runs in two
+  placements (see section 3 and 5a); this project adopts them. `SPEC.md`, `conformance.md` and its
+  capture corpus are the reference used here. Its **MIT notice is in `kexts/wifi/native/NOTICE`**.
+- **Bananz0/AirportItlwm-Tahoe-AWDL** (https://github.com/Bananz0/AirportItlwm-Tahoe-AWDL, GPL-2.0+):
+  Intel 9560 on the *legacy* (OCLP-restored Ventura) IO80211Family. It feeds received action frames to
+  Apple's peer manager through `bpfTapInput(DLT 12)`, posts availability-window messages, extracts service
+  TLVs from OOB frames, and dequeues TX with `dequeueTxPackets`. Reached "AirDrop session start", no
+  complete transfer. Its findings on the legacy family informed section 5d; **only structure and
+  semantics were reused, no code.** On the native 26.x family the same entry points exist and were
+  re-derived from the 26.7.2 binaries; offsets differ.
+- **itlwm issue 1062 / kgp-macPro's AirportItlwm-Tahoe** (GPL-2.0): `awdl0` as `IO80211P2PInterface` on
+  the legacy family, wifip2pd attached, AirPlay and Screen Mirroring working, AirDrop not. Dequeue path
+  blocked until Bananz0 found the per-AC budgets (their conclusion, adopted there, not used here since this
+  driver is hybrid BSD).
+- **OCLP fork (InsanelyMac thread 362042)** restores the legacy Modern Wireless stack
+  (`IO80211FamilyLegacy`, `IOSkywalkFamily` downgrade, `WiFiPeerToPeer`, `wifip2pd`) by root patch. It
+  does nothing for a third-party AWDL radio; on Intel it reaches `awdl0` and AirPlay, not AirDrop. It is
+  not applicable to this native-family driver.
+- Nobody has AWDL on the native macOS 26 family with a non-Apple card.
 
-## 2. Prior art on third-party drivers (all negative so far)
+## 3. What the QCA6174 can do
 
-- **itlwm / AirportItlwm (Intel).** The legacy front end (macOS ≤ 14 ABI) implements the
-  AWDL ioctls as stubs that accept parameters; it never had an AWDL engine. On macOS 26 the
-  WCL front end (laobamac's V2 path that AirportAth10k is ported from) has **no virtual
-  interface code at all**: `awdl0` is not created.
-- **OpenIntelWireless/itlwm issue #1062** (Tahoe): the most thorough attempt. With the
-  OCLP-restored *legacy* IO80211FamilyLegacy and a patched Ventura AirportItlwm, the author
-  reached: `awdl0` created as `IO80211P2PInterface` (role 6), `wifip2pd` attached, link
-  state active, IPv6 link-local assigned, Apple's AWDL action frames received on channel 6
-  and decoded, a management frame submitted through the Intel firmware. Never reached: a
-  usable TX data path (the queued AWDL packets are not exposed through the legacy dequeue
-  paths), any synchronised transmit, any AirDrop transfer beyond ~4 isolated one-time
-  reports across all users. Conclusion in that thread: interface creation is solvable, the
-  hard part is the scheduled MAC layer and the Apple-private TX/RX handshake.
-- **Nobody has `awdl0` on the native macOS 26 (WCL, IO80211Family 1200.x) family** with a
-  non-Apple card. This project is on that family, so there is no example to copy.
+Evidence: `kexts/wifi/evidence/linux-iw-phy.txt`, the firmware (`WLAN.RM.4.4.1-00309`, WMI op 4, HTT 3,
+feature bits `WOWLAN_SUPPORT IGNORE_OTP_RESULT MFP_SUPPORT`, **no `RAW_MODE_SUPPORT`**), Linux `ath10k`.
+Interface combinations list `managed + monitor` on one channel and `managed + P2P-client` on two.
 
-## 3. What the QCA6174 and WLAN.RM.4.4.1 can do (from Linux ath10k, this laptop)
-
-Evidence: `kexts/wifi/evidence/linux-iw-phy.txt`, `linux-debugfs-wmi_services.txt`, the
-firmware container (`firmware-6.bin`: version `WLAN.RM.4.4.1-00309`, WMI op version 4 = TLV,
-HTT 3, feature bits `WOWLAN_SUPPORT IGNORE_OTP_RESULT MFP_SUPPORT`; **`NO_P2P` is not set**),
-Linux `ath10k` at `d48723711bae`.
-
-| Need | Firmware/driver fact | Verdict |
-|---|---|---|
-| Receive vendor action frames | management RX via `WMI_MGMT_RX` with channel, SNR, rate (no TSF in the TLV event); Linux delivers all management frames | yes (host timestamps the frame on arrival; AWDL's 16 TU granularity tolerates ms jitter) |
-| Transmit arbitrary action frames | management TX via `HTT_H2T_MSG_TYPE_MGMT_TX` (the path the core already uses for auth/assoc; `WMI_SERVICE_MGMT_TX_WMI` is not advertised); any 802.11 frame body | yes |
-| Transmit data frames to the AWDL BSSID | monitor/injection on Linux uses `ATH10K_HW_TXRX_RAW` through HTT TX; in the kext the same HTT TX with a monitor vdev, or native-wifi TX on a P2P-device vdev | yes, to be proven on hardware |
-| Second virtual interface | `P2P-device`, `P2P-client`, `P2P-GO`, `monitor`, `mesh` listed; combinations allow `managed + P2P-client` on **2 channels** (firmware MCC), `managed + monitor` on 1 channel | yes |
-| Fast channel changes | `remain_on_channel` via a one-channel WMI scan (Linux ROC); a monitor vdev follows `VDEV_RESTART`; both are ~ms operations | yes for 64 TU slots, with a few ms of dead time per switch |
-| TSF access | `inc_tsf`/`dec_tsf` vdev params exist; no TSF read in the TLV management RX event | not needed: the engine keeps its own clock like OWL |
-| ACKing frames addressed to us while not associated (active monitor) | **not advertised** on this card (`iw phy` lists no "active monitor") | peers retransmit unicast up to 7×; discovery still works; throughput suffers. A STA/P2P-device vdev with a firmware peer entry per AWDL peer would ACK; to be tested |
-| Concurrent infrastructure link on another channel | MCC with a P2P-client vdev (2 channels); with monitor only 1 channel | AWDL fully concurrent only when the engine's sequence stays on the infra channel, or with the P2P vdev variant |
-
-Nothing fundamental blocks AWDL on this card. What a Broadcom card has and this one lacks is
-the firmware-side schedule; it has to be done on the host with ms precision. The one hardware
-weakness is the missing active-monitor ACK, which a different card (ath9k, or a Broadcom
-with Apple firmware) would fix, but it degrades, not prevents, AirDrop.
+- **Verified against Linux ath10k source (2026-11-08):** monitor vdev type is `WMI_VDEV_TYPE_MONITOR = 4`;
+  the HTT TX descriptor flags `0x05` for data are `RAW | HDR_PRESENT | NO_ENCRYPT` (`PKT_TYPE` 0 in bits
+  7:5) and `0x65` for action frames (`PKT_TYPE` 3, `ATH10K_HW_TXRX_MGMT`), ext-tid 16 (non-QoS) and 17
+  (management). The two values the first pass took from memory were correct.
+- **Unknown until a run:** whether RM.4.4.1 radiates a monitor vdev's raw frames while associated.
+  Linux reaches the air differently in shared mode: mac80211 finds a local address in the injected
+  frame's addr2 and sends it through the *station* vdev (Native Wi-Fi TX, no RAW). This driver keeps to
+  the monitor vdev (RAW). They are not the same firmware path, so the Linux test below gives evidence for
+  the card, and may need the driver to switch to the station-vdev path if RAW fails.
 
 ## 4. The engine: `native/src/AirportAth10kAwdl.hpp`
 
-A header-only, allocation-free port of OWL (SEEMOO, GPL-3.0, commit `0ee3263`,
-attribution in the file) of everything platform-independent: wire helpers, the frame
-builders, the TLV parsers, sync, election, channel sequence, a fixed 32-entry peer table,
-the transmit schedule (availability windows, unicast guard 3 TU, multicast guard 16 TU, the
-multicast EAWs 0 and 10) and an `Engine` with OWL's timers (channel switch at every AW, PSF
-every `psf_interval`, MIF mid-EAW, peer clean-up + election every second, unicast/multicast
-queues) driven by `tick(now)`, `receive(frame)` and `send(ethernet)` over a `Sink`
-(`setChannel`, `transmit`, `peerAdded/Removed`, `syncChanged`, `data`). Times are integer
-microseconds; frames are plain 802.11 (no radiotap). Differences from OWL are listed at the
-top of the file.
+A header-only, allocation-free port of OWL (SEEMOO, GPL-3.0, commit `0ee3263`, attribution in the
+file) of everything platform-independent, extended with Owly's placements and rules (MIT, attribution
+in the file):
 
-Verified on the host (`tests/run-tests.sh` → `native/tests/test_native_awdl.cpp`, ASan/UBSan):
+- `kPresenceFixed` (Owly's `Presence::Fixed`) and `kPresenceShare` (`Presence::Share`): the radio stays on
+  one channel; shared advertises only the sync master's slots on that channel (AWDL-12), keeps its previous
+  sequence if the master never names it (rather than announce it is never available), ranks masters counter
+  first; fixed advertises every slot and ranks metric first, as Apple devices do.
+- `kPresenceOwl` keeps OWL's original behaviour for the byte-exact vector tests.
+- Peers are valid after a MIF and a Version TLV; a valid peer silent for 5 s is dropped; data frames count as
+  hearing it (AWDL-17). A-MSDUs are bounded to 16 subframes (AWDL-14).
+- The Session layer (`AirportAth10kAwdlSession.hpp`) adds: placement follows the station (below); OWLY-2 (an
+  ICMPv6 echo to each valid peer every 3 s, replies swallowed); AWDL-18 (a TCP SYN from a not-yet-valid peer
+  held up to 2 s and delivered after its neighbor entry); the macOS stack's service records (section 5d).
+  PSFs carry HT capabilities as Owly's spec requires (OWL's did not; vectors unaffected).
 
-- PSF, MIF and data frames are **byte-exact** against frames produced by OWL's own C code
-  with the same state and clock (`native/tests/awdl_vectors.inc`, regenerated by
-  `awdl-vectors/generate.sh`); parse results (peer fields, channel sequence), election
-  outcomes, sync updates and schedule values are identical to OWL's.
-- OWL's unit tests (sync, election, peers) ported and passing.
-- Two engines on a shared simulated medium: election (the better metric wins, the other
-  becomes a slave at height 1 with the slave PSF interval), synchronisation within 3 TU,
-  unicast and multicast data delivered only in the right windows, loopback, drop to
-  unknown peers, master loss and re-election after the 2 s timeout.
-- Truncated frames, RSSI filter with grace, buffer limits, foreign management, A-MSDU.
-- Compiles under the kext cross-build flags with only `memcpy`, `strlen`, `bzero` imports.
+Differences from OWL and Owly are stated in the file headers.
 
-Not in the engine (as in OWL): dynamic channel-sequence adaptation (static sequence on the
-master channel; OWL's `awdl_chanseq_init_idle` is available), AWDL encryption/security
-TLVs, the service parameter bitmask (service discovery is mDNS over IPv6 and needs nothing
-from the engine), NAN sync.
+## 5. What is implemented (everything needs `AWDL=1` and `ath10k_awdl=1`)
 
-## 5. What is implemented
+### 5a. Radio binding (core): placements
 
-Everything in this section is compiled only with `AIRPORT_ATH10K_AWDL=1`.
+Owly's two placements, chosen by the Session from the station link:
 
-### 5a. Radio binding (ath10k core)
-
-`src/kext/Ath10kAwdl.hpp` (pure logic, host-tested) and `src/kext/Ath10kAwdlService.cpp` (the CE
-glue). The state machine owns a **monitor vdev, id 1**, created with the type the Linux
-monitor mode uses:
-
-- Bring-up: `VDEV_CREATE` (type 4, monitor), `VDEV_START` (20 MHz HT on the chosen channel,
-  the regulatory limit as power), `VDEV_UP`. Each command is one CE3 transaction with the
-  completion rule the core's other WMI users apply; `VDEV_START`/`RESTART`/`STOP` also wait
-  for the WMI event. Events for vdev 1 are consumed before the core's parser, which rejects
-  anything else as unsolicited. A missing reply fails the radio after 3 s, never the station.
-- Channel retune (`AwdlSetChannel`): `DOWN`, `RESTART`, `UP` (three round trips, the same
-  sequence as the station's channel switch). Not used in the default static mode.
-- Frames: AWDL action frames arrive via the WMI management-RX event (filtered: category
-  127, OUI 00:17:f2, type 8); data frames with address 3 = AWDL BSSID via HTT RX (raw MPDU,
-  FCS trimmed, or native WiFi), both timestamped on arrival. TX goes through HTT `TX_FRM` with
-  the vdev id in the descriptor, type MGMT for action frames and RAW for data, one frame in
-  flight at a time from an 8-entry queue. Frames travel through typed in-kernel calls
-  (`nativeAwdlTx/Rx`), since a control `Request` carries at most 512 bytes.
-- Lifecycle: control ops 32-35 (`AwdlRadioStart/Stop/SetChannel/Status`). A firmware reload
-  resets the radio; the front end asks again.
-
-**Firmware limits, stated plainly.**
-
-| Limit | Consequence | Degraded behaviour |
+| Station state | Placement | Radio |
 |---|---|---|
-| The core runs one WMI command at a time and the station path owns the rings | No AWDL while the station vdev is joining or joined; the radio tears down on a join and is restarted when idle | AirDrop only when not associated (Option-click the Wi-Fi menu and Disconnect, or no saved network in range) |
-| No host-side MCC implementation; a monitor vdev cannot follow the infrastructure channel | Same as above | Concurrent infrastructure + AWDL is future work |
-| Timing resolution: the core's runtime tick (1-10 ms) and the 3-command retune | A 64 TU slot can lose a few ms; AW alignment is approximate | **Static channel sequence on one social channel (default 6)**: this node is on air for the peers' slots on that channel only. 6 is chosen because it is TX-legal in the world domain; `ath10k_awdl_ch=44|149` needs the regulatory domain to allow TX there |
-| No firmware timestamp in the management-RX event | The host stamps frames on arrival | Sync error of a few ms instead of microseconds; AWDL's 16 TU windows tolerate it |
-| No active monitor on this card (`iw phy`) | Unicast frames addressed to us are not ACKed by the firmware | Peers retry up to 7 times; discovery works, throughput suffers |
-| Injected monitor-vdev frames | Whether WLAN.RM.4.4.1 radiates them from a monitor vdev without a peer entry is unproven | Run 3 (Linux) or the on-device checklist below settles it |
-| 6 GHz, A-MSDU/A-MPDU TX, 802.11 fragmentation | Not implemented | Single MSDU frames only |
+| Joined on channel 6, 44 or 149 | **Shared** | monitor vdev (id 1) with the station's MAC, on the station's channel definition (center and phy copied, as Linux `ath10k_monitor_vdev_start`). No channel changes. The station's own receive path ACKs the peer's unicast (Owly's design). |
+| Not joined | **Exclusive/fixed** | monitor vdev on one social channel (default 6, `ath10k_awdl_ch=`), no ACKs from the chip |
+| Joined on another channel | none | AWDL off and `awdl0` not running; waits |
+
+- awdl0's MAC is the station's MAC in every placement (AWDL-2 needs a stable address, and shared mode needs
+  this address so the station ACKs).
+- The state machine moves between placements through a full tear-down and restart. A join in progress, a
+  disconnect, a CSA, or a roam stops the radio and the session restarts it when the station is stable.
+- The core (`awdlPlan`) enforces it: shared runs only while the station is `Connected` and not in a channel
+  switch, on the same channel; exclusive only while the station vdev is idle.
+- TX: HTT `TX_FRM` on the monitor vdev, one frame at a time on CE4, serialized against the station's
+  management TX (the core's single-owner path), and held off while the station's data slots are outstanding
+  so the two never batch in the completion stream. Under heavy Wi-Fi traffic AWDL frames wait for those
+  slots to drain.
+- Exclusive placement has no ACK path (Owly's IBSS/hidden-AP is not implemented; the Linux test says
+  whether the card can do it). Discovery works; unicast from peers is retried on air.
 
 ### 5b. `awdl0` on macOS 26 (IO80211Family 1200.13.1)
 
-Read from the 26.7.2 collection (symbol tables and vtables, `tools/kc-audit.py --dump`; nothing
-copied beyond names and offsets):
+Read from the 26.7.2 collection (symbol tables and vtables via `tools/kc-audit.py`; only names, slots
+and offsets were used). `awdl0` on 26.x is an `IO80211AWDLProtocol` subclass on `IO80211VirtualInterface`,
+not the legacy `IO80211P2PInterface`. The family creates the peer manager (`IO80211AWDLPeerManager`,
+1100+ methods) for role 6. This driver's interface answers `setVIRTUAL_IF_CREATE` for role 6.
 
-- `awdl0` is a subclass of **`IO80211AWDLProtocol`** (568 vtable slots, classSize 0x130, no
-  ivars) on **`IO80211VirtualInterface`** (505 slots, 0x130), itself an
-  `IO80211SkywalkInterface`, not the legacy `IO80211P2PInterface`. The class has **63 pure
-  virtual slots** (505-567): the `getAWDL_*/setAWDL_*` ioctl handlers.
-- Apple's Broadcom driver creates it from `setVIRTUAL_IF_CREATE` (the Infra interface's slot
-  556) → `AppleBCMWLANCore::createProxInterface`: `withOptions` →
-  `IO80211AWDLProtocol` ctor, `init(controller, mac, 6, name)` (role 6 = AWDL, the role WCL
-  asks for), `attach`, `initRegistrationInfo`, then its own `start` → a native
-  `IOSkywalkEthernetInterface::registerEthernetInterface` with rings. Peer management is in the
-  family (`IO80211AWDLPeerManager`, ~1000 methods), which the base class creates for role 6.
-- This driver: `AirportAth10kAwdlInterface : IO80211AWDLProtocol` (role 6, interface id 2, 23
-  handlers answered from the engine or stored, the other 40 refused as Unsupported rather than
-  reading a guessed layout), `setVIRTUAL_IF_CREATE` answered for role 6 with the BSD name and
-  MAC, created at bring-up when `ath10k_awdl=1`.
-- `include/Airport/macOS26/IO80211AWDLProtocol.h` is generated from those slots. kc-audit
-  proves it at every `AWDL=1` build: `AirportAth10kAwdlInterface` 568 slots match the parent,
-  `IO80211VirtualInterface`/`IO80211AWDLProtocol` sizes 0x130, all imports exported.
+The 63 pure-virtual AWDL handlers (`IO80211AWDLProtocol`), checked against what
+`AppleBCMWLANProximityInterface` does with each on 26.7.2:
+
+- Answered from the engine (sync params, election ID/metric, master channel, sync state, presence, BSSID,
+  channel, peer cache size): 23, as before.
+- Now implemented: `SYNCHRONIZATION_CHANNEL_SEQUENCE` set+get (stored), `OOB_REQUEST`, `OOB_AUTO_REQUEST`
+  (section 5d), `SECONDARY_MASTER_CHANNEL` get.
+- Accepted and counted, no firmware to apply them to (`AirportAth10kAwdlIoctls` in the registry shows what a
+  real run calls): `EXTENSION_STATE_MACHINE`, `ELECTION_RSSI_THRESHOLDS`, `ELECTION_PARAMS`, `PEER_CACHE_CONTROL`,
+  `SYNC_FRAME_TEMPLATE`, `PEER_TRAFFIC_REGISTRATION`, `AF_TX_MODE`, `MIN_RATE`, encryption keys/type,
+  `TXCAL_PERIOD`, advertisers, `DFSP`, `OOB_SEC_PAYLOAD`, `LLW`, `TX_RATE`, `P2P_COEX_PROTECTION`, `PSF_DWELL`,
+  `CONFIG`, `RTG_PEER_STATS_CONFIG`.
+- Refused (return Unsupported) because the driver does not keep the data: `COMPANION_SKYWALK_IF_CREATE`
+  and the getters of those parameters.
+- **Unknown:** which of these `wifip2pd` and the peer manager need to succeed. The registry counter settles
+  that on the first boot.
 
 ### 5c. Data path and addressing
 
-Same hybrid as the infrastructure interface, not a Skywalk nexus: `AirportAth10kAwdlNet` is a
-second `IOEthernetController` (provider: the main controller, same IO80211 work queue) whose
-BSD interface `AirportAth10kAwdlBsd` has the name prefix `awdl`, sub-family Wi-Fi and the
-output pull model (the same SPI that gave en1 its flowswitch). The Skywalk side goes through
-`IO80211VirtualInterface::prepareBSDInterface` in the gate and `peerToPeerConfigureIfnet`
-(IFEF_AWDL and the peer-to-peer ifnet parameters).
+The same hybrid as `en1`: `AirportAth10kAwdlNet` is an `IOEthernetController` whose BSD interface has
+the prefix `awdl`, Wi-Fi sub-family and the output pull model, passed to
+`IO80211VirtualInterface::prepareBSDInterface` and `peerToPeerConfigureIfnet` (the family's own routine that
+sets the peer-to-peer `eflags` for role 6). Output: mbufs -> the engine's unicast/multicast queues -> sent in
+the peer's availability window. Input: frames the engine delivers -> `inputPacket`.
 
-Output: mbufs → `outputStart` → the engine's unicast/multicast queues → transmitted in the
-peer's availability window. Input: frames the engine delivers → `inputPacket`. The link is
-active while the radio runs. IPv6 link-local: the interface comes up with the AWDL MAC
-(locally administered); assignment of the `fe80::` address is left to the normal macOS
-autoconfiguration. Not verified. AirDrop uses mDNS/TLS over that link-local address.
+This is **not** the native Skywalk data path (`IOSkywalkTxSubmissionQueue`, `dequeueTxPackets`) that Broadcom
+uses. IP traffic does not need that path: the ifnet is a normal ifnet to `sharingd` and `mDNSResponder`, and
+output never passes through the flow queues traced in the legacy family. Whether the kernel's AWDL
+special-casing (IFEF_AWDL, `peerToPeerConfigureIfnet`) behaves with a hybrid interface is unknown.
 
-Not implemented: native Skywalk rings (`IOSkywalkTxSubmissionQueue` and friends), which is
-what `IO80211VirtualInterface` is built for on Broadcom; delivering received AWDL action frames
-to Apple's `IO80211AWDLPeerManager` (its `actionFrameInput` takes `IO80211Buffer` objects
-from a family pool; the IO80211Buffer ownership contract is not yet known), so Apple's
-stack does not see peers; peers appear only in this driver's log and registry.
+Neighbor entries (`NET-2`): `nd6_alt_node_present/absent` (kernel, the API Apple's AWDL path uses) create the
+peer's link-local neighbor entry from its AWDL address. IPv6 link-local autoconfiguration on `awdl0` itself:
+left to the normal macOS path, not verified.
 
-## 6. What blocks what
+### 5d. Feeding Apple's stack
 
-| Step | State | Blocked by |
-|---|---|---|
-| Protocol engine | done, host-verified | — |
-| Radio binding in the core | written, host-verified against a firmware model | the first run on real firmware (does a monitor vdev start next to the idle station vdev, do frames radiate) |
-| `awdl0` on macOS 26 | written, ABI audited against 26.7.2 | first boot (`ifconfig awdl0`), vtables are proven, behaviour is not |
-| Skywalk nexus and Apple peer manager feed | not implemented | a first `awdl0` boot, and the IO80211Buffer contract |
-| AirDrop transfer | — | everything above plus Apple's userspace accepting a non-Broadcom `awdl0` (section 8) |
+`ath10k_awdl_stack=<mask>` turns each feed off (default 7):
 
-A different Wi-Fi card does **not** remove any of these except the ACK weakness: the
-only cards whose firmware runs AWDL are Apple-flashed Broadcom ones, for which Apple's own
-driver exists.
+- bit 0: **Peer manager RX.** Every received AWDL action frame goes to the family's
+  `IO80211VirtualInterface::bpfTapInput(mbuf, DLT 12, meta, 0x48)`, the same path
+  `AppleBCMWLANProximityInterface::handleActionFrame_rx` uses on 26.7.2 (it copies into a family buffer,
+  `IO80211Controller::allocFramePool`, created at controller start). Metadata (source at 0, channel at
+  0x0c, rate 0x28, RSSI 0x2c, MAC time 0x30, size 0x48) read from the binary; `isValidAF` requires it.
+  The peer manager gets to see peers, service records and Service Response TLVs (type 2) from them.
+- bit 1: **Neighbors** as above.
+- bit 2: **Service records from OOB.** The family hands us `apple80211_awdl_oob_request` for the MI frame it
+  builds (`updatePrimaryPayloadMI`); the frame pointer is at +0x30 and the length at +0x28 (read from
+  Broadcom's handler; the reconstructed header's inline `data[]` is older). Service Response (2) and ARPA (16)
+  TLVs go into our MIFs. One-shot unicast OOB frames are transmitted.
+- bit 3 (default off): `IO80211VirtualInterface::setLinkState` on bring-up.
 
-## 7. Owner test steps
+Not done: the availability-window-start message the family's `reportDataPathEvents` handles (index 0 of the
+first switch; Bananz0 posts message 41 on the legacy family; on 26.7.2 its handler reads the interface state,
+not verified further), and any TX through Apple's flow queues.
 
-Build with `AWDL=1`, install, boot with `ath10k_awdl=1` (plus `ath10k_awdl_ch=6` if another channel was tried). The coordinator installs; one change per boot.
+## 6. What macOS needs, and how sure we are
 
-**Before anything else**: with the join path unaffected, Wi-Fi must still join as before (`ath10k_awdl` not set: identical builds apart from the gated code paths). Check with `ath10k_awdl=1` first that the station still joins and that disconnecting returns to idle.
+From the 26.7.2 binaries:
 
-1. **awdl0 exists:** `ifconfig awdl0` shows the interface, `UP`, and a `fe80::` address appears within seconds of the link going active. If there is no address: `sudo ifconfig awdl0 inet6 -autoconf` and report; this is the IPv6 link-local item.
-2. **Radio up:** `ioreg -l -w0 | grep -E 'AirportAth10kAwdl'` shows `AirportAth10kAwdlState` 2 (Running); the log has `awdl: awdl0 started`, no `awdl:` failure lines. `log stream --predicate 'sender == "AirportAth10k"' | grep -i awdl`.
-3. **Peers appear** (Wi-Fi disconnected, a Mac or iPhone with AirDrop open nearby on 2.4 GHz): `awdl: peer added <mac> name '<name>'` within a few seconds. Report `AirportAth10kAwdlPeers` and any `awdl-*` failure strings from `AirportAth10kLastMessage`.
-4. **Peer sees us:** on the other device, AirDrop should list "helios300" if discovery works over mDNS; AWDL peers should be visible with `sudo log stream --predicate 'process == "wifip2pd"'` on a Mac.
-5. **Finder › AirDrop** on the Helios lists the other device; a small file in each direction.
-6. **Stop paths:** join a Wi-Fi network (the log shows AWDL tearing down; `AirportAth10kAwdlState` leaves Running; join succeeds as without AWDL) and disconnect (AWDL comes back).
-7. Report `wdutil info` (AWDL section), `netstat -I awdl0`, the log, and the first failing step.
+- The family creates `IO80211AWDLPeerManager` and drives it. `wifip2pd` configures it via ioctls that go
+  through `IO80211PeerManager::ioctl_internal` to the 63 handlers; the peer manager wants `enableAWDL`
+  (`interfaceStateChange`) and gates action-frame input on its own state (`+0x3ee0` bit 1, `isValidAF`).
+  Frame feed is `bpfTapInput` DLT 12. All confirmed in disassembly.
+- Service records: `IO80211AWDLPeerManager::updatePrimaryPayloadMI` hands the MI frame down via OOB (confirmed);
+  received Service Response TLVs reach it through the action frame feed (the parser is in the peer manager).
 
-Things to record even if everything fails: which firmware errors appear (`awdl-vdev-start-rejected`, `awdl-firmware-timeout`), whether `VDEV_START` was accepted at all, and any panic log.
+From research (not verifiable on Linux; no macOS userland binaries here):
 
-## 8. What can still fail (plainly)
+- `sharingd` needs `awdl0` with AWDL capability; `mDNSResponder` publishes `_airdrop._tcp` over D2D/awdl0; AirDrop
+  is then HTTPS to the peer's link-local address port 8770 (Owly SPEC; TLS is user-level).
+- Whether `sharingd` accepts this non-Broadcom awdl0 at all is **unknown** until it runs. It may refuse the
+  whole path (capability checks, Continuity gating); the Intel attempts reached AirDrop only in isolated reports.
+- BLE AirDrop advertisement (the wake-up): on a sending Mac, `sharingd` advertises Apple manufacturer data with TLV
+  type 5 (Owly SPEC BLE-1..5). The Rome chip's BLE works per the owner; never tested here.
 
-- The firmware rejects a monitor vdev next to the idle station vdev, or never radiates injected frames from it, or drops other-BSS frames: the core reports `awdl-firmware-timeout` / nothing received. A Linux `awdl-run3` tells this apart from the macOS side.
-- `IO80211VirtualInterface` is built around native Skywalk rings. The hybrid BSD interface is unproven for a virtual interface; `prepareBSDInterface` may reach IOSkywalk state that only exists after `registerEthernetInterface`. The result would be a panic on the first boot; `-airportath10k_frontoff` and removing the boot-arg are the recovery. **Boot with a known-good fallback available.**
-- Apple's AWDL userland (`wifip2pd`, `sharingd`, `mDNSResponder`) was designed against the Broadcom firmware and IO80211AWDLPeerManager events. `sharingd` may refuse a non-Broadcom card, the family may not feed our interface, `wifip2pd` may immediately reconfigure it through ioctls we refuse (40 are `Unsupported`), or the Continuity entitlements for AWDL use may gate features. The Intel thread suggests the discovery path can work; AirDrop transfers worked only in isolated reports there.
-- The static channel sequence means long discovery times and missed peers; peers that do not revisit channel 6 are unreachable. Concurrent AWDL + Wi-Fi is not implemented; AWDL needs the Wi-Fi disassociated.
-- AWDL link-layer encryption is not implemented (OWL has none; AirDrop's payload is TLS over the link), but other Continuity features may assume it.
+## 7. On-device test steps (coordinator installs; one change per boot; known-good fallback)
+
+Install the `AWDL=1` kexts and keep a fallback boot. Then, in order:
+
+1. **`ath10k_awdl=1 ath10k_awdl_stack=0`** (radio only, nothing into Apple's stack):
+   - Station must still join as before.
+   - `ifconfig awdl0` shows the interface, `ioreg -l | grep AirportAth10kAwdl` shows
+     `AirportAth10kAwdlState` 2 and `AirportAth10kAwdlPlacement` 2 (shared, when on channel 6/44/149).
+   - Log: `log stream --predicate 'sender == "AirportAth10k"' | grep -i awdl`. Peers appear as `awdl: peer added`.
+2. **Peers visible while joined** on an AP on 6/44/149: an iPhone/Mac with AirDrop open gives peers; a Mac
+   sees us with `sudo log stream --predicate 'process == "wifip2pd"'`.
+3. **`ath10k_awdl_stack=7`** (default): repeat, and check `AirportAth10kAwdlIoctls` (which handlers get
+   called), `AirportAth10kAwdlFedFrames`, `AirportAth10kAwdlOob`. Then **Finder AirDrop / Share Sheet**.
+4. `ifconfig awdl0` for `fe80::` (if no address: note it, `sudo ifconfig awdl0 inet6 -autoconf` and report).
+5. A file each way. `wdutil info`, `netstat -I awdl0`, `AirportAth10kAwdl*` registry keys, and panics.
+6. Join/leave paths: joining another channel stops AWDL (state leaves Running, no panic); returning restarts.
+
+Recovery: `-airportath10k_frontoff` disables the front end; or drop the boot-arg.
+
+**Linux live USB test (the cheapest radio proof, do this first if possible):** `tools/owly-live-usb.sh`. On a
+Linux live USB booted on the laptop: `./owly-live-usb.sh bundle DIR` here, copy `owly-live.tar.gz` next to the script,
+`sudo ./owly-live-usb.sh setup`, then `./owly-live-usb.sh test shared` (Wi-Fi joined on 6/44/149, iPhone AirDrop
+Everyone). It runs `owly test-card` (a photo each way) and tells you which placement this card can do. Then
+`test exclusive`. The result decides whether the macOS shared mode has a working radio to match.
+
+## 8. What can still fail, bluntly
+
+Unproven: everything on hardware. Specifically, in order of likely failure:
+
+1. **The firmware may not radiate monitor-vdev RAW frames while a station is joined**, or may refuse the monitor
+   vdev next to a joined station. The Linux test distinguishes "card can't" from "this driver can't".
+2. **First-boot behaviour of the hybrid** `IO80211VirtualInterface`: `prepareBSDInterface` and the peer manager may
+   reach Skywalk state that does not exist for a hybrid interface (the previous pass flagged this). Panic is possible
+   on first boot; keep the fallback.
+3. **Apple's userland may simply not use it.** `sharingd`/`wifip2pd` may refuse a non-Broadcom interface, or expect
+   handlers we refuse, or the peer manager's data path. The Intel forks never got reliable AirDrop on the legacy
+   stack; this is the native one, which nobody has tried.
+4. **Timing.** The core has ms ticks and a host-side MAC; AWDL's 3 TU guard tolerates a few ms, but shared mode has
+   no hardware-assisted schedule. Owly works in software, so this is not fatal, but it is unmeasured here.
+5. AirDrop-specific: `sharingd` Contacts-Only needs Apple identity validation; the "Everyone" path is the first target.
+6. Coexistence limit: AWDL TX waits for outstanding station data TX; AirDrop while the Wi-Fi link is busy will be slow.
+
+Not implemented: `IOSkywalkTxSubmissionQueue` native rings, Owly's exclusive ACK via IBSS/hidden AP, ADDBA responses
+(Owly accepts only on cards that ACK aggregates), channel hopping across social channels.

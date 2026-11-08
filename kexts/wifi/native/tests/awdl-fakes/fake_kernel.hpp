@@ -152,3 +152,8 @@ class IOEthernetController:public IONetworkController{public:virtual bool init(v
     virtual IOReturn setHardwareAddress(const void *,UInt32)=0;
 };
 struct ifnet_init_eparams;
+// AWDL stack feed (AirportAth10kAwdlDriver.cpp)
+inline void *IOMallocZeroData(size_t n){return calloc(1,n);}
+inline void IOFreeData(void *p,size_t){free(p);}
+inline unsigned ifnet_index(ifnet_t){return 7;}
+void *mbuf_datastart(mbuf_t m);
