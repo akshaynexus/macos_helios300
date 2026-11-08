@@ -292,6 +292,7 @@ public:
     bool queueEnabled=false;
     Queue *getOutputQueue(){return queueEnabled?&queue:nullptr;}
     Queue *txQueue(){return getOutputQueue();}
+    void serviceTxQueue(){if(Queue *q=txQueue())q->service(1);}
 #ifdef ATH10K_WMI_RUNTIME_TEST
     IOWorkLoop *getWorkLoop(){return IOWorkLoop::workLoop();}
 #endif

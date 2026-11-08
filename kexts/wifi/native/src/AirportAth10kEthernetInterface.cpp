@@ -5,6 +5,15 @@
 #include <net/ethernet.h>
 #include <net/if.h>
 
+// IONetworkInterface::setInterfaceSubType(uint32_t) is private SPI (not in
+// the SDK header, exported by IONetworkingFamily 3.4 on macOS 26.7.2 as
+// __ZN18IONetworkInterface19setInterfaceSubTypeEj). It sets the ifnet
+// sub-family before the BSD attach; without IFNET_SUBFAMILY_WIFI (3) the
+// interface is "type: Ethernet" with no Wi-Fi functional type and airportd's
+// interface list (getifaddrs filter) counts zero Wi-Fi interfaces — hardware
+// run 3: "No WiFi matching interface exists", power "Off (forced)".
+extern "C" bool airportSetInterfaceSubType(IONetworkInterface *,uint32_t) __asm__("__ZN18IONetworkInterface19setInterfaceSubTypeEj");
+
 #define super IOEthernetInterface
 OSDefineMetaClassAndStructors(AirportAth10kEthernetInterface, IOEthernetInterface)
 
@@ -27,9 +36,8 @@ IOReturn AirportAth10kEthernetInterface::attachToDataLinkLayer(IOOptionBits opti
 {
     char name[IFNAMSIZ];
     AIRPORT_STEP("bsd: attachToDataLinkLayer");
-    // AirportItlwm calls the private IONetworkInterface::setInterfaceSubType(3)
-    // here; macOS 26.7.2's IONetworkingFamily does not export it (kc-audit), and
-    // the Wi-Fi sub-family is applied by IO80211InfraInterface::prepareBSDInterface.
+    if(!airportSetInterfaceSubType(this,3)){AIRPORT_LOG("setInterfaceSubType(WIFI) failed");return kIOReturnNotReady;} // IFNET_SUBFAMILY_WIFI
+    AIRPORT_STEP("bsd: sub-family Wi-Fi set");
     IOReturn ret=super::attachToDataLinkLayer(options,parameter);
     if(ret!=kIOReturnSuccess || !interface)return ret;
     UInt8 builtIn=0;

@@ -72,6 +72,7 @@ private:
     bool _nativeFrontEnd=false;
     IOOutputQueue *_nativeOutputQueue=nullptr;
     IOOutputQueue *txQueue() const {return _nativeOutputQueue?_nativeOutputQueue:getOutputQueue();}
+    void serviceTxQueue();
     static IOReturn nativeAction(OSObject *,void *,void *,void *,void *);
     bool _reprobeRequested=false,_systemSuspended=false;
     bool requestDeviceRestart();

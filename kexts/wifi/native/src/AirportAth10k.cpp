@@ -14,6 +14,12 @@ static_assert(AirportBridge::kNotReady==kIOReturnNotReady && AirportBridge::kBus
 
 volatile SInt32 gAirportAth10kStep=0;
 
+// IONetworkInterface output-pull-model SPI (exported by IONetworkingFamily 3.4,
+// hidden from the SDK headers), bound by mangled name; `this` is the first argument.
+extern "C" IOReturn airportConfigureOutputPullModel(IONetworkInterface *,uint32_t driverQueueSize,uint32_t options,uint32_t outputQueueSize,uint32_t schedulingModel,uint32_t targetQdelay) __asm__("__ZN18IONetworkInterface24configureOutputPullModelEjjjjj");
+extern "C" IOReturn airportDequeueOutputPackets(IONetworkInterface *,uint32_t maxCount,mbuf_t *head,mbuf_t *tail,uint32_t *count,uint64_t *bytes) __asm__("__ZN18IONetworkInterface20dequeueOutputPacketsEjPP6__mbufS2_PjPy");
+static constexpr uint32_t kAirportWorkLoopSynchronous=1; // kIONetworkWorkLoopSynchronous: outputStart runs on our work loop
+
 // Pre-flight data for tools/kc-audit.py: sizeof() of every Apple class this
 // kext subclasses, as compiled from the reconstructed headers. The audit
 // compares each with the classSize the real collection's MetaClass
@@ -269,6 +275,11 @@ bool AirportAth10k::configureInterface(IONetworkInterface *interface)
     if(!super::configureInterface(interface))return false;
     interface->setProperty("IOModel","Qualcomm Atheros QCA6174 (ath10k)");
     interface->setProperty("IOUserVisibleName","Wi-Fi");
+    // Pull model, as AirportItlwm (and every Apple Ethernet driver): the ifnet
+    // gets IFEF_TXSTART and dlil attaches the Skywalk flowswitch.
+    const IOReturn r=airportConfigureOutputPullModel(interface,Ath10k::kOutputQueueCapacity,kAirportWorkLoopSynchronous,0,0,0);
+    if(r!=kIOReturnSuccess){AIRPORT_LOG("configureOutputPullModel failed 0x%x",r);return false;}
+    AIRPORT_STEP("bsd: output pull model configured");
     return true;
 }
 
@@ -277,6 +288,24 @@ IOOutputQueue *AirportAth10k::createOutputQueue()
 {
     if(!ath10k || !coreController()->getWorkLoop())return nullptr;
     return IOGatedOutputQueue::withTarget(ath10k,coreController()->getWorkLoop(),Ath10k::kOutputQueueCapacity);
+}
+
+// Called by the interface on our work loop when it has packets. They are
+// moved into the gated queue (which runs Ath10kPCIDevice::outputPacket under
+// the core's gate); when it is full we return NoResources and the core calls
+// signalOutputThread after it drains the queue (Ath10kPCIDevice::serviceTxQueue).
+IOReturn AirportAth10k::outputStart(IONetworkInterface *interface,IOOptionBits)
+{
+    IOOutputQueue *queue=getOutputQueue();
+    if(!queue || !interface)return kIOReturnNoResources;
+    const UInt32 capacity=queue->getCapacity();
+    while(queue->getSize()+1<capacity){
+        mbuf_t head=nullptr;uint32_t count=0;
+        if(airportDequeueOutputPackets(interface,1,&head,nullptr,&count,nullptr)!=kIOReturnSuccess || !head)return kIOReturnSuccess;
+        mbuf_setnextpkt(head,nullptr);
+        queue->enqueue(head,nullptr);
+    }
+    return kIOReturnNoResources;
 }
 
 UInt32 AirportAth10k::outputPacket(mbuf_t packet,void *param)

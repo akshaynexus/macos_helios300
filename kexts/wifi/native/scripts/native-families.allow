@@ -13,6 +13,11 @@ hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOBasicOutputQueue.h
 hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkData.h
 hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkStats.h
 sym com.apple.iokit.IONetworkingFamily _gIONetworkFilterGroup
+# Private SPI (exported by IONetworkingFamily 3.4): ifnet sub-family Wi-Fi for the BSD interface.
+sym com.apple.iokit.IONetworkingFamily __ZN18IONetworkInterface19setInterfaceSubTypeEj
+# Output pull model SPI (IONetworkingFamily 3.4): configureOutputPullModel, dequeueOutputPackets.
+sym com.apple.iokit.IONetworkingFamily __ZN18IONetworkInterface24configureOutputPullModelEjjjjj
+sym com.apple.iokit.IONetworkingFamily __ZN18IONetworkInterface20dequeueOutputPacketsEjPP6__mbufS2_PjPy
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211ControllerV2.h
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211SkywalkInterface.h
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211InfraInterface.h

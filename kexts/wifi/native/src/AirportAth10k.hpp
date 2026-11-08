@@ -43,6 +43,16 @@ public:
     bool configureInterface(IONetworkInterface *) override;
     IOOutputQueue *createOutputQueue() override;
     UInt32 outputPacket(mbuf_t,void *) override;
+    // Output pull model (IFEF_TXSTART). IONetworkController::outputStart is
+    // private SPI: the macOS 26.5 SDK shows its vtable slot as the pad
+    // _RESERVEDIONetworkController2 (real IONetworkingFamily 3.4 slot 325 is
+    // outputStart(IONetworkInterface*, unsigned int), see tools/kc-audit.py
+    // --dump IONetworkController). The pad is overridden and its symbol aliased
+    // to outputStart below, so the family calls outputStart with its real ABI.
+    // Without the pull model the ifnet has no TXSTART, dlil attaches no Skywalk
+    // flowswitch and airportd does not treat the interface as Wi-Fi (run 3).
+    void _RESERVEDIONetworkController2() override __asm__("__ZN13AirportAth10k11outputStartEP18IONetworkInterfacej");
+    IOReturn outputStart(IONetworkInterface *,IOOptionBits);
     bool setLinkStatus(UInt32,const IONetworkMedium *activeMedium=0,UInt64 speed=0,OSData *data=0) override;
     IOReturn enable(IONetworkInterface *) override;
     IOReturn disable(IONetworkInterface *) override;

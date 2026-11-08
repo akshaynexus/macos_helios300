@@ -12,3 +12,5 @@ hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOGatedOutputQueue.h
 hdr com.apple.iokit.IONetworkingFamily IOKit/network/IOBasicOutputQueue.h
 hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkData.h
 hdr com.apple.iokit.IONetworkingFamily IOKit/network/IONetworkStats.h
+# Output pull model SPI used only for the native front end's interface (IONetworkingFamily 3.4).
+sym com.apple.iokit.IONetworkingFamily __ZN18IONetworkInterface18signalOutputThreadEj

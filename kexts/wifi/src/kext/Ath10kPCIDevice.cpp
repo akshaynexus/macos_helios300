@@ -231,7 +231,11 @@ void Ath10kPCIDevice::runDeferredProbe()
         _powerManaged = true;
         static IOPMPowerState states[2] = {
             {1,0,0,0,0,0,0,0,0,0,0,0},
-            {1,kIOPMDeviceUsable,0,kIOPMPowerOn,0,0,0,0,0,0,0,0}
+            // outputPowerCharacter kIOPMPowerOn: children (the native front
+            // end's nub and IO80211Controller) require it to reach their "on"
+            // state; with 0 they stayed at state 0 and the IO80211 interface
+            // was powered off (hardware run 3).
+            {1,kIOPMDeviceUsable,kIOPMPowerOn,kIOPMPowerOn,0,0,0,0,0,0,0,0}
         };
         if (registerPowerDriver(this, states, 2) != kIOReturnSuccess) {
             _wmiWorkLoop->runAction(controlWMIRuntime, this, const_cast<char *>("power-registration-failed"));

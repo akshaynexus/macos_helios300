@@ -114,6 +114,23 @@ matches (`IO80211Controller` 0x128, `IO80211InfraProtocol` 0x130, `IOEthernetInt
 `IONetworkController` 0x110, `IOEthernetController` 0x118) and the build now checks them
 (`kKcAuditParentSizes`), against both the Boot and the System collection.
 
+Fourth real boot (26.7.2, nub build): no panic; nub, controller, IO80211 interface and BSD
+interface published, configd registered an IEEE80211 interface, `networksetup` listed
+"Wi-Fi (en1)", WCL went to driver-available after our `DriverAvailable` message. But
+airportd found no Apple80211 interface ("getifaddrs … count[0]") and power stayed
+"Off (forced)". Three causes, fixed:
+- `ifconfig -v en1` said `type: Ethernet`: the Wi-Fi ifnet sub-family was missing because the
+  `IONetworkInterface::setInterfaceSubType(3)` call had been dropped after a mis-mangled
+  audit entry (`__ZN19…` for an 18-letter class); it is back with the real symbol.
+- No `IFEF_TXSTART` and no Skywalk flowswitch agent (the Realtek `en0` and the owner's real
+  Mac have both): the front end used the legacy output queue. It now uses the output pull
+  model like AirportItlwm, `configureOutputPullModel` + `outputStart` (private SPI bound by
+  mangled name; the SDK shows `outputStart`'s vtable slot as `_RESERVEDIONetworkController2`),
+  with the core signalling the interface's output thread when its gated queue drains.
+- The IO80211 interface's power state stayed 0 (`setPowerState powerStateOrdinal[0]`): the
+  core's "on" power state exported no `kIOPMPowerOn` to children, so neither the nub nor the
+  controller could reach state 1. The core now outputs `kIOPMPowerOn`.
+
 Only macOS can verify (not done): that WCL accepts the capability bits and event sequence,
 DHCP over the Skywalk interface, sleep/wake, Settings details. The reconstructed headers are
 now proven against 26.7.2; another point release can still move slots, so rerun the build
