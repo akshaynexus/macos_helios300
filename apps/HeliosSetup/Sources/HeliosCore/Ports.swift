@@ -52,6 +52,23 @@ public protocol FileSystem {
     func remove(_ path: String) throws
     func freeBytes(_ path: String) -> Int64?
     func size(_ path: String) -> Int64?
+    /// mkdtemp under `parent`: a new directory only this user can enter. Returns its path.
+    func makeSecureDirectory(in parent: String, prefix: String) throws -> String
+    /// root:wheel for `path` and everything under it, never following a symlink. Does nothing unless this process is
+    /// root (the root half always is: `_root` refuses to start otherwise).
+    func ownAsRoot(_ path: String) throws
+    /// Mode 0700 for a file about to be run.
+    func makeExecutable(_ path: String) throws
+}
+
+public enum FileSystemError: Error, CustomStringConvertible, Equatable {
+    case failed(String, String)
+
+    public var description: String {
+        switch self {
+        case .failed(let what, let path): return "\(what) failed for \(path)"
+        }
+    }
 }
 
 /// HTTPS GET. Every download is checked against a hash afterwards, so this only has to fetch bytes.
@@ -107,7 +124,7 @@ public struct ProcessRunner: CommandRunner {
     public func stream(_ argv: [String], env: [String: String]?, cwd: String?, output: String?) -> Int32 {
         guard let process = makeProcess(argv, env: env, cwd: cwd) else { return 127 }
         if let output {
-            guard let handle = appendHandle(output) else { return 126 }
+            guard let handle = openLogForAppending(output) else { return 126 }
             process.standardOutput = handle
             process.standardError = handle
         }
@@ -127,14 +144,13 @@ public struct ProcessRunner: CommandRunner {
         return process
     }
 
-    private func appendHandle(_ path: String) -> FileHandle? {
-        if !FileManager.default.fileExists(atPath: path) {
-            _ = FileManager.default.createFile(atPath: path, contents: nil)
-        }
-        guard let handle = FileHandle(forWritingAtPath: path) else { return nil }
-        handle.seekToEndOfFile()
-        return handle
-    }
+}
+
+/// Opens a log for appending, never through a symbolic link: the root half writes these into the user's folder, and a
+/// link planted there must not turn into a root write somewhere else.
+public func openLogForAppending(_ path: String) -> FileHandle? {
+    let fd = open(path, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW, 0o644)
+    return fd < 0 ? nil : FileHandle(fileDescriptor: fd, closeOnDealloc: true)
 }
 
 public struct LocalFileSystem: FileSystem {
@@ -193,6 +209,26 @@ public struct LocalFileSystem: FileSystem {
     public func size(_ path: String) -> Int64? {
         guard let attrs = try? fm.attributesOfItem(atPath: path) else { return nil }
         return (attrs[.size] as? NSNumber)?.int64Value
+    }
+
+    public func makeSecureDirectory(in parent: String, prefix: String) throws -> String {
+        try makeDirectory(parent)
+        var template = Array((parent as NSString).appendingPathComponent("\(prefix).XXXXXX").utf8CString)
+        guard mkdtemp(&template) != nil else { throw FileSystemError.failed("mkdtemp", parent) }
+        return String(cString: template)
+    }
+
+    public func ownAsRoot(_ path: String) throws {
+        guard geteuid() == 0 else { return }
+        var paths = [path]
+        if isDirectory(path) {
+            paths += try fm.subpathsOfDirectory(atPath: path).map { (path as NSString).appendingPathComponent($0) }
+        }
+        for p in paths where lchown(p, 0, 0) != 0 { throw FileSystemError.failed("chown root:wheel", p) }
+    }
+
+    public func makeExecutable(_ path: String) throws {
+        guard chmod(path, 0o700) == 0 else { throw FileSystemError.failed("chmod 0700", path) }
     }
 }
 

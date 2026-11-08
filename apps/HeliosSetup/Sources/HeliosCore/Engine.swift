@@ -27,6 +27,9 @@ public struct Environment {
     public var appPath: String?
     public var systemStatePath = StatePaths.system
     public var releasesDir = StatePaths.releases
+    /// Where root makes its private directories (RootScratch and RootBootstrap).
+    public var rootRunDir = StatePaths.rootRun
+    public var manifestVerifier = ManifestVerifier.release
 
     public init(
         runner: CommandRunner, fs: FileSystem, http: HTTPClient, clock: Clock, privileged: PrivilegedRunner,
@@ -88,15 +91,20 @@ public struct Overview {
     public var build: String
     public var boot: String
     public var scripts: [(String, Bool)]
+    /// Set when the system state exists but does not read (root refuses to change anything until it does).
+    public var stateProblem: String?
 }
 
 public struct UpdateOffer {
     public var candidate: ReleaseCandidate
     public var manifest: Manifest
     public var raw: Data
+    public var signature: Data
     public var diff: ManifestDiff
     public var plan: UpdatePlan
     public var changelog: String
+    /// What the plan was made against; the root side refuses if that is no longer true.
+    public var baseline: UpdateBaseline?
 }
 
 public final class Engine {
@@ -160,6 +168,8 @@ public final class Engine {
         let ctx = probes()
         let items = StepPlanner.items(rel.manifest)
         let system = store.loadSystem()
+        var stateProblem: String?
+        do { _ = try store.readSystem() } catch { stateProblem = "\(error)" }
         let statuses = StepPlanner.statuses(items, ctx: ctx, system: system, user: store.loadUser(), boot: ctx.bootSession)
         let restart = system.changes(inBoot: ctx.bootSession).last(where: \.needsRestart)
             .map { "\($0.item) (\($0.action)) waits for a restart" }
@@ -168,7 +178,7 @@ public final class Engine {
         return Overview(
             release: rel, items: items, statuses: statuses, next: StepPlanner.next(items, statuses: statuses),
             restartPending: restart, bootSource: ctx.bootSource, build: ctx.build, boot: ctx.bootSession,
-            scripts: scripts)
+            scripts: scripts, stateProblem: stateProblem)
     }
 
     // MARK: steps
@@ -194,12 +204,11 @@ public final class Engine {
         {
             throw EngineError.blocked(why)
         }
-        var argv = [env.cliPath, "_root", "--user", env.user.name, "--home", env.user.home, "step", id, action, "--release", dir]
-        if let src = user.efiSource { argv += ["--efi-source", src] }
+        var command = ["step", id, action, "--release", dir]
+        if let src = user.efiSource { command += ["--efi-source", src] }
         let rc: Int32
         if Installer.needsRoot(item, action: action) {
-            rc = env.privileged.runAsRoot(argv, prompt: prompt(action, item.title), output: output)
-            if rc == privilegedCancelled { throw EngineError.cancelled }
+            rc = try runRoot(command, prompt: prompt(action, item.title), output: output)
         } else {
             rc = RootOps(env: env).step(id, action, releaseDir: dir, efiSource: user.efiSource, output: output)
         }
@@ -208,6 +217,23 @@ public final class Engine {
         user.runs[id] = RunRecord(action: action, status: rc, bootSession: boot, date: now, log: output ?? "terminal")
         if action == "check" { user.checks[id] = CheckRecord(bootSession: boot, date: now, status: rc, manifestSha256: sha) }
         try? store.saveUser(user)
+        return rc
+    }
+
+    /// `helios-setup _root …` through the bootstrap, so root runs a private, checked copy of this binary.
+    func rootArgv(_ command: [String], output: String?) throws -> [String] {
+        guard let sha = Hashing.sha256(file: env.cliPath, fs: env.fs) else {
+            throw EngineError.failed("\(env.cliPath) cannot be read")
+        }
+        let root = ["_root", "--user", env.user.name, "--home", env.user.home, "--resources", env.resourcesDir]
+        return RootBootstrap.argv(
+            cli: env.cliPath, sha256: sha, runDir: env.rootRunDir,
+            arguments: root + (output.map { ["--output", $0] } ?? []) + command)
+    }
+
+    func runRoot(_ command: [String], prompt: String, output: String?) throws -> Int32 {
+        let rc = env.privileged.runAsRoot(try rootArgv(command, output: output), prompt: prompt, output: output)
+        if rc == privilegedCancelled { throw EngineError.cancelled }
         return rc
     }
 
@@ -230,30 +256,41 @@ public final class Engine {
 
     // MARK: updates
 
-    var updater: Updater { Updater(http: env.http, fs: env.fs, unzipper: env.unzipper) }
+    var updater: Updater { Updater(http: env.http, fs: env.fs, unzipper: env.unzipper, verifier: env.manifestVerifier) }
 
-    /// The installed release's manifest (the baseline for a diff), else the one the app works from.
-    public func installedManifest() -> (Manifest?, String?) {
+    /// What an update is measured against: the installed release, else (nothing recorded yet) the real release the app
+    /// works from, which the root side then records as the installed one. Root and user compute the same thing.
+    public func updateBaseline() -> UpdateBaseline? {
         if let i = store.loadSystem().installed {
-            let path = ((env.releasesDir as NSString).appendingPathComponent(i.tag) as NSString).appendingPathComponent(
-                "manifest.json")
-            if let d = try? env.fs.read(path), let m = try? Manifest.decode(d) { return (m, i.tag) }
+            let dir = (env.releasesDir as NSString).appendingPathComponent(i.tag)
+            let path = (dir as NSString).appendingPathComponent(ManifestVerifier.manifestFile)
+            if let d = try? env.fs.read(path), let m = try? Manifest.decode(d) {
+                return UpdateBaseline(manifest: m, tag: i.tag, sha256: Hashing.sha256(d), dir: dir)
+            }
+            return nil
         }
         let rel = loadRelease()
-        return rel.dir == nil ? (nil, nil) : (rel.manifest, rel.manifest.release?.tag)
+        guard let dir = rel.dir, let sha = rel.sha256, rel.manifest.release?.dryRun != true else { return nil }
+        return UpdateBaseline(manifest: rel.manifest, tag: rel.manifest.release?.tag, sha256: sha, dir: dir)
     }
 
     /// Looks for a newer release; nil when there is none. Pre-releases follow the installed release's channel
-    /// unless the user chose (every release so far is a pre-release).
+    /// unless the user chose (every release so far is a pre-release). A newer release must be signed and must cover the
+    /// running macOS before it is planned or offered.
     public func checkForUpdates(includePrereleases: Bool? = nil) throws -> UpdateOffer? {
-        let (old, tag) = installedManifest()
+        let baseline = updateBaseline()
+        let old = baseline?.manifest
+        let tag = baseline?.tag
         let pre = includePrereleases ?? store.loadUser().includePrereleases ?? (old?.release?.preRelease ?? true)
         guard let c = ReleaseList.newer(try updater.releases(), than: tag, includePrereleases: pre) else { return nil }
-        let (m, raw) = try updater.manifest(tag: c.tag)
+        let (m, raw, signature) = try updater.manifest(tag: c.tag)
+        let darwin = ProbeContext(runner: env.runner, fs: env.fs).darwin
+        guard ManifestCheck.covers(m, darwin: darwin) else { throw UpdateError.notForThisMacOS(c.tag, darwin) }
         let diff = ManifestDiff.between(old, m)
         return UpdateOffer(
-            candidate: c, manifest: m, raw: raw, diff: diff, plan: UpdatePlanner.plan(old: old, new: m, diff: diff),
-            changelog: diff.changelog(notes: c.notes, from: tag, to: c.tag))
+            candidate: c, manifest: m, raw: raw, signature: signature, diff: diff,
+            plan: UpdatePlanner.plan(old: old, new: m, diff: diff),
+            changelog: diff.changelog(notes: c.notes, from: tag, to: c.tag), baseline: baseline)
     }
 
     public func downloadsDir(_ tag: String) -> String {
@@ -261,37 +298,69 @@ public final class Engine {
             .appendingPathComponent(tag)
     }
 
-    /// Downloads and verifies the whole release (unchanged files are copied from the installed one).
+    /// Downloads and verifies the whole release (unchanged files are copied from the installed one). A complete,
+    /// verified copy from an earlier run of the same release is used as it is.
     public func download(_ offer: UpdateOffer) throws -> StagedRelease {
-        let prev = store.loadSystem().installed?.releaseDir ?? loadRelease().dir
-        return try updater.stage(offer.manifest, raw: offer.raw, into: downloadsDir(offer.candidate.tag), previousDir: prev)
+        let dir = downloadsDir(offer.candidate.tag)
+        let manifestPath = (dir as NSString).appendingPathComponent(ManifestVerifier.manifestFile)
+        if (try? env.fs.read(manifestPath)) == offer.raw, (try? updater.verifyStaged(dir, manifest: offer.manifest)) != nil {
+            try env.fs.write(offer.signature, to: (dir as NSString).appendingPathComponent(ManifestVerifier.signatureFile))
+            return StagedRelease(dir: dir, manifest: offer.manifest, manifestSha256: Hashing.sha256(offer.raw))
+        }
+        let prev = offer.baseline?.dir
+        return try updater.stage(offer.manifest, raw: offer.raw, signature: offer.signature, into: dir, previousDir: prev)
     }
 
     /// Applies the next batch of a staged update as root (one driver unit per restart).
     @discardableResult
-    public func applyNextUpdate(_ staged: StagedRelease, output: String? = nil) throws -> Int32 {
-        var argv = [
-            env.cliPath, "_root", "--user", env.user.name, "--home", env.user.home, "update-apply",
-            "--staged", staged.dir, "--sha", staged.manifestSha256,
+    public func applyNextUpdate(_ staged: StagedRelease, baseline: UpdateBaseline?, output: String? = nil) throws -> Int32 {
+        var command = [
+            "update-apply", "--staged", staged.dir, "--sha", staged.manifestSha256, "--baseline-sha", baseline?.sha256 ?? "none",
         ]
-        if let app = env.appPath { argv += ["--app", app] }
-        let rc = env.privileged.runAsRoot(
-            argv,
+        if let dir = baseline?.dir { command += ["--baseline-dir", dir] }
+        if let app = env.appPath { command += ["--app", app] }
+        return try runRoot(
+            command,
             prompt: "Helios 300 Setup needs an administrator password to apply "
                 + "macos_helios300 \(staged.manifest.release?.tag ?? "")", output: output)
-        if rc == privilegedCancelled { throw EngineError.cancelled }
-        return rc
     }
 
     @discardableResult
     public func rollbackLast(output: String? = nil) throws -> Int32 {
-        let argv = [env.cliPath, "_root", "--user", env.user.name, "--home", env.user.home, "rollback"]
-        let rc = env.privileged.runAsRoot(
-            argv,
-            prompt: "Helios 300 Setup needs an administrator password to roll back "
-                + "the last update", output: output)
-        if rc == privilegedCancelled { throw EngineError.cancelled }
-        return rc
+        try runRoot(
+            ["rollback"],
+            prompt: "Helios 300 Setup needs an administrator password to roll back the last update", output: output)
+    }
+
+    /// After a restart the resume agent reopens the app with --resume: an "Update all" still going is then continued.
+    public func shouldResumeUpdate(arguments: [String]) -> Bool {
+        arguments.contains("--resume") && store.loadUser().resumeAfterLogin && store.loadSystem().pending != nil
+    }
+
+    /// Starts the app bundle again; the caller quits. False when it could not be started.
+    @discardableResult
+    public func relaunch(at path: String? = nil) -> Bool {
+        guard let app = path ?? env.appPath else { return false }
+        return env.runner.capture([Tool.open, "-n", app]).ok
+    }
+
+    /// Copies the app to `destination`: staged and verified next to it, so a failed copy leaves the old app in place.
+    public func installApp(from source: String, to destination: String) throws {
+        let efi = EFIManager(runner: env.runner, fs: env.fs, clock: env.clock)
+        let swap = StagedSwap(fs: env.fs, copy: efi.copyTree, verify: efi.verify)
+        try swap.stage(source, target: destination, what: "the app")
+        let backup = env.fs.exists(destination) ? swap.nextBackup(destination) : nil
+        do {
+            try swap.commit(source, target: destination, backup: backup, what: "the app")
+        } catch {
+            if let backup, env.fs.exists(backup) {
+                try? env.fs.remove(destination)
+                try? env.fs.move(backup, to: destination)
+            }
+            try? env.fs.remove(StagedSwap.staged(destination))
+            throw error
+        }
+        if let backup { try env.fs.remove(backup) }
     }
 
     /// Optional: newer third-party kexts from Dortania's build repo (only when the user turned it on).
@@ -311,17 +380,11 @@ public final class Engine {
         }
         let zip = (downloadsDir("third-party") as NSString).appendingPathComponent("\(u.product)-\(u.available).zip")
         try env.fs.write(data, to: zip)
-        let argv =
-            [
-                env.cliPath, "_root", "--user", env.user.name, "--home", env.user.home, "thirdparty-apply",
-                "--product", u.product, "--zip", zip, "--sha", u.sha256,
-            ] + u.bundles.flatMap { ["--bundle", $0.bundle] }
-        let rc = env.privileged.runAsRoot(
-            argv,
-            prompt: "Helios 300 Setup needs an administrator password to update "
-                + "\(u.product) on the EFI partition", output: output)
-        if rc == privilegedCancelled { throw EngineError.cancelled }
-        return rc
+        return try runRoot(
+            ["thirdparty-apply", "--product", u.product, "--zip", zip, "--sha", u.sha256]
+                + u.bundles.flatMap { ["--bundle", $0.bundle] },
+            prompt: "Helios 300 Setup needs an administrator password to update \(u.product) on the EFI partition", output: output
+        )
     }
 
     // MARK: GPU apps
@@ -339,16 +402,10 @@ public final class Engine {
     public func setGPU(_ app: AppEntry, use: Bool, output: String? = nil) throws -> Int32 {
         let rel = loadRelease()
         guard let dir = rel.dir else { throw EngineError.noRelease(rel.problem ?? "") }
-        let argv = [
-            env.cliPath, "_root", "--user", env.user.name, "--home", env.user.home, "gpu-apps",
-            use ? "add" : "remove", app.path, "--release", dir,
-        ]
-        let rc = env.privileged.runAsRoot(
-            argv,
+        return try runRoot(
+            ["gpu-apps", use ? "add" : "remove", app.path, "--release", dir],
             prompt: "Helios 300 Setup needs an administrator password to "
                 + "\(use ? "give" : "take") the GTX 1060 \(use ? "to" : "from") \(app.name)", output: output)
-        if rc == privilegedCancelled { throw EngineError.cancelled }
-        return rc
     }
 
     /// gpu-apps.sh run as the user: one launch on the GTX 1060 without changing the list.

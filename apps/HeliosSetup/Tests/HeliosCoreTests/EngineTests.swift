@@ -6,19 +6,22 @@ import XCTest
 
 @testable import HeliosCore
 
-final class EngineTests: XCTestCase {
+/// A fake Mac with a real file system under a temp directory, shared by the tests that drive both halves.
+class RootFixture: XCTestCase {
     var t = ""
     var runner = FakeRunner()
     var privileged = FakePrivileged()
     var http = FakeHTTP()
 
-    func env() -> Environment {
+    func env(fs: FileSystem = LocalFileSystem(), appPath: String? = nil) -> Environment {
         var e = Environment(
-            runner: runner, fs: LocalFileSystem(), http: http, clock: FakeClock(now: Date(timeIntervalSince1970: 1_762_560_000)),
+            runner: runner, fs: fs, http: http, clock: FakeClock(now: Date(timeIntervalSince1970: 1_762_560_000)),
             privileged: privileged, unzipper: CommandUnzipper(), user: UserContext(name: "alex", home: "\(t)/home"),
-            resourcesDir: "\(t)/res", cliPath: "/App/Contents/MacOS/helios-setup", appPath: nil)
+            resourcesDir: "\(t)/res", cliPath: "\(t)/app/helios-setup", appPath: appPath)
         e.systemStatePath = "\(t)/sys/state.plist"
         e.releasesDir = "\(t)/sys/releases"
+        e.rootRunDir = "\(t)/rootrun"
+        e.manifestVerifier = testVerifier
         return e
     }
 
@@ -28,6 +31,9 @@ final class EngineTests: XCTestCase {
         privileged = FakePrivileged()
         http = FakeHTTP()
         runner.set("/usr/sbin/sysctl -n kern.bootsessionuuid", "BOOT-A\n")
+        runner.set("/usr/sbin/sysctl -n kern.osrelease", "25.6.0\n")
+        runner.set("/usr/sbin/diskutil info -plist /", String(decoding: fixtureData("diskutil-info-root.plist"), as: UTF8.self))
+        write("the cli binary", "\(t)/app/helios-setup")
         runner.set(
             "/usr/sbin/diskutil list -plist internal physical",
             String(decoding: fixtureData("diskutil-list-internal.plist"), as: UTF8.self))
@@ -52,77 +58,8 @@ final class EngineTests: XCTestCase {
         return "\(t)/rel"
     }
 
-    // MARK: steps
-
-    func testRootSideRecordsTheChangeFirstAndRefusesASecondDriverChange() throws {
-        let rel = try releaseFolder()
-        let ops = RootOps(env: env())
-        XCTAssertEqual(ops.step("gpu-fb", "install", releaseDir: rel, efiSource: nil, output: nil), 0)
-        let run = try XCTUnwrap(runner.streamed.last)
-        XCTAssertEqual(run.argv, ["/bin/bash", "\(t)/res/install-gpu.sh"])
-        XCTAssertEqual(run.env?["MODE"], "install")
-        XCTAssertEqual(run.env?["ONLY"], "PG106FB")
-        XCTAssertEqual(run.cwd, rel)
-        let s = env().store.loadSystem()
-        XCTAssertEqual(s.changes.map(\.item), ["gpu-fb"])
-        XCTAssertNil(s.installed, "a dry-run manifest is never adopted as the installed release")
-        let before = runner.streamed.count
-        XCTAssertEqual(ops.step("gpu-accel", "install", releaseDir: rel, efiSource: nil, output: nil), 1)
-        XCTAssertEqual(runner.streamed.count, before, "refused before anything ran")
-        XCTAssertEqual(ops.step("gpu-accel", "check", releaseDir: rel, efiSource: nil, output: nil), 0, "a dry run is fine")
-    }
-
-    func testRootSideRefusesAScriptThatIsNotTheRelease() throws {
-        let rel = try releaseFolder()
-        write("#!/bin/bash\n# changed\n", "\(t)/res/install-gpu.sh")
-        XCTAssertEqual(RootOps(env: env()).step("gpu-fb", "check", releaseDir: rel, efiSource: nil, output: nil), 1)
-        XCTAssertTrue(runner.streamed.isEmpty)
-    }
-
-    func testUserSideNeedsTheDryRunThenGoesThroughThePrivilegedRunner() throws {
-        let rel = try releaseFolder()
-        let engine = Engine(env: env())
-        XCTAssertThrowsError(try engine.perform("gpu-fb", "install", explicit: rel)) { e in
-            guard case .blocked(let why) = e as? EngineError else { return XCTFail("\(e)") }
-            XCTAssertTrue(why.contains("Check"))
-        }
-        XCTAssertTrue(privileged.calls.isEmpty)
-        XCTAssertEqual(try engine.perform("gpu-fb", "check", explicit: rel), 0)
-        XCTAssertEqual(privileged.calls.last?[1...3], ["_root", "--user", "alex"])
-        XCTAssertEqual(try engine.perform("gpu-fb", "install", explicit: rel), 0)
-        let argv = try XCTUnwrap(privileged.calls.last)
-        XCTAssertEqual(argv.first, "/App/Contents/MacOS/helios-setup")
-        XCTAssertTrue(argv.contains("install") && argv.contains("gpu-fb") && argv.contains(rel))
-        let u = env().store.loadUser()
-        XCTAssertEqual(u.runs["gpu-fb"]?.action, "install")
-        XCTAssertEqual(u.checks["gpu-fb"]?.status, 0)
-    }
-
-    func testCancelledPromptIsReported() throws {
-        let rel = try releaseFolder()
-        privileged.status = privilegedCancelled
-        XCTAssertThrowsError(try Engine(env: env()).perform("gpu-fb", "check", explicit: rel)) { e in
-            XCTAssertEqual(e as? EngineError, .cancelled)
-        }
-    }
-
-    func testOverviewWithoutAReleaseIsReadOnly() {
-        write(
-            String(
-                decoding: (try? Data(contentsOf: repoRoot.appendingPathComponent("tools/release/spec.json"))) ?? Data(),
-                as: UTF8.self),
-            "\(t)/res/spec.json")
-        let o = Engine(env: env()).overview()
-        XCTAssertFalse(o.release.canAct)
-        XCTAssertEqual(o.release.source, .embeddedSpec)
-        XCTAssertEqual(o.items.first?.id, "opencore")
-        XCTAssertThrowsError(try Engine(env: env()).perform("gpu-fb", "check"))
-    }
-
-    // MARK: updates
-
     /// A real (non dry-run) one-kext release, Foo.kext, OpenCore-injected, its zip and manifest served by FakeHTTP.
-    func fooRelease(version: String, payload: String) throws -> (Manifest, Data) {
+    func fooRelease(version: String, payload: String, signature: ((Data) -> Data)? = nil) throws -> (Manifest, Data) {
         let src = "\(t)/build-\(version)"
         write("<plist/>", "\(src)/Foo.kext/Contents/Info.plist")
         write(payload, "\(src)/Foo.kext/Contents/MacOS/Foo")
@@ -151,6 +88,7 @@ final class EngineTests: XCTestCase {
         let raw = try JSONEncoder().encode(m)
         http.pages[a.url ?? ""] = zip
         http.pages[ManifestCheck.urlPrefix + "v\(version)/manifest.json"] = raw
+        http.pages[ManifestCheck.urlPrefix + "v\(version)/manifest.json.sig"] = (signature ?? testSign)(raw)
         return (m, raw)
     }
 
@@ -159,6 +97,89 @@ final class EngineTests: XCTestCase {
         write("foo-old", "\(t)/esp/EFI/OC/Kexts/Foo.kext/Contents/MacOS/Foo")
         write("<plist/>", "\(t)/esp/EFI/OC/Kexts/Foo.kext/Contents/Info.plist")
     }
+
+    func read(_ path: String) -> String { (try? String(contentsOfFile: path, encoding: .utf8)) ?? "<MISSING>" }
+
+    func fooOnESP() -> String { read("\(t)/esp/EFI/OC/Kexts/Foo.kext/Contents/MacOS/Foo") }
+}
+
+final class EngineTests: RootFixture {
+    // MARK: steps
+
+    func testRootSideRecordsTheChangeFirstAndRefusesASecondDriverChange() throws {
+        let rel = try releaseFolder()
+        let ops = RootOps(env: env())
+        XCTAssertEqual(ops.step("gpu-fb", "install", releaseDir: rel, efiSource: nil, output: nil), 0)
+        let run = try XCTUnwrap(runner.streamed.last)
+        XCTAssertEqual(run.argv.first, "/bin/bash")
+        XCTAssertEqual(run.argv.count, 2)
+        XCTAssertTrue(run.argv[1].hasPrefix("\(t)/rootrun/helios-setup."), "a root-owned copy, not \(run.argv[1])")
+        XCTAssertTrue(run.argv[1].hasSuffix("/install-gpu.sh"))
+        XCTAssertEqual(run.env?["MODE"], "install")
+        XCTAssertEqual(run.env?["ONLY"], "PG106FB")
+        XCTAssertEqual(run.cwd, rel)
+        let s = env().store.loadSystem()
+        XCTAssertEqual(s.changes.map(\.item), ["gpu-fb"])
+        XCTAssertNil(s.installed, "a dry-run manifest is never adopted as the installed release")
+        let before = runner.streamed.count
+        XCTAssertEqual(ops.step("gpu-accel", "install", releaseDir: rel, efiSource: nil, output: nil), 1)
+        XCTAssertEqual(runner.streamed.count, before, "refused before anything ran")
+        XCTAssertEqual(ops.step("gpu-accel", "check", releaseDir: rel, efiSource: nil, output: nil), 0, "a dry run is fine")
+    }
+
+    func testRootSideRefusesAScriptThatIsNotTheRelease() throws {
+        let rel = try releaseFolder()
+        write("#!/bin/bash\n# changed\n", "\(t)/res/install-gpu.sh")
+        XCTAssertEqual(RootOps(env: env()).step("gpu-fb", "check", releaseDir: rel, efiSource: nil, output: nil), 1)
+        XCTAssertTrue(runner.streamed.isEmpty)
+    }
+
+    func testUserSideNeedsTheDryRunThenGoesThroughThePrivilegedRunner() throws {
+        let rel = try releaseFolder()
+        let engine = Engine(env: env())
+        XCTAssertThrowsError(try engine.perform("gpu-fb", "install", explicit: rel)) { e in
+            guard case .blocked(let why) = e as? EngineError else { return XCTFail("\(e)") }
+            XCTAssertTrue(why.contains("Check"))
+        }
+        XCTAssertTrue(privileged.calls.isEmpty)
+        XCTAssertEqual(try engine.perform("gpu-fb", "check", explicit: rel), 0)
+        XCTAssertEqual(try engine.perform("gpu-fb", "install", explicit: rel), 0)
+        let argv = try XCTUnwrap(privileged.calls.last)
+        XCTAssertEqual(Array(argv.prefix(3)), ["/bin/sh", "-p", "-c"])
+        XCTAssertEqual(
+            Array(argv.dropFirst(4).prefix(4)),
+            ["helios-setup-bootstrap", "\(t)/app/helios-setup", Hashing.sha256(Data("the cli binary".utf8)), "\(t)/rootrun"])
+        XCTAssertEqual(Array(argv.dropFirst(8).prefix(3)), ["_root", "--user", "alex"])
+        XCTAssertTrue(argv.contains("install") && argv.contains("gpu-fb") && argv.contains(rel))
+        XCTAssertEqual(
+            argv[(argv.firstIndex(of: "--resources") ?? 0) + 1], "\(t)/res", "the root copy still finds the app's scripts")
+        let u = env().store.loadUser()
+        XCTAssertEqual(u.runs["gpu-fb"]?.action, "install")
+        XCTAssertEqual(u.checks["gpu-fb"]?.status, 0)
+    }
+
+    func testCancelledPromptIsReported() throws {
+        let rel = try releaseFolder()
+        privileged.status = privilegedCancelled
+        XCTAssertThrowsError(try Engine(env: env()).perform("gpu-fb", "check", explicit: rel)) { e in
+            XCTAssertEqual(e as? EngineError, .cancelled)
+        }
+    }
+
+    func testOverviewWithoutAReleaseIsReadOnly() {
+        write(
+            String(
+                decoding: (try? Data(contentsOf: repoRoot.appendingPathComponent("tools/release/spec.json"))) ?? Data(),
+                as: UTF8.self),
+            "\(t)/res/spec.json")
+        let o = Engine(env: env()).overview()
+        XCTAssertFalse(o.release.canAct)
+        XCTAssertEqual(o.release.source, .embeddedSpec)
+        XCTAssertEqual(o.items.first?.id, "opencore")
+        XCTAssertThrowsError(try Engine(env: env()).perform("gpu-fb", "check"))
+    }
+
+    // MARK: updates
 
     func testUpdateDownloadApplyAndRollBack() throws {
         espWithOldFoo()
@@ -174,11 +195,14 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(staged.manifestSha256, Hashing.sha256(raw))
 
         let ops = RootOps(env: env())
-        XCTAssertEqual(ops.updateApply(staged: staged.dir, sha: staged.manifestSha256, appPath: nil, output: nil), 0)
+        XCTAssertEqual(
+            ops.updateApply(
+                staged: staged.dir, sha: staged.manifestSha256, baselineSha: "none", baselineDir: nil, appPath: nil, output: nil),
+            0)
         XCTAssertEqual(
             try String(contentsOfFile: "\(t)/esp/EFI/OC/Kexts/Foo.kext/Contents/MacOS/Foo", encoding: .utf8), "foo-new")
         XCTAssertEqual(
-            try String(contentsOfFile: "\(t)/esp/EFI/OC/Kexts/Foo.kext.prev/Contents/MacOS/Foo", encoding: .utf8), "foo-old")
+            try String(contentsOfFile: "\(t)/esp/EFI/OC/Kexts/Foo.kext.prev-1/Contents/MacOS/Foo", encoding: .utf8), "foo-old")
         var s = env().store.loadSystem()
         XCTAssertEqual(s.installed?.tag, "v0.1.2")
         XCTAssertEqual(s.installed?.manifestSha256, Hashing.sha256(raw))
@@ -187,7 +211,10 @@ final class EngineTests: XCTestCase {
             FileManager.default.fileExists(atPath: "\(t)/sys/releases/v0.1.2/Foo.kext.zip"), "kept root-owned for rollback")
 
         XCTAssertEqual(
-            ops.updateApply(staged: staged.dir, sha: "0" + staged.manifestSha256.dropFirst(), appPath: nil, output: nil), 1,
+            ops.updateApply(
+                staged: staged.dir, sha: "0" + staged.manifestSha256.dropFirst(), baselineSha: "none", baselineDir: nil,
+                appPath: nil,
+                output: nil), 1,
             "a manifest that is not the checked one is refused")
 
         XCTAssertEqual(ops.rollback(output: nil), 0)
@@ -208,9 +235,11 @@ final class EngineTests: XCTestCase {
                 item: "gpu-fb", action: "install", bootSession: "BOOT-A", date: Date(), driverChange: true, needsRestart: true))
         try env().store.saveSystem(s)
         let staged = try Updater(http: http, fs: LocalFileSystem(), unzipper: CommandUnzipper())
-            .stage(m, raw: raw, into: "\(t)/staged", previousDir: nil)
+            .stage(m, raw: raw, signature: testSign(raw), into: "\(t)/staged", previousDir: nil)
         XCTAssertEqual(
-            RootOps(env: env()).updateApply(staged: staged.dir, sha: staged.manifestSha256, appPath: nil, output: nil), 1)
+            RootOps(env: env()).updateApply(
+                staged: staged.dir, sha: staged.manifestSha256, baselineSha: "none", baselineDir: nil, appPath: nil, output: nil),
+            1)
         XCTAssertEqual(
             try String(contentsOfFile: "\(t)/esp/EFI/OC/Kexts/Foo.kext/Contents/MacOS/Foo", encoding: .utf8), "foo-old")
     }

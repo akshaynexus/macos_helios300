@@ -112,31 +112,24 @@ final class InstallerTests: XCTestCase {
     }
 
     func testOsascriptGetsArgumentsNotShellText() {
-        let args = OsascriptRunner.osascriptArguments(
-            ["/App/helios-setup", "_root", "it's; rm -rf /"], prompt: "p", log: "/tmp/l", rcFile: "/tmp/r")
+        let args = OsascriptRunner.osascriptArguments(["/App/helios-setup", "_root", "it's; rm -rf /"], prompt: "p")
         XCTAssertEqual(args.first, "/usr/bin/osascript")
-        XCTAssertEqual(Array(args.suffix(6)), ["p", "/tmp/l", "/tmp/r", "/App/helios-setup", "_root", "it's; rm -rf /"])
+        XCTAssertEqual(Array(args.suffix(4)), ["p", "/App/helios-setup", "_root", "it's; rm -rf /"])
         XCTAssertTrue(args.contains { $0.contains("quoted form of") })
         XCTAssertTrue(args.contains { $0.contains("</dev/null") })
+        XCTAssertFalse(args.contains { $0.contains(">>") }, "the root shell writes no file of its own")
     }
 
     func testOsascriptRunnerReadsTheExitStatusOrReportsCancel() {
         let t = tempDir(self)
         let r = FakeRunner()
-        r.fallback = { argv in
-            if let rc = argv.firstIndex(of: "/tmp/never") { _ = rc }
-            return CommandResult(status: 1, stderr: "User canceled. (-128)")
-        }
-        XCTAssertEqual(
-            OsascriptRunner(runner: r, fs: LocalFileSystem(), tempDir: t).runAsRoot(["/bin/true"], prompt: "p", output: nil),
-            privilegedCancelled)
-        r.fallback = { argv in
-            let rcFile = argv[argv.count - 2]
-            write("3\n", rcFile)
-            return CommandResult(status: 0)
-        }
-        XCTAssertEqual(
-            OsascriptRunner(runner: r, fs: LocalFileSystem(), tempDir: t).runAsRoot(["/bin/false"], prompt: "p", output: nil), 3)
+        r.fallback = { _ in CommandResult(status: 1, stderr: "User canceled. (-128)") }
+        XCTAssertEqual(OsascriptRunner(runner: r).runAsRoot(["/bin/true"], prompt: "p", output: nil), privilegedCancelled)
+        r.fallback = { _ in CommandResult(status: 0, stdout: "bootstrap says\r3\r") }
+        XCTAssertEqual(OsascriptRunner(runner: r).runAsRoot(["/bin/false"], prompt: "p", output: "\(t)/log"), 3)
+        XCTAssertEqual(try? String(contentsOfFile: "\(t)/log", encoding: .utf8), "bootstrap says\n", "shown to the user")
+        r.fallback = { _ in CommandResult(status: 0, stdout: "") }
+        XCTAssertEqual(OsascriptRunner(runner: r).runAsRoot(["/bin/false"], prompt: "p", output: nil), privilegedCancelled)
     }
 }
 

@@ -254,10 +254,13 @@ public struct Forbidden: Codable, Equatable {
     public var kexts: [String]?
     public var bootArgs: [String]?
     public var acpi: [String]?
+    /// PCI path -> property names that must not be set on it (`disable-gpu` on the GP106).
+    public var deviceProperties: [String: [String]]?
 
     enum CodingKeys: String, CodingKey {
         case kexts, acpi
         case bootArgs = "boot_args"
+        case deviceProperties = "device_properties"
     }
 }
 

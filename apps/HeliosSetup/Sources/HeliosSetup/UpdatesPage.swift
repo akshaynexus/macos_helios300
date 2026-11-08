@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
 // Updates, Sparkle-style: check, read the release notes and the per-file changes, then Install (the next batch),
-// Update all (batch after batch, a restart between driver changes, the app reopening after each), Remind me later
-// or Skip this version. Nothing installs without a click. "Roll back last update" undoes one applied unit.
+// Update all (batch after batch, a restart between driver changes, the app reopening after each and asking before the
+// next part), Remind me later or Skip this version. Nothing installs without a click. "Roll back last update" undoes one applied unit.
 #if canImport(AppKit)
     import AppKit
     import HeliosCore
@@ -54,7 +54,7 @@
                     [
                         rollback,
                         UI.secondary(
-                            "Restores the .prev kexts and the config.plist backup of the "
+                            "Restores the kept kexts and the config.plist of the "
                                 + "last applied update. If macOS does not start: Shift+Enter in "
                                 + "OpenCore (safe mode), or F12 and the stick; Help has the details."),
                     ],
@@ -93,7 +93,7 @@
 
         // MARK: check / download / apply
 
-        func checkNow() {
+        func checkNow(then: (() -> Void)? = nil) {
             stateLine.stringValue = "Checking GitHub releases…"
             let pre = app.store.loadUser().includePrereleases
             background(
@@ -120,7 +120,22 @@
                     }
                     self.renderActions()
                     if self.app.store.loadUser().thirdPartyUpdates { self.checkThirdParty() }
+                    then?()
                 })
+        }
+
+        /// The app reopened after a restart during "Update all": asks before the next part (it needs the password anyway).
+        func resumeUpdate() {
+            checkNow { [weak self] in
+                guard let self, let o = self.offer else { return }
+                UI.alert(
+                    "Continue updating to \(o.candidate.tag)?",
+                    "The previous part is applied. The next one asks for the administrator password.",
+                    buttons: ["Continue", "Later"], in: self.app.window
+                ) { [weak self] c in
+                    if c == 0 { self?.apply(all: true) }
+                }
+            }
         }
 
         private func renderActions() {
@@ -143,41 +158,54 @@
         }
 
         private func apply(all: Bool) {
-            guard let o = offer else { return }
+            guard let o = offer, app.beginWork(in: "the update") else { return }
             let log = logFile("update")
             let t = LogTail(path: log, view: logText)
             t.start()
             stateLine.stringValue = "Downloading and verifying every file of \(o.candidate.tag)…"
+            let appliedBefore = Set(app.store.loadSystem().pending?.applied ?? [])
             background(
                 { () -> Result<Int32, Error> in
                     Result {
                         let s = try self.staged.flatMap { $0.manifest == o.manifest ? $0 : nil } ?? self.app.engine.download(o)
                         self.staged = s
-                        return try self.app.engine.applyNextUpdate(s, output: log)
+                        return try self.app.engine.applyNextUpdate(s, baseline: o.baseline, output: log)
                     }
                 },
                 then: { r in
                     t.stop()
+                    self.app.endWork()
                     switch r {
                     case .success(0):
-                        self.editUser { $0.resumeAfterLogin = all }
-                        let pending = self.app.store.loadSystem().pending
-                        if pending == nil {
-                            self.stateLine.stringValue = "\(o.candidate.tag) is installed."
-                        }
-                        if o.plan.units.contains(where: \.requiresRestart) {
-                            self.app.offerRestart(
-                                "Part of \(o.candidate.tag) is applied; a restart loads it.\(pending != nil && all ? " After the restart the app offers the next part." : "")"
-                            )
-                        }
+                        self.finishedApply(o, all: all, appliedBefore: appliedBefore)
                     case .success(let rc):
                         self.stateLine.stringValue =
                             "The update stopped (exit \(rc)): see the log. What was applied can be rolled back."
+                        UI.alert("The update stopped", "Exit \(rc). The log shows where.", style: .warning, in: self.app.window)
                     case .failure(let e):
                         self.stateLine.stringValue = "\(e)"
+                        UI.alert("The update did not run", "\(e)", style: .warning, in: self.app.window)
                     }
                     self.app.refreshAll()
                 })
+        }
+
+        private func finishedApply(_ o: UpdateOffer, all: Bool, appliedBefore: Set<String>) {
+            let pending = app.store.loadSystem().pending
+            editUser { $0.resumeAfterLogin = all && pending != nil }
+            if pending == nil { stateLine.stringValue = "\(o.candidate.tag) is installed." }
+            let applied = Set(pending?.applied ?? o.plan.units.map(\.id)).subtracting(appliedBefore)
+            let units = o.plan.units.filter { applied.contains($0.id) }
+            if units.contains(where: \.requiresRestart) {
+                let next = pending != nil && all ? " After the restart the app asks before applying the next part." : ""
+                app.offerRestart("Part of \(o.candidate.tag) is applied; a restart loads it.\(next)")
+            } else if units.contains(where: { $0.kind == .app }) {
+                UI.alert(
+                    "The app was updated", "Reopen it to use the new version.", buttons: ["Reopen now", "Later"], in: app.window
+                ) { [weak self] c in
+                    if c == 0, self?.app.engine.relaunch() == true { NSApp.terminate(nil) }
+                }
+            }
         }
 
         private func confirmRollback() {
@@ -189,7 +217,7 @@
                 "Roll back \(last.unit)?", "Puts back what \(last.toTag) replaced (applied \(last.date)). A restart follows.",
                 buttons: ["Roll back", "Cancel"], style: .warning, in: app.window
             ) { [weak self] c in
-                guard c == 0, let self else { return }
+                guard c == 0, let self, self.app.beginWork(in: "the rollback") else { return }
                 let log = self.logFile("rollback")
                 let t = LogTail(path: log, view: self.logText)
                 t.start()
@@ -197,7 +225,15 @@
                     { Result { try self.app.engine.rollbackLast(output: log) } },
                     then: { r in
                         t.stop()
-                        if case .success(0) = r { self.app.offerRestart("Rolled back \(last.unit).") }
+                        self.app.endWork()
+                        switch r {
+                        case .success(0): self.app.offerRestart("Rolled back \(last.unit).")
+                        case .success(let rc):
+                            UI.alert(
+                                "The rollback stopped", "Exit \(rc). The log shows why.", style: .warning, in: self.app.window)
+                        case .failure(let e):
+                            UI.alert("The rollback did not run", "\(e)", style: .warning, in: self.app.window)
+                        }
                         self.app.refreshAll()
                     })
             }
@@ -239,6 +275,7 @@
         }
 
         private func applyThirdParty(_ u: ThirdPartyUpdate) {
+            guard app.beginWork(in: "the kext update") else { return }
             let log = logFile("third-party")
             let t = LogTail(path: log, view: logText)
             t.start()
@@ -246,7 +283,16 @@
                 { Result { try self.app.engine.applyThirdParty(u, output: log) } },
                 then: { r in
                     t.stop()
-                    if case .success(0) = r { self.app.offerRestart("\(u.product) \(u.available) is on the EFI partition.") }
+                    self.app.endWork()
+                    switch r {
+                    case .success(0): self.app.offerRestart("\(u.product) \(u.available) is on the EFI partition.")
+                    case .success(let rc):
+                        UI.alert(
+                            "\(u.product): update stopped", "Exit \(rc). The log shows why.", style: .warning, in: self.app.window
+                        )
+                    case .failure(let e):
+                        UI.alert("\(u.product): update did not run", "\(e)", style: .warning, in: self.app.window)
+                    }
                     self.app.refreshAll()
                 })
         }

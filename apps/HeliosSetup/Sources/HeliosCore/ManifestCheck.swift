@@ -6,6 +6,7 @@
 //   1. the manifest comes from the release (its sha256 is recorded in the state once installed);
 //   2. every release file must match the manifest's sha256 and size;
 //   3. a zipped bundle must extract to exactly the files in contents_sha256, each with its sha256.
+// For updates the manifest itself must first carry a valid Ed25519 signature (ManifestSignature.swift).
 // Keep the rules identical to 1401's; a change there must be made here too (ManifestCheckTests mirror its tests).
 import Foundation
 
@@ -23,9 +24,12 @@ public enum ManifestCheck {
         try need(m.repo == repo, "repo is '\(m.repo)', not \(repo)")
         guard let rel = m.release else { throw ManifestError.notUsable("no release version") }
         try need(isVersion(rel.version), "no release version")
+        try need(rel.tag == "v" + rel.version, "tag '\(rel.tag)' is not v\(rel.version)")
+        try need(isPathComponent(rel.tag), "tag '\(rel.tag)' is not a plain name")
         try need(local || rel.dryRun != true, "it is a dry-run manifest (release.sh --dry-run); only a local test may use one")
         try need(!m.artifacts.isEmpty, "no artifacts")
         for a in m.artifacts {
+            try need(isPathComponent(a.name), "artifact name '\(a.name)' is not a plain name")
             try need(isSha256(a.sha256 ?? ""), "artifact without sha256: \(a.name)")
             try need(isFileName(a.file ?? ""), "bad file name '\(a.file ?? "")'")
             try need(
@@ -86,16 +90,33 @@ public enum ManifestCheck {
         return nums.count == 3 ? nums : [0, 0, 0]
     }
 
+    // `\z`, as re.fullmatch in 1401: `$` would also accept a trailing newline.
     static func isVersion(_ s: String) -> Bool {
-        s.range(of: #"^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$"#, options: .regularExpression) != nil
+        s.range(of: #"^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?\z"#, options: .regularExpression) != nil
     }
 
     static func isSha256(_ s: String) -> Bool {
-        s.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil
+        s.range(of: #"^[0-9a-f]{64}\z"#, options: .regularExpression) != nil
     }
 
     static func isFileName(_ s: String) -> Bool {
-        s.range(of: "^[A-Za-z0-9_.+-]+$", options: .regularExpression) != nil
+        s.range(of: #"^[A-Za-z0-9_.+-]+\z"#, options: .regularExpression) != nil
+    }
+
+    /// One path component and nothing else: no separator, no `..`, not absolute. Names from a manifest or from `_root`'s
+    /// argv become paths under root-owned folders and the ESP.
+    public static func isPathComponent(_ s: String) -> Bool {
+        s.range(of: #"^[A-Za-z0-9_.+ -]+\z"#, options: .regularExpression) != nil && !s.contains("..") && s != "."
+    }
+
+    /// 1401's _extract_bundle: every entry of a bundle zip is the bundle's top directory or below it, and none climbs out.
+    public static func checkZipEntries(_ entries: [String], artifact a: Artifact) throws {
+        for n in entries {
+            let parts = n.split(separator: "/", omittingEmptySubsequences: false)
+            guard !n.hasPrefix("/"), !parts.contains(".."), n == a.name + "/" || n.hasPrefix(a.name + "/") else {
+                throw VerifyError.strayEntry(a.file ?? a.name, n)
+            }
+        }
     }
 }
 
@@ -108,6 +129,8 @@ public enum VerifyError: Error, CustomStringConvertible, Equatable {
     case innerMismatch(String, String)
     case extraInner(String, String)
     case missingFile(String, String)
+    case strayEntry(String, String)
+    case notAZip(String)
 
     public var description: String {
         switch self {
@@ -120,6 +143,8 @@ public enum VerifyError: Error, CustomStringConvertible, Equatable {
         case .innerMismatch(let n, let p): return "\(n): \(p) does not match its manifest.json sha256"
         case .extraInner(let n, let p): return "\(n): \(p) is in the zip but not in manifest.json"
         case .missingFile(let f, let dir): return "\(f) is listed in manifest.json but not in \(dir)"
+        case .strayEntry(let f, let n): return "\(f): unexpected entry \(n)"
+        case .notAZip(let f): return "\(f) is not a readable zip"
         }
     }
 }

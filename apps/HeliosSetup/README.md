@@ -26,10 +26,16 @@ and still ship next to it for advanced users.
 - **Updates**: works like Sparkle.
   - It checks GitHub for a newer macos_helios300 release (pre-releases follow the installed channel, with a toggle)
     and shows the release notes plus which files changed.
-  - Every file is downloaded and verified against the manifest (sha256, size, and every file inside each zip),
-    then applied: **Install next step**, **Update all** (one driver change per restart), *Remind me later*, or
+  - A release must be signed: `manifest.json.sig` (Ed25519, public key compiled in) is checked before the manifest is
+    believed, on the user side and again as root. Every file is then downloaded and verified against the manifest
+    (sha256, size, and every file inside each zip), then applied: **Install next step**, **Update all** (one driver
+    change per restart; the app reopens after each restart and asks before the next part), *Remind me later*, or
     *Skip this version*.
-  - *Roll back last update* restores the `.prev` kexts and the `config.plist` backup.
+  - A unit is applied whole or not at all: each file is staged as `<name>.new` and verified, the undo is recorded,
+    the old copy becomes `<name>.prev-N` (never overwritten) and the new one is renamed in. A run that gets killed
+    is undone from that record on the next run.
+  - *Roll back last update* puts back the kept copies, newest unit first; a restart follows, and it counts as the
+    driver change of that boot.
   - A daily check is optional and only posts a notification; it never installs anything.
   - Updating third-party kexts from Dortania's build repo is optional and off by default.
 - **Help**: safe mode (Shift+Enter in the OpenCore picker), the Recovery commands, and the BIOS boot order. The
@@ -52,11 +58,14 @@ and still ship next to it for advanced users.
  │ Probes          ioreg · kmutil · pmset · nvram · system_profiler · diskutil parsers + evaluator    │
  │ StepPlanner     checklist order · status · RestartGuard (one driver change/boot) · DryRunRule       │
  │ Installer       runs post_install `run` lines as written (stdin /dev/null, MODE/ONLY in env)       │
- │ EFIManager      ESP find/mount · backup · staged copy · verify · swap · restore · ocvalidate        │
+ │ EFIManager      ESP find/mount · backup · staged copy · journalled swap · restore · ocvalidate      │
  │ ConfigMerger    config_delta → config.plist, never dropping the user's keys                        │
+ │ ManifestSignature  Ed25519 over manifest.json (CryptoKit; swift-crypto for the Linux tests)        │
  │ Updater         GitHub releases · manifest diff · download + verify (file + inner zip)             │
- │ UpdatePlanner   units (update_groups) · batches (one restart each)                                 │
- │ UpdateApplier   applies a unit; Rollback records + RollbackExecutor                                │
+ │ UpdatePlanner   units (update_groups, removals) · batches (one restart each)                       │
+ │ StagedSwap      <name>.new → verify → <name>.prev-N → rename in; undone from a persisted op        │
+ │ UpdateApplier   applies a whole unit; Rollback records + RollbackExecutor (idempotent)             │
+ │ RootSupport     root-owned copies of helios-setup, scripts and ocvalidate; one root job at a time  │
  │ StateStore      /Library/Application Support/Helios300/state.plist (root) + the user's state       │
  │ Ports           CommandRunner · FileSystem · HTTPClient · Clock · PrivilegedRunner (+ fakes)       │
  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -65,11 +74,17 @@ and still ship next to it for advanced users.
 Every side effect goes through a protocol in `Ports.swift`, so the whole core runs in `swift test` on Linux with
 fakes. Root work runs in a separate process: the user side starts `helios-setup _root --user U --home H <command>`,
 through `osascript … with administrator privileges` from the GUI, `sudo` from the CLI, or directly when already
-root. That process checks every rule again (the release and its scripts, one driver change per restart). It
-writes the change to the system state *before* making it, then makes it. No password is ever seen or stored.
+root. That process checks what root must not take on trust (the manifest's signature for an update, the release and
+its scripts, one driver change per restart; the dry-run rule stays with the user side, whose state root cannot treat
+as evidence). It writes the change to the system state *before* making it, then makes it. No password is ever seen
+or stored.
 
-The scripts in `Contents/Resources` must match the release manifest's sha256 before they run, and they run in
-the release folder:
+Root never runs code from a place the user can write to: the prompt runs a one-line bootstrap that copies
+`helios-setup` into a new root-owned directory under `/var/root`, checks that copy's SHA-256, and runs the copy.
+`_root` then does the same for the scripts and `ocvalidate`, re-checking the manifest's sha256 on the copy. Logs are
+opened with `O_NOFOLLOW`, and one `flock` serializes root jobs.
+
+The scripts must match the release manifest's sha256, and they run in the release folder:
 
 ```
 stdin </dev/null   env -i HOME USER PATH MODE=… ONLY=…   bash install-gpu.sh
@@ -118,7 +133,7 @@ the schema enum.
 
 ```
 cd apps/HeliosSetup
-swift test -j $(nproc)                                     # the core, on Linux (94 tests)
+swift test -j $(nproc)                                     # the core, on Linux (137 tests)
 swift format lint --strict -r Sources Tests                # the committed .swift-format
 SIGN=1 bash ../../tools/release/cross-setup-app.sh ../.. ../../kexts/nvidia-macos-driver /tmp/app 0.1.1
 ```
@@ -157,5 +172,6 @@ helios-setup third-party --check|--apply PRODUCT  helios-setup diagnostics      
 - The OpenCore install and the update flow follow OpenCore Legacy Patcher's `support/install.py`
   (`diskutil list -plist`, mount, copy, unmount) and `support/updates.py` (check, then offer). OCLP is BSD-3-Clause,
   © 2020-2025 Dhinak G, Mykola Grymalyuk and contributors. No OCLP code is included.
-- Config validation is OpenCore's own `ocvalidate`, run only when it matches the EFI's OpenCore version. New
-  Kernel → Add entries carry every key of OpenCore's Sample.plist.
+- Config validation is OpenCore's own `ocvalidate`, run on `config.plist.new` before it replaces `config.plist`, only
+  when one is at `EFI/OC/Tools` or next to the release and matches the EFI's OpenCore version; otherwise the log says
+  so plainly and the config is not validated. New Kernel → Add entries carry every key of OpenCore's Sample.plist.

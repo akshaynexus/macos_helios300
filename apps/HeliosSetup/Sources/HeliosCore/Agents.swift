@@ -2,8 +2,8 @@
 //
 // LaunchAgents the app installs for the user and removes again (the same pattern as OCLP's post-install agents:
 // a per-user plist in ~/Library/LaunchAgents, loaded by launchd at login).
-//   resume  after "Restart now": opens the app at the next login with --resume, so it continues where it was;
-//           the app deletes it as soon as it has started in the new boot.
+//   resume  after "Restart now": opens the app at the next login with --resume, so it continues where it was (an
+//           "Update all" still going offers its next part); the app deletes it as soon as it has started in the new boot.
 //   update  the daily check (`--background-check`): looks for a newer release and posts a notification; it never
 //           installs anything (that needs the user's click in the app).
 import Foundation

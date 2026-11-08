@@ -8,18 +8,12 @@ import XCTest
 final class EFIAndRollbackTests: XCTestCase {
     let clock = FakeClock(now: Date(timeIntervalSince1970: 1_762_560_000))  // 2025-11-08 00:00:00 UTC
 
-    func makeEFI(_ root: String, marker: String) {
-        write("bootx64-\(marker)", "\(root)/EFI/BOOT/BOOTx64.efi")
-        write("xxREL-105-2025-05-05xx", "\(root)/EFI/OC/OpenCore.efi")
-        write(String(decoding: fixtureData("config-internal.plist"), as: UTF8.self), "\(root)/EFI/OC/config.plist")
-        write("kext-\(marker)", "\(root)/EFI/OC/Kexts/PG106.kext/Contents/MacOS/PG106")
-    }
-
     func manager() -> (EFIManager, FakeRunner) {
         let r = FakeRunner()
         r.set(
             "/usr/sbin/diskutil list -plist internal physical",
             String(decoding: fixtureData("diskutil-list-internal.plist"), as: UTF8.self))
+        r.set("/usr/sbin/diskutil info -plist /", String(decoding: fixtureData("diskutil-info-root.plist"), as: UTF8.self))
         return (EFIManager(runner: r, fs: LocalFileSystem(), clock: clock), r)
     }
 
@@ -31,8 +25,8 @@ final class EFIAndRollbackTests: XCTestCase {
 
     func testInstallBacksUpVerifiesAndSwaps() throws {
         let t = tempDir(self)
-        makeEFI("\(t)/stick", marker: "new")
-        makeEFI("\(t)/esp", marker: "old")
+        makeTestEFI("\(t)/stick", marker: "new")
+        makeTestEFI("\(t)/esp", marker: "old")
         let (efi, _) = manager()
         let src = try efi.sourceEFI("\(t)/stick")
         XCTAssertEqual(src, "\(t)/stick/EFI")
@@ -46,14 +40,15 @@ final class EFIAndRollbackTests: XCTestCase {
             FileManager.default.fileExists(atPath: "\(t)/esp/EFI-backup-20251108-000000/EFI"),
             "a backup never looks like \\EFI\\BOOT to the firmware")
         XCTAssertFalse(FileManager.default.fileExists(atPath: "\(t)/esp/EFI.new"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: "\(t)/esp/EFI.old"))
         XCTAssertEqual(efi.backups(esp: "\(t)/esp"), ["EFI-backup-20251108-000000"])
         XCTAssertTrue(log.contains { $0.contains("verified") })
     }
 
     func testRestorePutsTheBackupBack() throws {
         let t = tempDir(self)
-        makeEFI("\(t)/stick", marker: "new")
-        makeEFI("\(t)/esp", marker: "old")
+        makeTestEFI("\(t)/stick", marker: "new")
+        makeTestEFI("\(t)/esp", marker: "old")
         let (efi, _) = manager()
         let backup = try XCTUnwrap(try efi.install(from: "\(t)/stick/EFI", esp: "\(t)/esp") { _ in })
         let (later, _) = (EFIManager(runner: FakeRunner(), fs: LocalFileSystem(), clock: FakeClock(now: clock.now + 60)), 0)
@@ -66,14 +61,14 @@ final class EFIAndRollbackTests: XCTestCase {
         let t = tempDir(self)
         let (efi, _) = manager()
         XCTAssertThrowsError(try efi.sourceEFI(t))
-        makeEFI("\(t)/stick", marker: "new")
+        makeTestEFI("\(t)/stick", marker: "new")
         XCTAssertNoThrow(try efi.checkSpace(source: "\(t)/stick/EFI", existing: nil, esp: t))
     }
 
     func testVerifyIgnoresFATHousekeepingButNotRealDifferences() throws {
         let t = tempDir(self)
-        makeEFI("\(t)/a", marker: "x")
-        makeEFI("\(t)/b", marker: "x")
+        makeTestEFI("\(t)/a", marker: "x")
+        makeTestEFI("\(t)/b", marker: "x")
         write("", "\(t)/b/EFI/OC/._config.plist")
         write("", "\(t)/b/EFI/.DS_Store")
         let (efi, _) = manager()
@@ -84,7 +79,7 @@ final class EFIAndRollbackTests: XCTestCase {
 
     func testOcvalidateOnlyForTheSameOpenCoreVersion() throws {
         let t = tempDir(self)
-        makeEFI(t, marker: "x")
+        makeTestEFI(t, marker: "x")
         write("tool", "\(t)/EFI/OC/Tools/ocvalidate")
         let (efi, r) = manager()
         let candidates = EFIManager.ocvalidateCandidates(efi: "\(t)/EFI", releaseDir: nil)
@@ -112,9 +107,9 @@ final class EFIAndRollbackTests: XCTestCase {
             user: UserContext(name: "user", home: "\(t)/home"), output: nil, mountESP: { "\(t)/esp" })
     }
 
-    func testOpenCoreUnitKeepsPrevAndRollbackRestoresTheExactBytes() throws {
+    func testOpenCoreUnitKeepsThePreviousCopyAndRollbackRestoresTheExactBytes() throws {
         let t = tempDir(self)
-        makeEFI("\(t)/esp", marker: "old")
+        makeTestEFI("\(t)/esp", marker: "old")
         let configBefore = try Data(contentsOf: URL(fileURLWithPath: "\(t)/esp/EFI/OC/config.plist"))
         write("kext-new", "\(t)/rel/x/PG106.kext/Contents/MacOS/PG106")
         var oldManifest = try manifestFixture("manifest-next.json")
@@ -131,8 +126,10 @@ final class EFIAndRollbackTests: XCTestCase {
         XCTAssertEqual(
             try String(contentsOfFile: "\(t)/esp/EFI/OC/Kexts/PG106.kext/Contents/MacOS/PG106", encoding: .utf8), "kext-new")
         XCTAssertEqual(
-            try String(contentsOfFile: "\(t)/esp/EFI/OC/Kexts/PG106.kext.prev/Contents/MacOS/PG106", encoding: .utf8), "kext-old")
-        XCTAssertEqual(record.ops.first, .restore("EFI/OC/Kexts/PG106.kext", from: "EFI/OC/Kexts/PG106.kext.prev", onESP: true))
+            try String(contentsOfFile: "\(t)/esp/EFI/OC/Kexts/PG106.kext.prev-1/Contents/MacOS/PG106", encoding: .utf8),
+            "kext-old")
+        XCTAssertEqual(record.ops.first?.target, "EFI/OC/Kexts/PG106.kext")
+        XCTAssertEqual(record.ops.first?.backup, "EFI/OC/Kexts/PG106.kext.prev-1")
         XCTAssertTrue(log.contains { $0.contains("WARNING: no ocvalidate") }, "skipped, with a warning")
 
         try RollbackExecutor(fs: LocalFileSystem(), runner: FakeRunner(), user: ctx.user).undo(
@@ -140,13 +137,14 @@ final class EFIAndRollbackTests: XCTestCase {
         ) { _ in }
         XCTAssertEqual(
             try String(contentsOfFile: "\(t)/esp/EFI/OC/Kexts/PG106.kext/Contents/MacOS/PG106", encoding: .utf8), "kext-old")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: "\(t)/esp/EFI/OC/Kexts/PG106.kext.prev"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: "\(t)/esp/EFI/OC/Kexts/PG106.kext.prev-1"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: "\(t)/esp/EFI/OC/Kexts/PG106.kext.new"))
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: "\(t)/esp/EFI/OC/config.plist")), configBefore)
     }
 
     func testFailedOcvalidateUndoesTheUnitAtOnce() throws {
         let t = tempDir(self)
-        makeEFI("\(t)/esp", marker: "old")
+        makeTestEFI("\(t)/esp", marker: "old")
         write("tool", "\(t)/esp/EFI/OC/Tools/ocvalidate")
         let configBefore = try Data(contentsOf: URL(fileURLWithPath: "\(t)/esp/EFI/OC/config.plist"))
         write("kext-new", "\(t)/rel/x/PG106.kext/Contents/MacOS/PG106")
@@ -161,7 +159,7 @@ final class EFIAndRollbackTests: XCTestCase {
         var c2 = ctx
         c2.new = new
         let r = FakeRunner()
-        r.set("\(t)/esp/EFI/OC/Tools/ocvalidate \(t)/esp/EFI/OC/config.plist", "OpenCore version 1.0.5!\nbroken", status: 1)
+        r.set("\(t)/esp/EFI/OC/Tools/ocvalidate \(t)/esp/EFI/OC/config.plist.new", "OpenCore version 1.0.5!\nbroken", status: 1)
         let applier = UpdateApplier(
             fs: LocalFileSystem(), runner: r, clock: clock, probes: ProbeContext(runner: r, fs: LocalFileSystem()))
         let unit = UpdateUnit(id: "PG106.kext", title: "PG106", kind: .opencore, artifacts: ["PG106.kext"], requiresRestart: true)
@@ -169,11 +167,13 @@ final class EFIAndRollbackTests: XCTestCase {
         XCTAssertEqual(
             try String(contentsOfFile: "\(t)/esp/EFI/OC/Kexts/PG106.kext/Contents/MacOS/PG106", encoding: .utf8), "kext-old")
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: "\(t)/esp/EFI/OC/config.plist")), configBefore)
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: "\(t)/esp/EFI/OC/config.plist.new"), "validated as a sibling, gone again")
     }
 
     func testKextTheUserLeftOutIsSkipped() throws {
         let t = tempDir(self)
-        makeEFI("\(t)/esp", marker: "old")
+        makeTestEFI("\(t)/esp", marker: "old")
         write("new", "\(t)/rel/x/NMHDA.kext/Contents/MacOS/NMHDA")
         let ctx = try context(t, newDir: "\(t)/rel", old: try manifestFixture("manifest-next.json"))
         let applier = UpdateApplier(

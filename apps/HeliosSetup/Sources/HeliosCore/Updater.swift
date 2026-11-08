@@ -4,8 +4,8 @@
 //   - Releases come from the GitHub API (the list 1401's resolve_latest reads); drafts are skipped, pre-releases
 //     only when allowed, and only a release that carries manifest.json counts.
 //   - Versions compare as 1401's _vkey: (major, minor, patch, is-final).
-//   - The manifest is fetched from the release download URL, checked with ManifestCheck (1401's rules) and must
-//     say the version its tag names. Each file must match its sha256 and size; zips are extracted and must hold
+//   - The manifest and its Ed25519 signature are fetched from the release download URL; an unsigned or badly signed
+//     manifest stops here. Then it is checked with ManifestCheck (1401's rules) and must say the version its tag names. Each file must match its sha256 and size; zips are extracted and must hold
 //     exactly their contents_sha256 files. Unchanged files are copied from the installed release (re-verified).
 //   - The changelog is the release notes plus the per-artifact diff.
 // No update is ever installed from here: the UI (Sparkle-style: notes, Remind me later, Skip, Install) or the CLI
@@ -49,7 +49,7 @@ public enum ReleaseList {
 
     /// helios300._vkey.
     public static func versionKey(_ tag: String) -> (major: Int, minor: Int, patch: Int, final: Bool) {
-        let pattern = #"^v?(\d+)\.(\d+)\.(\d+)(-.*)?$"#
+        let pattern = #"^v?(\d+)\.(\d+)\.(\d+)(-.*)?\z"#
         guard tag.range(of: pattern, options: .regularExpression) != nil else { return (-1, -1, -1, false) }
         let core = String(tag.drop { $0 == "v" })
         let dash = core.firstIndex(of: "-")
@@ -151,6 +151,9 @@ public enum UpdateError: Error, CustomStringConvertible, Equatable {
     case unzip(String, String)
     case download(String, String)
     case manifestChanged(String)
+    case notForThisMacOS(String, String)
+    case baselineChanged(String, String)
+    case otherUpdatePending(String)
 
     public var description: String {
         switch self {
@@ -159,7 +162,36 @@ public enum UpdateError: Error, CustomStringConvertible, Equatable {
         case .unzip(let z, let why): return "cannot unzip \(z): \(why)"
         case .download(let f, let why): return "\(f) could not be downloaded: \(why)"
         case .manifestChanged(let p): return "\(p) is not the manifest that was checked (its sha256 changed)"
+        case .notForThisMacOS(let tag, let darwin): return "\(tag) is not for this macOS (Darwin \(darwin)): not offered"
+        case .baselineChanged(let shown, let now):
+            return
+                "the installed release changed since the update was planned (planned against \(shown), it is now \(now)): check for updates again"
+        case .otherUpdatePending(let tag):
+            return "an update to \(tag) is half applied: finish it or roll it back first"
         }
+    }
+}
+
+/// The names in a zip's central directory, read without extracting it (the checks 1401's _extract_bundle makes).
+public enum ZipListing {
+    public static func names(_ data: Data, file: String) throws -> [String] {
+        let bytes = [UInt8](data)
+        func u16(_ i: Int) -> Int { i + 1 < bytes.count ? Int(bytes[i]) | Int(bytes[i + 1]) << 8 : -1 }
+        func u32(_ i: Int) -> Int { i + 3 < bytes.count ? u16(i) | u16(i + 2) << 16 : -1 }
+        let eocd = stride(from: bytes.count - 22, through: max(0, bytes.count - 65_557), by: -1).first { i in
+            i >= 0 && u32(i) == 0x0605_4b50
+        }
+        guard let eocd else { throw VerifyError.notAZip(file) }
+        var names: [String] = []
+        var at = u32(eocd + 16)
+        for _ in 0..<u16(eocd + 10) {
+            guard at >= 0, u32(at) == 0x0201_4b50 else { throw VerifyError.notAZip(file) }
+            let length = u16(at + 28)
+            guard length >= 0, at + 46 + length <= bytes.count else { throw VerifyError.notAZip(file) }
+            names.append(String(decoding: bytes[(at + 46)..<(at + 46 + length)], as: UTF8.self))
+            at += 46 + length + u16(at + 30) + u16(at + 32)
+        }
+        return names
     }
 }
 
@@ -174,11 +206,13 @@ public struct Updater {
     let http: HTTPClient
     let fs: FileSystem
     let unzipper: Unzipper
+    let verifier: ManifestVerifier
 
-    public init(http: HTTPClient, fs: FileSystem, unzipper: Unzipper) {
+    public init(http: HTTPClient, fs: FileSystem, unzipper: Unzipper, verifier: ManifestVerifier = .release) {
         self.http = http
         self.fs = fs
         self.unzipper = unzipper
+        self.verifier = verifier
     }
 
     public func releases() throws -> [ReleaseCandidate] {
@@ -186,22 +220,28 @@ public struct Updater {
         return ReleaseList.parse(try http.get(url, headers: ["Accept": "application/vnd.github+json"]))
     }
 
-    /// helios300.load_release for one tag: the manifest bytes, checked.
-    public func manifest(tag: String) throws -> (Manifest, Data) {
-        guard let url = URL(string: "\(ManifestCheck.urlPrefix)\(tag)/manifest.json") else { throw UpdateError.noRelease }
+    /// helios300.load_release for one tag, signature first: the manifest bytes and their signature, checked.
+    public func manifest(tag: String) throws -> (manifest: Manifest, raw: Data, signature: Data) {
+        guard ManifestCheck.isPathComponent(tag),
+            let url = URL(string: "\(ManifestCheck.urlPrefix)\(tag)/\(ManifestVerifier.manifestFile)"),
+            let sigURL = URL(string: "\(ManifestCheck.urlPrefix)\(tag)/\(ManifestVerifier.signatureFile)")
+        else { throw UpdateError.noRelease }
         let raw = try http.get(url, headers: [:])
+        guard let signature = try? http.get(sigURL, headers: [:]) else { throw SignatureError.missing(tag) }
+        try verifier.verify(raw, signature: signature, what: "the \(tag) manifest")
         let m = try Manifest.decode(raw)
         try ManifestCheck.check(m)
         guard "v" + (m.release?.version ?? "") == tag else { throw UpdateError.tagMismatch(tag, m.release?.version ?? "?") }
-        return (m, raw)
+        return (m, raw, signature)
     }
 
     /// Downloads (or reuses from `previousDir`) every artifact into `dir`, verifying each, then extracts and
     /// verifies the zips. A failure leaves `dir` incomplete; nothing outside it is touched.
-    public func stage(_ m: Manifest, raw: Data, into dir: String, previousDir: String?) throws -> StagedRelease {
+    public func stage(_ m: Manifest, raw: Data, signature: Data, into dir: String, previousDir: String?) throws -> StagedRelease {
         let version = m.release?.version ?? "?"
         try fs.makeDirectory(dir)
-        try fs.write(raw, to: (dir as NSString).appendingPathComponent("manifest.json"))
+        try fs.write(raw, to: (dir as NSString).appendingPathComponent(ManifestVerifier.manifestFile))
+        try fs.write(signature, to: (dir as NSString).appendingPathComponent(ManifestVerifier.signatureFile))
         for a in m.artifacts {
             guard let file = a.file else { continue }
             let dest = (dir as NSString).appendingPathComponent(file)
@@ -213,7 +253,8 @@ public struct Updater {
         return StagedRelease(dir: dir, manifest: m, manifestSha256: Hashing.sha256(raw))
     }
 
-    /// Re-checks a release folder against its manifest (used again by the root side before applying).
+    /// Re-checks a release folder against its manifest (used again by the root side before applying). Each zip goes
+    /// into a directory of its own, and only its `<name>/` is taken from there, as 1401's _extract_bundle does.
     public func verifyStaged(_ dir: String, manifest m: Manifest) throws {
         let version = m.release?.version ?? "?"
         let x = (dir as NSString).appendingPathComponent("x")
@@ -224,7 +265,12 @@ public struct Updater {
             guard let data = try? fs.read(path) else { throw VerifyError.missingFile(file, dir) }
             try ManifestCheck.verifyFile(data, artifact: a, version: version)
             if a.isZip {
-                try unzipper.extract(path, into: x)
+                try ManifestCheck.checkZipEntries(try ZipListing.names(data, file: file), artifact: a)
+                let own = (x as NSString).appendingPathComponent(a.name + ".unpack")
+                try unzipper.extract(path, into: own)
+                if let stray = try fs.list(own).first(where: { $0 != a.name }) { throw VerifyError.strayEntry(file, stray) }
+                try fs.move((own as NSString).appendingPathComponent(a.name), to: (x as NSString).appendingPathComponent(a.name))
+                try fs.remove(own)
                 try ManifestCheck.verifyExtracted(root: x, artifact: a, fs: fs)
             }
         }

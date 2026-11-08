@@ -56,8 +56,23 @@ public struct SystemState: Codable, Equatable {
     public var pending: PendingUpdate?
     /// EFI backups made by the OpenCore install, newest last (names on the internal ESP).
     public var efiBackups: [String] = []
+    /// The update unit being applied: its undo so far, written before each change. Set only while a unit runs, so
+    /// finding it on the next run means that run was killed, and the unit is undone first.
+    public var interrupted: RollbackRecord?
 
     public init() {}
+
+    /// Every key optional: a state written by an older build still reads.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        installed = try c.decodeIfPresent(InstalledRelease.self, forKey: .installed)
+        previous = try c.decodeIfPresent(InstalledRelease.self, forKey: .previous)
+        changes = try c.decodeIfPresent([ChangeRecord].self, forKey: .changes) ?? []
+        rollbacks = try c.decodeIfPresent([RollbackRecord].self, forKey: .rollbacks) ?? []
+        pending = try c.decodeIfPresent(PendingUpdate.self, forKey: .pending)
+        efiBackups = try c.decodeIfPresent([String].self, forKey: .efiBackups) ?? []
+        interrupted = try c.decodeIfPresent(RollbackRecord.self, forKey: .interrupted)
+    }
 
     /// The changes made in this boot session.
     public func changes(inBoot boot: String) -> [ChangeRecord] {
@@ -129,13 +144,38 @@ public struct UserState: Codable, Equatable {
     public var efiSource: String?
 
     public init() {}
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        releaseDir = try c.decodeIfPresent(String.self, forKey: .releaseDir)
+        checks = try c.decodeIfPresent([String: CheckRecord].self, forKey: .checks) ?? [:]
+        runs = try c.decodeIfPresent([String: RunRecord].self, forKey: .runs) ?? [:]
+        resumeAfterLogin = try c.decodeIfPresent(Bool.self, forKey: .resumeAfterLogin) ?? false
+        includePrereleases = try c.decodeIfPresent(Bool.self, forKey: .includePrereleases)
+        dailyUpdateCheck = try c.decodeIfPresent(Bool.self, forKey: .dailyUpdateCheck) ?? false
+        remindLaterUntil = try c.decodeIfPresent(Date.self, forKey: .remindLaterUntil)
+        skippedTag = try c.decodeIfPresent(String.self, forKey: .skippedTag)
+        thirdPartyUpdates = try c.decodeIfPresent(Bool.self, forKey: .thirdPartyUpdates) ?? false
+        efiSource = try c.decodeIfPresent(String.self, forKey: .efiSource)
+    }
+}
+
+public enum StateError: Error, CustomStringConvertible, Equatable {
+    case corrupt(String, String)
+
+    public var description: String {
+        switch self {
+        case .corrupt(let path, let why): return "\(path) cannot be read (\(why)): it was left as it is"
+        }
+    }
 }
 
 public enum StatePaths {
     public static let systemDir = "/Library/Application Support/Helios300"
     public static let system = systemDir + "/state.plist"
     public static let releases = systemDir + "/releases"
-    public static let backups = systemDir + "/backups"
+    /// Where root keeps its private copies while it works: /var/root, not the admin-writable /Library/Application Support.
+    public static let rootRun = "/var/root"
 
     public static func userDir(home: String) -> String {
         (home as NSString).appendingPathComponent("Library/Application Support/Helios 300 Setup")
@@ -161,15 +201,25 @@ public struct StateStore {
         self.userPath = StatePaths.user(home: home)
     }
 
-    public func loadSystem() -> SystemState { load(systemPath) ?? SystemState() }
-    public func loadUser() -> UserState { load(userPath) ?? UserState() }
+    /// The system state for showing. A missing file is an empty state; so is a corrupt one here, and `readSystem`
+    /// tells the difference for anything that is about to write.
+    public func loadSystem() -> SystemState { (try? readSystem()) ?? SystemState() }
+    public func loadUser() -> UserState { (try? readUser()) ?? UserState() }
+
+    /// A missing file is an empty state; a file that does not decode throws, so it is never overwritten with one.
+    public func readSystem() throws -> SystemState { try read(systemPath, missing: SystemState()) }
+    public func readUser() throws -> UserState { try read(userPath, missing: UserState()) }
 
     public func saveSystem(_ s: SystemState) throws { try save(s, to: systemPath) }
     public func saveUser(_ s: UserState) throws { try save(s, to: userPath) }
 
-    private func load<T: Decodable>(_ path: String) -> T? {
-        guard let data = try? fs.read(path) else { return nil }
-        return try? PropertyListDecoder().decode(T.self, from: data)
+    private func read<T: Decodable>(_ path: String, missing: T) throws -> T {
+        guard fs.exists(path) else { return missing }
+        do {
+            return try PropertyListDecoder().decode(T.self, from: try fs.read(path))
+        } catch {
+            throw StateError.corrupt(path, "\(error)")
+        }
     }
 
     private func save<T: Encodable>(_ value: T, to path: String) throws {

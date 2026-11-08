@@ -6,7 +6,7 @@
 //     because the project rule is one driver change per restart.
 //   - Status is evaluated from the step's declarative probes plus what was done in this boot session.
 //   - RestartGuard: a second driver change in the same boot session is refused (the change log is the system
-//     state, so the GUI and the CLI enforce the same rule).
+//     state, so the GUI and the CLI enforce the same rule). Taking back that same change is not a second change.
 //   - DryRunRule: Install needs a passing Check of the same item, in this boot, against the same manifest.
 import Foundation
 
@@ -169,6 +169,19 @@ public enum RestartGuard {
 
     public static func check(_ item: SetupItem, action: String, system: SystemState, boot: String) -> GuardDecision {
         guard changeActions.contains(action), item.driverChange else { return .allowed }
+        if action == "revert", let last = system.changes(inBoot: boot).last(where: { $0.driverChange }), last.item == item.id,
+            last.action == "install"
+        {
+            return .allowed  // Undo of the install this boot is waiting on
+        }
+        return checkDriverChange(system: system, boot: boot)
+    }
+
+    /// Rolling back an update unit is a driver change, except that it may take back, or finish taking back, the one
+    /// change this boot already holds.
+    public static func checkRollback(_ record: RollbackRecord, system: SystemState, boot: String) -> GuardDecision {
+        let own = ["update:\(record.unit)", record.unit, "rollback:\(record.unit)"]
+        if let last = system.changes(inBoot: boot).last(where: { $0.driverChange }), own.contains(last.item) { return .allowed }
         return checkDriverChange(system: system, boot: boot)
     }
 

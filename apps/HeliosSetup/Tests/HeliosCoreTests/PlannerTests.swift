@@ -175,8 +175,11 @@ final class PlannerTests: XCTestCase {
         XCTAssertEqual(
             RestartGuard.check(try item("sleep"), action: "install", system: s, boot: "A"), .allowed,
             "pmset is not a driver change")
-        guard case .restartFirst = RestartGuard.check(try item("gpu-fb"), action: "revert", system: s, boot: "A")
-        else { return XCTFail("undo is a change too") }
+        XCTAssertEqual(
+            RestartGuard.check(try item("gpu-fb"), action: "revert", system: s, boot: "A"), .allowed,
+            "Undo of the install this boot is waiting on is not a second change")
+        guard case .restartFirst = RestartGuard.check(try item("gpu-accel"), action: "revert", system: s, boot: "A")
+        else { return XCTFail("undo of something else is a change too") }
     }
 
     func testUserspacePartCountsAsTheChangeOfThisBoot() throws {

@@ -132,6 +132,31 @@ public enum ScriptVerifier {
         return path
     }
 
+    /// A root-owned copy of the script, checked against the manifest after it was copied: what runs is what was hashed,
+    /// whatever happens to the original in a user-writable place.
+    public static func verifiedCopy(
+        of script: String, scriptsDir: String, manifest: Manifest, fs: FileSystem, scratch: RootScratch
+    ) throws -> String {
+        let source = (scriptsDir as NSString).appendingPathComponent(script)
+        guard fs.exists(source) else { throw InstallerError.scriptMissing(script) }
+        guard let want = manifest.artifact(script)?.sha256 else { throw InstallerError.scriptNotInRelease(script) }
+        let copy = try scratch.copy(source)
+        guard Hashing.sha256(file: copy, fs: fs) == want else {
+            throw InstallerError.scriptMismatch(script, manifest.release?.version ?? "?")
+        }
+        return copy
+    }
+
+    /// The path to run: the verified root-owned copy under `scratch`, or on the user side the file in place.
+    public static func runnable(
+        _ script: String, scriptsDir: String, manifest: Manifest, fs: FileSystem, scratch: RootScratch?
+    ) throws -> String {
+        if let scratch {
+            return try verifiedCopy(of: script, scriptsDir: scriptsDir, manifest: manifest, fs: fs, scratch: scratch)
+        }
+        return try path(of: script, scriptsDir: scriptsDir, manifest: manifest, fs: fs)
+    }
+
     /// Every script artifact the app carries, checked: [(name, ok)].
     public static func report(scriptsDir: String, manifest: Manifest, fs: FileSystem) -> [(String, Bool)] {
         manifest.artifacts.filter { $0.kind == "script" }.map { a in
@@ -145,13 +170,16 @@ public struct Installer {
     let runner: CommandRunner
     let fs: FileSystem
     public let scriptsDir: String
+    /// Set on the root side: scripts run from a root-owned, re-verified copy.
+    let scratch: RootScratch?
 
     public static let searchPath = ["/usr/bin", "/bin", "/usr/sbin", "/sbin", "/usr/libexec"]
 
-    public init(runner: CommandRunner, fs: FileSystem, scriptsDir: String) {
+    public init(runner: CommandRunner, fs: FileSystem, scriptsDir: String, scratch: RootScratch? = nil) {
         self.runner = runner
         self.fs = fs
         self.scriptsDir = scriptsDir
+        self.scratch = scratch
     }
 
     /// The process to start for an item's action: argv, environment, working directory. `.cli` commands are
@@ -164,7 +192,7 @@ public struct Installer {
         let env = baseEnvironment(user)
         switch try CommandParser.parse(line) {
         case .script(let name, let args, let extra):
-            let path = try ScriptVerifier.path(of: name, scriptsDir: scriptsDir, manifest: manifest, fs: fs)
+            let path = try ScriptVerifier.runnable(name, scriptsDir: scriptsDir, manifest: manifest, fs: fs, scratch: scratch)
             return ([Tool.bash, path] + args, env.merging(extra) { $1 }.merging(item.env) { $1 }, releaseDir)
         case .exec(let argv, _, let extra):
             return ([try resolve(argv[0])] + argv.dropFirst(), env.merging(extra) { $1 }, releaseDir)

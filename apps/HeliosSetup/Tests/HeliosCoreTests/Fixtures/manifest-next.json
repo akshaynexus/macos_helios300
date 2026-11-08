@@ -1187,7 +1187,7 @@
           "In the OpenCore picker select macOS and press Shift+Enter: safe mode (-x). PG106, PG106FB, PG106Accel and the Wi-Fi kexts stand down there.",
           "In safe mode open Helios 300 Setup and press Undo on the last step (or run helios-setup undo <step>), then restart.",
           "If OpenCore itself does not come up: F12 at the Predator logo and pick the USB stick; its EFI is the known-good fallback.",
-          "After an update: Updates > Roll back last update (or helios-setup rollback) restores the .prev kexts and the config.plist backup."
+          "After an update: Updates > Roll back last update (or helios-setup rollback) puts back the kexts and config.plist the update replaced."
         ]
       },
       {

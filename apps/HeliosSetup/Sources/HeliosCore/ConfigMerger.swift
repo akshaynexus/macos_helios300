@@ -14,7 +14,7 @@
 import Foundation
 
 public struct ConfigChange: Equatable, CustomStringConvertible {
-    public enum Kind: String { case added, changed, warning }
+    public enum Kind: String { case added, changed, removed, warning }
     public var kind: Kind
     public var path: String
     public var detail: String
@@ -37,6 +37,30 @@ public enum ConfigMerger {
         mergeNVRAMDelete(&cfg, delta.nvramDelete, &changes)
         mergeBootArgs(&cfg, delta.bootArgsRequired, &changes)
         warnForbidden(cfg, delta.forbidden, &changes)
+        return (cfg, changes)
+    }
+
+    /// Takes a dropped kext's Kernel > Add entries and a dropped SSDT's ACPI > Add entry out of `config`. Nothing else is
+    /// touched. (`merge` never removes; a release that stops shipping a file must, or OpenCore would look for it.)
+    public static func remove(_ config: [String: Any], kexts: [String], ssdts: [String]) -> ([String: Any], [ConfigChange]) {
+        var cfg = config
+        var changes: [ConfigChange] = []
+        if var kernel = cfg["Kernel"] as? [String: Any], var add = kernel["Add"] as? [[String: Any]] {
+            for k in add where kexts.contains(bundleName(k)) {
+                changes.append(ConfigChange(kind: .removed, path: "Kernel/Add/\(k["BundlePath"] as? String ?? "")", detail: ""))
+            }
+            add.removeAll { kexts.contains(bundleName($0)) }
+            kernel["Add"] = add
+            cfg["Kernel"] = kernel
+        }
+        if var acpi = cfg["ACPI"] as? [String: Any], var add = acpi["Add"] as? [[String: Any]] {
+            for s in add where ssdts.contains(s["Path"] as? String ?? "") {
+                changes.append(ConfigChange(kind: .removed, path: "ACPI/Add/\(s["Path"] as? String ?? "")", detail: ""))
+            }
+            add.removeAll { ssdts.contains($0["Path"] as? String ?? "") }
+            acpi["Add"] = add
+            cfg["ACPI"] = acpi
+        }
         return (cfg, changes)
     }
 
@@ -220,6 +244,15 @@ public enum ConfigMerger {
                 ConfigChange(
                     kind: .warning, path: "ACPI/Add/\(s["Path"] as? String ?? "")",
                     detail: "forbidden by the release: disable it"))
+        }
+        let properties = (cfg["DeviceProperties"] as? [String: Any])?["Add"] as? [String: Any] ?? [:]
+        for (path, names) in (f.deviceProperties ?? [:]).sorted(by: { $0.key < $1.key }) {
+            for name in names where (properties[path] as? [String: Any])?[name] != nil {
+                changes.append(
+                    ConfigChange(
+                        kind: .warning, path: "DeviceProperties/Add/\(path)/\(name)",
+                        detail: "forbidden by the release: remove it"))
+            }
         }
     }
 

@@ -16,7 +16,6 @@
         private let releaseLine = UI.secondary("")
         private let (logScroll, logText) = UI.logView(height: 200)
         private var tail: LogTail?
-        private var running = false
         private var overview: Overview?
 
         init(app: AppDelegate) {
@@ -70,6 +69,7 @@
 
         private func renderBanners(_ o: Overview) {
             if let p = o.release.problem { banners.addArrangedSubview(banner("⚠︎ \(p)", .systemOrange)) }
+            if let p = o.stateProblem { banners.addArrangedSubview(banner("⚠︎ \(p)", .systemRed)) }
             for (name, ok) in o.scripts where !ok {
                 banners.addArrangedSubview(
                     banner("⚠︎ \(name) in this app is not the release's: use the app from the same release.", .systemRed))
@@ -105,7 +105,7 @@
         }
 
         private func row(_ item: SetupItem, _ status: ItemStatus, _ o: Overview) -> NSView {
-            let canAct = o.release.canAct && !running && !(status.isNotAvailable)
+            let canAct = o.release.canAct && !app.busy && !(status.isNotAvailable)
             let checked =
                 DryRunRule.check(
                     item, user: app.store.loadUser(), boot: o.boot,
@@ -117,7 +117,7 @@
             primary.isEnabled = canAct && checked && status != .installed && item.command("install") != nil
             primary.keyEquivalent = o.next?.id == item.id && primary.isEnabled ? "\r" : ""
             undo.isEnabled =
-                o.release.canAct && !running && item.command("revert") != nil
+                o.release.canAct && !app.busy && item.command("revert") != nil
                 && (status == .installed || status.isFailed || status.label == "Needs restart")
             primary.toolTip = checked ? nil : "Run Check first: Install is enabled after a passing dry run in this session"
             var buttons: [NSView] = [check, primary, undo]
@@ -165,12 +165,12 @@
         }
 
         func run(_ item: SetupItem, _ action: String) {
+            guard app.beginWork(in: "this step") else { return }
             let log = logPath(item.id, action)
             try? LocalFileSystem().write(Data(), to: log)
             let t = LogTail(path: log, view: logText)
             tail = t
             t.start()
-            running = true
             refreshButtonsOnly()
             background(
                 { () -> Result<Int32, Error> in
@@ -178,7 +178,7 @@
                 },
                 then: { result in
                     t.stop()
-                    self.running = false
+                    self.app.endWork()
                     self.finished(item, action, result)
                     self.app.refreshAll()
                 })

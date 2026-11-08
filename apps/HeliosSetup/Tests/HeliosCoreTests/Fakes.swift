@@ -6,6 +6,64 @@ import XCTest
 
 @testable import HeliosCore
 
+#if canImport(CryptoKit)
+    import CryptoKit
+#else
+    import Crypto
+#endif
+
+/// The key the tests sign manifests with, and the verifier that trusts it.
+let testSigningKey = Curve25519.Signing.PrivateKey()
+let testVerifier = ManifestVerifier(publicKey: testSigningKey.publicKey.rawRepresentation)
+
+func testSign(_ data: Data) -> Data {
+    (try? testSigningKey.signature(for: data)) ?? Data()
+}
+
+/// The real file system with one mutating call failing: `failAt` counts them (0 first). `killed`: that call and every
+/// later one fail, as when the process dies; otherwise only that one, as when a single operation goes wrong.
+final class FaultFS: FileSystem {
+    let fs = LocalFileSystem()
+    var failAt: Int
+    var killed: Bool
+    var count = 0
+    var fired = false
+    struct Fault: Error {}
+
+    init(failAt: Int, killed: Bool) {
+        self.failAt = failAt
+        self.killed = killed
+    }
+
+    func step() throws {
+        defer { count += 1 }
+        if killed && fired { throw Fault() }
+        if count == failAt {
+            fired = true
+            throw Fault()
+        }
+    }
+
+    func exists(_ path: String) -> Bool { fs.exists(path) }
+    func isDirectory(_ path: String) -> Bool { fs.isDirectory(path) }
+    func isSymlink(_ path: String) -> Bool { fs.isSymlink(path) }
+    func read(_ path: String) throws -> Data { try fs.read(path) }
+    func write(_ data: Data, to path: String) throws { try step(); try fs.write(data, to: path) }
+    func list(_ path: String) throws -> [String] { try fs.list(path) }
+    func makeDirectory(_ path: String) throws { try step(); try fs.makeDirectory(path) }
+    func copy(_ from: String, to: String) throws { try step(); try fs.copy(from, to: to) }
+    func move(_ from: String, to: String) throws { try step(); try fs.move(from, to: to) }
+    func remove(_ path: String) throws { try step(); try fs.remove(path) }
+    func freeBytes(_ path: String) -> Int64? { fs.freeBytes(path) }
+    func size(_ path: String) -> Int64? { fs.size(path) }
+    func makeSecureDirectory(in parent: String, prefix: String) throws -> String {
+        try step()
+        return try fs.makeSecureDirectory(in: parent, prefix: prefix)
+    }
+    func ownAsRoot(_ path: String) throws { try fs.ownAsRoot(path) }
+    func makeExecutable(_ path: String) throws { try fs.makeExecutable(path) }
+}
+
 let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures")
 let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -87,6 +145,14 @@ func write(_ text: String, _ path: String) {
     try? LocalFileSystem().write(Data(text.utf8), to: path)
 }
 
+/// An OpenCore EFI folder at `root`/EFI whose BOOT and PG106 carry `marker`.
+func makeTestEFI(_ root: String, marker: String) {
+    write("bootx64-\(marker)", "\(root)/EFI/BOOT/BOOTx64.efi")
+    write("xxREL-105-2025-05-05xx", "\(root)/EFI/OC/OpenCore.efi")
+    write(String(decoding: fixtureData("config-internal.plist"), as: UTF8.self), "\(root)/EFI/OC/config.plist")
+    write("kext-\(marker)", "\(root)/EFI/OC/Kexts/PG106.kext/Contents/MacOS/PG106")
+}
+
 /// zip -r of `dir`'s `top` into `zip` (deterministic enough for tests).
 func makeZip(_ dir: String, top: String, zip: String) {
     let r = ProcessRunner().capture(["/usr/bin/zip", "-q", "-r", "-X", zip, top], env: nil, cwd: dir)
@@ -112,6 +178,11 @@ struct RootedFS: FileSystem {
     func remove(_ path: String) throws { try fs.remove(p(path)) }
     func freeBytes(_ path: String) -> Int64? { fs.freeBytes(p(path)) }
     func size(_ path: String) -> Int64? { fs.size(p(path)) }
+    func makeSecureDirectory(in parent: String, prefix: String) throws -> String {
+        String(try fs.makeSecureDirectory(in: p(parent), prefix: prefix).dropFirst(root.count))
+    }
+    func ownAsRoot(_ path: String) throws { try fs.ownAsRoot(p(path)) }
+    func makeExecutable(_ path: String) throws { try fs.makeExecutable(p(path)) }
 
     func touch(_ path: String, _ text: String = "x") { try? write(Data(text.utf8), to: path) }
 }

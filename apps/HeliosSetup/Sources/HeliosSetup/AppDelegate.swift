@@ -3,7 +3,7 @@
 // The app: one window with four pages (Setup, Status, GPU apps, Updates) and a Help sheet. Everything it shows
 // and does goes through HeliosCore's Engine, the same code as the helios-setup CLI.
 //   --resume             started by the resume LaunchAgent after "Restart now": the agent is removed, the window
-//                        opens on Setup (or Updates when an update is half applied)
+//                        opens on Setup (or Updates when an update is half applied, and "Update all" then asks to go on)
 //   --background-check   started daily by the update LaunchAgent: checks, posts a notification, quits.
 #if canImport(AppKit)
     import AppKit
@@ -17,6 +17,8 @@
         var status: StatusPage?
         var gpu: GPUAppsPage?
         var updates: UpdatesPage?
+        /// One job at a time across every page (the root side holds a lock too; this one says so before the prompt).
+        private(set) var busy = false
         /// Created once, on the main thread, before any page uses it from a background queue.
         let engine = Engine(env: .live(gui: true, executable: Bundle.main.executablePath ?? CommandLine.arguments[0]))
 
@@ -39,6 +41,7 @@
             buildWindow()
             if store.loadSystem().pending != nil { tabs.selectTabViewItem(at: 3) }
             NSApp.activate(ignoringOtherApps: true)
+            if engine.shouldResumeUpdate(arguments: CommandLine.arguments) { updates?.resumeUpdate() }
         }
 
         func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
@@ -110,6 +113,20 @@
             updates?.refresh()
         }
 
+        // MARK: one job at a time
+
+        /// False (and says so) while another job runs.
+        func beginWork(in what: String) -> Bool {
+            guard !busy else {
+                UI.alert("Please wait", "Another job is running; \(what) can start when it has finished.", in: window)
+                return false
+            }
+            busy = true
+            return true
+        }
+
+        func endWork() { busy = false }
+
         // MARK: help
 
         func showHelp() {
@@ -153,10 +170,9 @@
             let dst = "/Applications/Helios 300 Setup.app"
             let rel = engine.loadRelease()
             do {
-                if FileManager.default.fileExists(atPath: dst) { try FileManager.default.removeItem(atPath: dst) }
-                try FileManager.default.copyItem(atPath: src, toPath: dst)
+                try engine.installApp(from: src, to: dst)
                 if let dir = rel.dir { engine.setReleaseDir(dir) }
-                _ = ProcessRunner().capture([Tool.open, "-n", dst])
+                engine.relaunch(at: dst)
                 NSApp.terminate(nil)
             } catch {
                 UI.alert("Could not copy the app", "\(error)", in: window)

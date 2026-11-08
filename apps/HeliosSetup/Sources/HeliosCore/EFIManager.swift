@@ -4,11 +4,15 @@
 //   find      `diskutil list -plist internal physical` -> the EFI partition(s); with several, the one on the
 //             disk that holds the boot volume's APFS physical store.
 //   mount     `diskutil mount <dev>` (root), then `diskutil info -plist` for the mount point.
-//   install   1. free space is checked (backup + staged copy + 1 MiB);
-//             2. an existing EFI/BOOT + EFI/OC is copied to EFI-backup-<date>/ on the same ESP and verified;
+//   install   1. free space is checked (backup + staged copy + 1 MiB), oldest backups pruned if that is what it takes;
+//             2. an existing EFI/BOOT + EFI/OC is copied to EFI-backup-<date>/ on the same ESP and verified (it is
+//                written under a partial name first, so a stopped backup never looks like a finished one);
 //             3. the new BOOT + OC are copied to EFI.new/ and verified against the source, file by file;
-//             4. only then swapped in, and verified again in place.
-//             A stop before 4 leaves the old bootloader untouched.
+//             4. the swap: EFI.old/.parts records what was there, BOOT and OC are renamed into EFI.old/, the staged
+//                copies are renamed in and verified in place, then EFI.old is renamed to EFI.old.del (the commit
+//                point) and the old copies are deleted last.
+//             A throw anywhere in 4 puts the old copies back. EFI.old's presence on the next run says a swap was killed:
+//             recoverSwap puts them back; EFI.old.del says it had committed and only the deletion is left.
 //   restore   the same swap from a backup (the current EFI is backed up first).
 //   validate  ocvalidate from <EFI>/OC/Tools (or next to the release), only when it is for the same OpenCore
 //             version as OpenCore.efi; otherwise skipped with a warning (OpenCore's own rule: ocvalidate checks one
@@ -25,7 +29,10 @@ public enum EFIError: Error, CustomStringConvertible, Equatable {
     case notAnEFI(String)
     case noSpace(need: Int64, free: Int64)
     case verifyFailed(String, String)
+    case swapFailed(String)
+    case rollbackFailed(String, String)
     case noBackup(String)
+    case badBackupName(String)
     case command(String, String)
 
     public var description: String {
@@ -37,8 +44,13 @@ public enum EFIError: Error, CustomStringConvertible, Equatable {
             return "\(p) is not an OpenCore EFI folder (needs BOOT/BOOTx64.efi, OC/OpenCore.efi, OC/config.plist)"
         case .noSpace(let need, let free):
             return "the EFI partition has \(free / 1_048_576) MiB free, \(need / 1_048_576) MiB are needed (backup + new copy)"
-        case .verifyFailed(let what, let path): return "\(what) does not match its source (\(path)); nothing was swapped"
+        case .verifyFailed(let what, let path): return "\(what) does not match its source (\(path))"
+        case .swapFailed(let why): return "the EFI swap stopped (\(why)); the previous EFI/BOOT and EFI/OC are back in place"
+        case .rollbackFailed(let why, let undo):
+            return "the EFI swap stopped (\(why)) and the previous EFI could not be put back (\(undo)): "
+                + "start from the stick and use Undo, or copy an EFI-backup-<date> folder back by hand"
         case .noBackup(let b): return "no EFI backup \(b)"
+        case .badBackupName(let b): return "\(b) is not an EFI backup name"
         case .command(let c, let why): return "\(c) failed: \(why)"
         }
     }
@@ -55,7 +67,24 @@ public struct EFIManager {
     let fs: FileSystem
     let clock: Clock
     static let parts = ["BOOT", "OC"]
+    static let stagedDir = "EFI.new"
+    static let asideDir = "EFI.old"
+    static let doomedDir = "EFI.old.del"
+    static let asideMarker = ".parts"
+    static let backupPrefix = "EFI-backup-"
+    static let partialPrefix = "EFI-partial-"
+    /// EFI backups kept on the ESP after a successful install or restore.
+    public static let backupsKept = 3
     static let ignored: Set<String> = [".DS_Store", ".fseventsd", ".Spotlight-V100", ".Trashes", ".TemporaryItems"]
+
+    /// Where an artifact lives on the ESP, relative to its mount point.
+    public static func kextPath(_ name: String) -> String { "EFI/OC/Kexts/\(name)" }
+    public static func acpiPath(_ name: String) -> String { "EFI/OC/ACPI/\(name)" }
+    public static let configPath = "EFI/OC/config.plist"
+
+    public static func espPath(of artifact: Artifact) -> String {
+        artifact.kind == "ssdt" ? acpiPath(artifact.name) : kextPath(artifact.name)
+    }
 
     public init(runner: CommandRunner, fs: FileSystem, clock: Clock) {
         self.runner = runner
@@ -65,10 +94,11 @@ public struct EFIManager {
 
     // MARK: find and mount
 
+    /// The EFI partition on the disk that holds the running macOS (its APFS physical store), even when the internal
+    /// disk list shows only one: that one could belong to another disk than the macOS being set up.
     public func internalESP() throws -> String {
         let list = runner.capture([Tool.diskutil, "list", "-plist", "internal", "physical"])
         let esps = DiskutilParser.efiPartitions(Data(list.stdout.utf8))
-        if esps.count == 1, let only = esps.first { return only }
         if esps.isEmpty { throw EFIError.noInternalESP }
         let root = runner.capture([Tool.diskutil, "info", "-plist", "/"])
         if let store = physicalStore(Data(root.stdout.utf8)), let disk = wholeDisk(store),
@@ -137,56 +167,158 @@ public struct EFIManager {
     /// had no OpenCore before.
     @discardableResult
     public func install(from source: String, esp mp: String, log: (String) -> Void) throws -> String? {
+        try recoverSwap(esp: mp, log: log)
         let efi = (mp as NSString).appendingPathComponent("EFI")
         let hadOC = isEFI(efi) || Self.parts.contains { fs.exists((efi as NSString).appendingPathComponent($0)) }
-        try checkSpace(source: source, existing: hadOC ? efi : nil, esp: mp)
-        var backup: String?
-        if hadOC {
-            let name = backupName()
-            try copyParts(from: efi, to: (mp as NSString).appendingPathComponent(name), what: "backup", log: log)
-            backup = name
-        }
+        try makeRoom(source: source, existing: hadOC ? efi : nil, esp: mp, log: log)
+        let backup = hadOC ? backupName() : nil
+        if let backup { try makeBackup(from: efi, named: backup, esp: mp, log: log) }
         try swapIn(source: source, esp: mp, log: log)
+        pruneBackups(esp: mp, log: log)
         return backup
     }
 
     /// Puts a backup back (after backing up what is there now).
     public func restore(backup name: String, esp mp: String, log: (String) -> Void) throws -> String? {
+        guard ManifestCheck.isPathComponent(name), name.hasPrefix(Self.backupPrefix) else { throw EFIError.badBackupName(name) }
+        try recoverSwap(esp: mp, log: log)
         let dir = (mp as NSString).appendingPathComponent(name)
         guard fs.isDirectory((dir as NSString).appendingPathComponent("OC")) else { throw EFIError.noBackup(name) }
         let efi = (mp as NSString).appendingPathComponent("EFI")
         var current: String?
         if isEFI(efi) {
-            try checkSpace(source: dir, existing: efi, esp: mp)
+            try makeRoom(source: dir, existing: efi, esp: mp, keeping: name, log: log)
             let n = backupName() + "-before-restore"
-            try copyParts(from: efi, to: (mp as NSString).appendingPathComponent(n), what: "backup", log: log)
+            try makeBackup(from: efi, named: n, esp: mp, log: log)
             current = n
         }
         try swapIn(source: dir, esp: mp, log: log)
+        pruneBackups(esp: mp, keeping: name, log: log)
         return current
     }
 
     public func backups(esp mp: String) -> [String] {
-        ((try? fs.list(mp)) ?? []).filter { $0.hasPrefix("EFI-backup-") }.sorted()
+        ((try? fs.list(mp)) ?? []).filter { $0.hasPrefix(Self.backupPrefix) }.sorted()
+    }
+
+    /// Writes a backup under a partial name and renames it when complete; a failed copy leaves nothing behind.
+    func makeBackup(from efi: String, named name: String, esp mp: String, log: (String) -> Void) throws {
+        let partial = (mp as NSString).appendingPathComponent(Self.partialPrefix + name)
+        try fs.remove(partial)
+        do {
+            try copyParts(from: efi, to: partial, what: "backup", log: log)
+            try fs.move(partial, to: (mp as NSString).appendingPathComponent(name))
+        } catch {
+            try? fs.remove(partial)
+            throw error
+        }
+        log("backup kept as \(name)")
+    }
+
+    /// Frees the ESP by deleting the oldest backups, keeping at least the newest, when that is what it takes.
+    func makeRoom(source: String, existing: String?, esp mp: String, keeping: String? = nil, log: (String) -> Void) throws {
+        while true {
+            do { return try checkSpace(source: source, existing: existing, esp: mp) } catch EFIError.noSpace(let need, let free) {
+                let spare = backups(esp: mp).dropLast().filter { $0 != keeping }
+                guard let oldest = spare.first else { throw EFIError.noSpace(need: need, free: free) }
+                try fs.remove((mp as NSString).appendingPathComponent(oldest))
+                log("removed the oldest backup \(oldest) to make room")
+            }
+        }
+    }
+
+    /// Keeps the newest `backupsKept` (and the one being used); a failure here costs only disk space.
+    func pruneBackups(esp mp: String, keeping: String? = nil, log: (String) -> Void) {
+        for old in backups(esp: mp).dropLast(Self.backupsKept) where old != keeping {
+            try? fs.remove((mp as NSString).appendingPathComponent(old))
+            log("removed the old backup \(old)")
+        }
     }
 
     func swapIn(source: String, esp mp: String, log: (String) -> Void) throws {
         let efi = (mp as NSString).appendingPathComponent("EFI")
-        let staged = (mp as NSString).appendingPathComponent("EFI.new")
-        try fs.remove(staged)
-        try copyParts(from: source, to: staged, what: "new EFI (staged)", log: log)
-        try fs.makeDirectory(efi)
-        for p in Self.parts {
-            let target = (efi as NSString).appendingPathComponent(p)
-            try fs.remove(target)
-            try fs.move((staged as NSString).appendingPathComponent(p), to: target)
+        let staged = (mp as NSString).appendingPathComponent(Self.stagedDir)
+        let aside = (mp as NSString).appendingPathComponent(Self.asideDir)
+        do {
+            try copyParts(from: source, to: staged, what: "new EFI (staged)", log: log)
+            try fs.makeDirectory(efi)
+            try fs.makeDirectory(aside)
+        } catch {
+            try? fs.remove(staged)
+            try? fs.remove(aside)
+            throw error
         }
-        try fs.remove(staged)
-        for p in Self.parts {
-            try verify(
-                (source as NSString).appendingPathComponent(p), (efi as NSString).appendingPathComponent(p), what: "EFI/\(p)")
+        let incoming = Self.parts.filter { fs.exists((staged as NSString).appendingPathComponent($0)) }
+        let had = Self.parts.filter { fs.exists((efi as NSString).appendingPathComponent($0)) }
+        try fs.write(Data(had.joined(separator: "\n").utf8), to: (aside as NSString).appendingPathComponent(Self.asideMarker))
+        do {
+            for p in incoming where had.contains(p) {
+                try fs.move((efi as NSString).appendingPathComponent(p), to: (aside as NSString).appendingPathComponent(p))
+            }
+            for p in incoming {
+                try fs.move((staged as NSString).appendingPathComponent(p), to: (efi as NSString).appendingPathComponent(p))
+            }
+            for p in incoming {
+                try verify(
+                    (source as NSString).appendingPathComponent(p), (efi as NSString).appendingPathComponent(p), what: "EFI/\(p)")
+            }
+        } catch {
+            do { try undoSwap(esp: mp) } catch let undo { throw EFIError.rollbackFailed("\(error)", "\(undo)") }
+            throw EFIError.swapFailed("\(error)")
         }
+        // The commit point: from here on the new EFI stays, whatever happens to the deletions.
+        try fs.move(aside, to: (mp as NSString).appendingPathComponent(Self.doomedDir))
+        finishSwap(esp: mp, log: log)
         log("EFI/BOOT and EFI/OC are in place and verified")
+    }
+
+    /// Deletes what a committed swap left behind. A failure only costs space until the next run tries again.
+    func finishSwap(esp mp: String, log: (String) -> Void) {
+        for dir in [Self.doomedDir, Self.stagedDir] {
+            let path = (mp as NSString).appendingPathComponent(dir)
+            do { try fs.remove(path) } catch { log("WARNING: could not delete \(path): \(error)") }
+        }
+    }
+
+    /// Puts the parts in EFI.old back, removes parts that only the swap brought in, and deletes EFI.old and EFI.new.
+    func undoSwap(esp mp: String) throws {
+        let efi = (mp as NSString).appendingPathComponent("EFI")
+        let aside = (mp as NSString).appendingPathComponent(Self.asideDir)
+        let marker = (aside as NSString).appendingPathComponent(Self.asideMarker)
+        // No marker: the swap had not started moving anything.
+        if let data = try? fs.read(marker) {
+            let had = Set(String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init))
+            for p in Self.parts {
+                let kept = (aside as NSString).appendingPathComponent(p)
+                let target = (efi as NSString).appendingPathComponent(p)
+                if fs.exists(kept) {
+                    try fs.remove(target)
+                    do { try fs.move(kept, to: target) } catch { try copyTree(kept, target) }  // a rename that fails twice
+                } else if !had.contains(p) {
+                    try fs.remove(target)
+                }
+            }
+        }
+        try fs.remove(aside)
+        try fs.remove((mp as NSString).appendingPathComponent(Self.stagedDir))
+    }
+
+    /// Repairs what a killed process left on the ESP: an uncommitted swap goes back, a committed one is tidied up,
+    /// and partial backups are removed. Run before anything else touches the ESP.
+    public func recoverSwap(esp mp: String, log: (String) -> Void) throws {
+        if fs.exists((mp as NSString).appendingPathComponent(Self.doomedDir)) {
+            log("an earlier EFI swap had finished: removing its old copies")
+            finishSwap(esp: mp, log: log)
+        }
+        if fs.exists((mp as NSString).appendingPathComponent(Self.asideDir)) {
+            log("an earlier EFI swap was interrupted: putting the previous EFI back")
+            do { try undoSwap(esp: mp) } catch { throw EFIError.rollbackFailed("an earlier run was interrupted", "\(error)") }
+        }
+        try fs.remove((mp as NSString).appendingPathComponent(Self.stagedDir))
+        for partial in ((try? fs.list(mp)) ?? []) where partial.hasPrefix(Self.partialPrefix) {
+            try fs.remove((mp as NSString).appendingPathComponent(partial))
+            log("removed the partial backup \(partial)")
+        }
     }
 
     func copyParts(from src: String, to dst: String, what: String, log: (String) -> Void) throws {
@@ -213,16 +345,20 @@ public struct EFIManager {
 
     /// Same files with the same SHA-256 (FAT housekeeping files ignored).
     public func verify(_ a: String, _ b: String, what: String) throws {
+        guard fs.isDirectory(a) else {
+            guard Hashing.sha256(file: a, fs: fs) == Hashing.sha256(file: b, fs: fs) else { throw EFIError.verifyFailed(what, b) }
+            return
+        }
         let x = try filtered(Hashing.tree(a, fs: fs).files)
         let y = try filtered(Hashing.tree(b, fs: fs).files)
         if x != y { throw EFIError.verifyFailed(what, b) }
     }
 
     func filtered(_ files: [String: String]) -> [String: String] {
-        files.filter { path, _ in
-            !path.split(separator: "/").contains { Self.ignored.contains(String($0)) || $0.hasPrefix("._") }
-        }
+        files.filter { path, _ in !path.split(separator: "/").contains { Self.isHousekeeping($0) } }
     }
+
+    static func isHousekeeping(_ name: Substring) -> Bool { ignored.contains(String(name)) || name.hasPrefix("._") }
 
     func treeSize(_ dir: String) -> Int64 {
         guard let files = try? Hashing.tree(dir, fs: fs).files else { return 0 }
@@ -239,20 +375,27 @@ public struct EFIManager {
 
     // MARK: ocvalidate
 
-    /// Runs ocvalidate on `<efi>/OC/config.plist` when a matching one is found in `candidates` (paths to try).
-    public func validate(efi: String, candidates: [String]) -> ValidationResult {
-        let config = (efi as NSString).appendingPathComponent("OC/config.plist")
+    /// Runs ocvalidate on `config` (default `<efi>/OC/config.plist`) when a matching one is found in `candidates`. With
+    /// `scratch` (the root side) it runs a root-owned copy, never the file in the place it was found.
+    public func validate(efi: String, config: String? = nil, candidates: [String], scratch: RootScratch? = nil)
+        -> ValidationResult
+    {
+        let config = config ?? (efi as NSString).appendingPathComponent("OC/config.plist")
         let ocFile = (efi as NSString).appendingPathComponent("OC/OpenCore.efi")
         guard let oc = (try? fs.read(ocFile)).flatMap(OpenCoreVersion.fromBinary) else {
             return .skipped("the OpenCore version of \(ocFile) is not readable: ocvalidate not run")
         }
-        guard let tool = candidates.first(where: fs.exists) else {
-            return .skipped("no ocvalidate next to OpenCore \(oc) (EFI/OC/Tools or the release folder): config not validated")
+        guard let found = candidates.first(where: fs.exists) else {
+            return .skipped("no ocvalidate for OpenCore \(oc) in EFI/OC/Tools or the release folder: config not validated")
+        }
+        let tool: String
+        do { tool = try scratch?.copy(found) ?? found } catch {
+            return .skipped("ocvalidate could not be copied to a root-owned place (\(error)): config not validated")
         }
         let r = runner.capture([tool, config])
         let out = r.stdout + r.stderr
         if let v = OpenCoreVersion.fromOcvalidate(out), v != oc {
-            return .skipped("\(tool) is for OpenCore \(v), the EFI has \(oc): config not validated")
+            return .skipped("\(found) is for OpenCore \(v), the EFI has \(oc): config not validated")
         }
         return r.ok ? .passed(out) : .failed(out)
     }

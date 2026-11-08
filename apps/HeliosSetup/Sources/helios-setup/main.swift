@@ -32,7 +32,7 @@ struct Args {
 
     static let valued: Set<String> = [
         "--release", "--user", "--home", "--source", "--efi-source", "--staged", "--sha",
-        "--app", "--product", "--zip", "--bundle", "--output",
+        "--app", "--product", "--zip", "--bundle", "--output", "--resources", "--baseline-sha", "--baseline-dir",
     ]
 
     init(_ argv: [String]) {
@@ -92,6 +92,7 @@ func printStatus(_ engine: Engine, json: Bool, showSSID: Bool, release: String?)
     )
     if let p = o.release.problem { print("  ! \(p)") }
     for (name, ok) in o.scripts where !ok { print("  ! \(name) in this app is missing or is not the release's copy (sha256)") }
+    if let p = o.stateProblem { print("  ! \(p)") }
     print("macOS \(o.build); this boot came from: \(o.bootSource)")
     if let r = o.restartPending { print("restart pending: \(r)") }
     print("\nSetup:")
@@ -142,7 +143,7 @@ func update(_ engine: Engine, _ a: Args) -> Int32 {
         guard a.flags.contains("--apply") else { return 0 }
         let staged = try engine.download(offer)
         print("\nDownloaded and verified: \(staged.dir)")
-        return try engine.applyNextUpdate(staged)
+        return try engine.applyNextUpdate(staged, baseline: offer.baseline)
     } catch {
         fail("\(error)")
     }
@@ -186,8 +187,14 @@ func thirdParty(_ engine: Engine, _ a: Args) -> Int32 {
 /// `_root`: the half that runs as root (started by Engine through sudo / osascript / directly).
 func root(_ a: Args) -> Int32 {
     guard geteuid() == 0 else { fail("_root must run as root", 77) }
+    // `do shell script … with administrator privileges` can leave the real UID the user's; scripts and sudo must see root.
+    guard setuid(0) == 0 else { fail("_root could not become root fully (setuid)", 77) }
+    // Held until this process exits.
+    guard RootLock.acquire() != nil else { fail("another Helios 300 Setup job is running; try again when it has finished", 75) }
     guard let name = a.options["--user"], let home = a.options["--home"] else { fail("_root needs --user and --home") }
-    let env = Environment.live(gui: false, executable: CommandLine.arguments[0], user: UserContext(name: name, home: home))
+    let env = Environment.live(
+        gui: false, executable: CommandLine.arguments[0], user: UserContext(name: name, home: home),
+        resources: a.options["--resources"])
     let ops = RootOps(env: env)
     let out = a.options["--output"]
     switch a.word(1) {
@@ -197,10 +204,13 @@ func root(_ a: Args) -> Int32 {
         }
         return ops.step(id, action, releaseDir: rel, efiSource: a.options["--efi-source"], output: out)
     case "update-apply":
-        guard let staged = a.options["--staged"], let sha = a.options["--sha"] else {
-            fail("_root update-apply --staged DIR --sha SHA")
+        guard let staged = a.options["--staged"], let sha = a.options["--sha"], let baseline = a.options["--baseline-sha"] else {
+            fail("_root update-apply --staged DIR --sha SHA --baseline-sha SHA|none")
         }
-        return ops.updateApply(staged: staged, sha: sha, appPath: a.options["--app"], output: out)
+        return ops.updateApply(
+            staged: staged, sha: sha, baselineSha: baseline, baselineDir: a.options["--baseline-dir"],
+            appPath: a.options["--app"],
+            output: out)
     case "rollback":
         return ops.rollback(output: out)
     case "gpu-apps":

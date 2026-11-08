@@ -4,7 +4,9 @@
 // `osascript -e 'do shell script … with administrator privileges'` (the same mechanism Apple documents for
 // AppleScript; OCLP's GUI also elevates through an authorization prompt rather than holding credentials). The
 // command line is built inside AppleScript from `quoted form of` each argument, so no argument is ever spliced
-// into shell text by this code. stdin of the root command is /dev/null.
+// into shell text by this code. stdin of the root command is /dev/null. The root shell writes no file of its own:
+// `_root` opens the log itself (never through a link), and the exit status comes back as the last line of the
+// command's output, so no root redirection ever points into a user-writable folder.
 import Foundation
 
 /// Exit status used when the administrator prompt was cancelled (no command ran).
@@ -35,50 +37,43 @@ public struct SudoRunner: PrivilegedRunner {
 /// GUI: the macOS administrator prompt.
 public struct OsascriptRunner: PrivilegedRunner {
     let runner: CommandRunner
-    let fs: FileSystem
-    let tempDir: String
 
-    public init(
-        runner: CommandRunner = ProcessRunner(), fs: FileSystem = LocalFileSystem(),
-        tempDir: String = NSTemporaryDirectory()
-    ) {
-        self.runner = runner
-        self.fs = fs
-        self.tempDir = tempDir
-    }
+    public init(runner: CommandRunner = ProcessRunner()) { self.runner = runner }
 
-    /// The AppleScript: argv items are (prompt, log, rc file, command...). The exit status goes to the rc file,
-    /// so a failing command and a cancelled prompt can be told apart.
+    /// The AppleScript: argv items are (prompt, command...). The command's exit status is the last line it prints,
+    /// so a failing command and a cancelled prompt (no output at all) can be told apart.
     public static let script = [
         "on run argv",
         "set cmd to \"\"",
-        "repeat with i from 4 to count of argv",
+        "repeat with i from 2 to count of argv",
         "set cmd to cmd & quoted form of (item i of argv) & \" \"",
         "end repeat",
-        "set cmd to cmd & \"</dev/null >>\" & quoted form of (item 2 of argv) & \" 2>&1; echo $? >\" & quoted form of (item 3 of argv)",
+        "set cmd to cmd & \"</dev/null 2>&1; echo $?\"",
         "do shell script cmd with prompt (item 1 of argv) with administrator privileges",
         "end run",
     ]
 
     /// The full osascript argv for one root command.
-    public static func osascriptArguments(_ argv: [String], prompt: String, log: String, rcFile: String) -> [String] {
+    public static func osascriptArguments(_ argv: [String], prompt: String) -> [String] {
         var out = ["/usr/bin/osascript"]
         for line in script { out += ["-e", line] }
-        return out + [prompt, log, rcFile] + argv
+        return out + [prompt] + argv
+    }
+
+    /// Lines the command printed before its status (the status is the last one).
+    static func parse(_ stdout: String) -> (status: Int32, text: String)? {
+        var lines = stdout.components(separatedBy: .newlines).filter { !$0.isEmpty }
+        guard let last = lines.popLast(), let status = Int32(last) else { return nil }
+        return (status, lines.joined(separator: "\n"))
     }
 
     public func runAsRoot(_ argv: [String], prompt: String, output: String?) -> Int32 {
-        let token = UUID().uuidString
-        let log = output ?? (tempDir as NSString).appendingPathComponent("helios-setup-\(token).log")
-        let rcFile = (tempDir as NSString).appendingPathComponent("helios-setup-\(token).rc")
-        if !fs.exists(log) { try? fs.write(Data(), to: log) }
-        let args = Self.osascriptArguments(argv, prompt: prompt, log: log, rcFile: rcFile)
-        _ = runner.capture(args, env: nil, cwd: nil)
-        defer { try? fs.remove(rcFile) }
-        guard let data = try? fs.read(rcFile),
-            let rc = Int32(String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))
-        else { return privilegedCancelled }
-        return rc
+        let result = runner.capture(Self.osascriptArguments(argv, prompt: prompt), env: nil, cwd: nil)
+        guard result.ok, let parsed = Self.parse(result.stdout) else { return privilegedCancelled }
+        if !parsed.text.isEmpty, let output, let log = openLogForAppending(output) {
+            log.write(Data((parsed.text + "\n").utf8))
+        }
+        return parsed.status
     }
 }
 

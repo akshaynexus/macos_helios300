@@ -134,30 +134,33 @@ final class UpdateTests: XCTestCase {
         let http = FakeHTTP()
         http.pages[a.url ?? ""] = zip
         http.pages[ManifestCheck.urlPrefix + "v0.1.1/manifest.json"] = raw
+        http.pages[ManifestCheck.urlPrefix + "v0.1.1/manifest.json.sig"] = testSign(raw)
         return (m, raw, http, work)
     }
 
     func updater(_ http: FakeHTTP) -> Updater {
-        Updater(http: http, fs: LocalFileSystem(), unzipper: CommandUnzipper())
+        Updater(http: http, fs: LocalFileSystem(), unzipper: CommandUnzipper(), verifier: testVerifier)
     }
 
     func testStageVerifiesEveryFileAndInnerFile() throws {
         let (m, raw, http, work) = try release()
-        let staged = try updater(http).stage(m, raw: raw, into: "\(work)/staged", previousDir: nil)
+        let staged = try updater(http).stage(m, raw: raw, signature: Data(), into: "\(work)/staged", previousDir: nil)
         XCTAssertEqual(staged.manifestSha256, Hashing.sha256(raw))
         XCTAssertTrue(FileManager.default.fileExists(atPath: "\(work)/staged/x/Foo.kext/Contents/MacOS/Foo"))
     }
 
     func testTamperedZipWithAnExtraFileIsRefused() throws {
         let (m, raw, http, work) = try release { src in write("evil", "\(src)/Foo.kext/Contents/MacOS/evil") }
-        XCTAssertThrowsError(try updater(http).stage(m, raw: raw, into: "\(work)/staged", previousDir: nil)) { e in
+        XCTAssertThrowsError(try updater(http).stage(m, raw: raw, signature: Data(), into: "\(work)/staged", previousDir: nil)) {
+            e in
             XCTAssertEqual(e as? VerifyError, .extraInner("Foo.kext", "Contents/MacOS/evil"))
         }
     }
 
     func testTamperedZipWithAChangedFileIsRefused() throws {
         let (m, raw, http, work) = try release { src in write("other binary", "\(src)/Foo.kext/Contents/MacOS/Foo") }
-        XCTAssertThrowsError(try updater(http).stage(m, raw: raw, into: "\(work)/staged", previousDir: nil)) { e in
+        XCTAssertThrowsError(try updater(http).stage(m, raw: raw, signature: Data(), into: "\(work)/staged", previousDir: nil)) {
+            e in
             XCTAssertEqual(e as? VerifyError, .innerMismatch("Foo.kext", "Contents/MacOS/Foo"))
         }
     }
@@ -166,23 +169,25 @@ final class UpdateTests: XCTestCase {
         let (m, raw, http, work) = try release()
         let url = m.artifacts[0].url ?? ""
         http.pages[url] = (http.pages[url] ?? Data()) + Data([0])
-        XCTAssertThrowsError(try updater(http).stage(m, raw: raw, into: "\(work)/staged", previousDir: nil)) { e in
+        XCTAssertThrowsError(try updater(http).stage(m, raw: raw, signature: Data(), into: "\(work)/staged", previousDir: nil)) {
+            e in
             guard case .fileMismatch = e as? VerifyError else { return XCTFail("\(e)") }
         }
     }
 
     func testUnchangedFilesComeFromTheInstalledRelease() throws {
         let (m, raw, http, work) = try release()
-        _ = try updater(http).stage(m, raw: raw, into: "\(work)/old", previousDir: nil)
+        _ = try updater(http).stage(m, raw: raw, signature: Data(), into: "\(work)/old", previousDir: nil)
         http.pages = [:]
         http.fetched = []
-        XCTAssertNoThrow(try updater(http).stage(m, raw: raw, into: "\(work)/new", previousDir: "\(work)/old"))
+        XCTAssertNoThrow(try updater(http).stage(m, raw: raw, signature: Data(), into: "\(work)/new", previousDir: "\(work)/old"))
         XCTAssertTrue(http.fetched.isEmpty)
     }
 
     func testManifestTagMustMatch() throws {
         let (_, raw, http, _) = try release()
         http.pages[ManifestCheck.urlPrefix + "v0.1.2/manifest.json"] = raw
+        http.pages[ManifestCheck.urlPrefix + "v0.1.2/manifest.json.sig"] = testSign(raw)
         XCTAssertThrowsError(try updater(http).manifest(tag: "v0.1.2")) { e in
             XCTAssertEqual(e as? UpdateError, .tagMismatch("v0.1.2", "0.1.1"))
         }

@@ -3,6 +3,9 @@
 // UpdatePlanner: turns a manifest diff into units of work and batches, with the project's restart rule.
 //   - One unit per changed artifact, except the members of an `update_groups` entry: `always` -> one unit;
 //     `abi-change` -> one unit when the group's `abi` differs between the installed and the new release.
+//     A unit may span install kinds (the PG106 group: an OpenCore kext and two /Library/Extensions kexts): the applier
+//     does all of its `parts`, or none. `kind` is the unit's rank in the order, not a promise that it is the only one.
+//   - An artifact the new release no longer ships is a removal unit of its own.
 //   - A changed config_delta (DeviceProperties, NVRAM, boot-args, ACPI) is its own unit; a kext's own Kernel > Add
 //     entry travels with the kext.
 //   - Units that need no restart (scripts, docs, the Metal userspace when its manifest says so, this app) form the
@@ -18,6 +21,8 @@ public struct UpdateUnit: Equatable {
     public var kind: Kind
     public var artifacts: [String]
     public var requiresRestart: Bool
+    /// The artifacts are gone from the release (read them in the old manifest): the unit takes them away.
+    public var removal = false
 }
 
 public struct UpdatePlan: Equatable {
@@ -46,6 +51,13 @@ public enum UpdatePlanner {
         }
         for a in new.artifacts where changed.contains(a.name) && !grouped.contains(a.name) {
             units.append(unit(id: a.name, title: a.name, artifacts: [a.name], manifest: new))
+        }
+        let dropped = diff.names(.removed).compactMap { old?.artifact($0) }.filter { kind($0) != .app }
+        for a in dropped {
+            units.append(
+                UpdateUnit(
+                    id: "remove-\(a.name)", title: "Remove \(a.name)", kind: kind(a), artifacts: [a.name],
+                    requiresRestart: requiresRestart(a), removal: true))
         }
         if diff.configChanged {
             units.append(
@@ -83,6 +95,12 @@ public enum UpdatePlanner {
         return UpdateUnit(
             id: id, title: title, kind: kind, artifacts: names,
             requiresRestart: arts.contains(where: requiresRestart))
+    }
+
+    /// A unit's artifacts by install kind, each kind's names in the unit's order. Artifacts the new manifest does not
+    /// know stay under `.files`.
+    public static func parts(_ unit: UpdateUnit, manifest m: Manifest) -> [UpdateUnit.Kind: [String]] {
+        Dictionary(grouping: unit.artifacts) { m.artifact($0).map(kind) ?? .files }
     }
 
     public static func kind(_ a: Artifact) -> UpdateUnit.Kind {

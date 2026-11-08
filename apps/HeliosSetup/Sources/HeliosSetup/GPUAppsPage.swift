@@ -82,9 +82,14 @@
         }
 
         private func set(_ entry: AppEntry, _ on: Bool) {
+            guard app.beginWork(in: "this change") else {
+                refresh()
+                return
+            }
             background(
                 { Result { try self.app.engine.setGPU(entry, use: on) } },
                 then: { r in
+                    self.app.endWork()
                     if case .failure(let e) = r { UI.alert("Not changed", "\(e)", in: self.app.window) }
                     self.refresh()
                 })
