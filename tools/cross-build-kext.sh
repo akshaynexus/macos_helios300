@@ -39,10 +39,12 @@
 #   MACOS_MIN   deployment target (default 26.0)
 #   XNU_CONFIG  xnu config/ directory with *.exports (default xnu-12377.1.9)
 #   CLANG, NM   (default clang, llvm-nm)
-#   HELIOS_REAL_KC  BootKernelExtensions.kc of the Mac that will run the kext.
-#               When set, tools/kc-audit.py checks every import against the
-#               collection's exports and every vtable against the real parent
-#               layout (what kxld/OpenCore patch at injection). Unset: skipped.
+#   HELIOS_REAL_KC  kernel collection(s) of the Mac that will run the kext,
+#               colon-separated (BootKernelExtensions.kc[:SystemKernelExtensions.kc]).
+#               When set, tools/kc-audit.py checks every import against their
+#               exports, every subclassed Apple class's size and every vtable
+#               against the real parent layout (what kxld/OpenCore patch at
+#               injection). Unset: skipped.
 #
 # Exit: 0 built + audit passed; 1 failure; 77 tools missing.
 set -euo pipefail
@@ -192,8 +194,10 @@ if [ "$AUDIT" = 1 ]; then
 		die "KPI audit"
 fi
 if [ -n "${HELIOS_REAL_KC:-}" ]; then
-	[ -f "$HELIOS_REAL_KC" ] || die "HELIOS_REAL_KC=$HELIOS_REAL_KC not found"
-	python3 -I "$HERE/kc-audit.py" --kc "$HELIOS_REAL_KC" --kext "$BIN" --plist "$OUT/Contents/Info.plist" ${KCSIBLING[@]+"${KCSIBLING[@]}"} ||
+	KCARGS=()
+	IFS=: read -r -a kcs <<<"$HELIOS_REAL_KC"
+	for kc in "${kcs[@]}"; do [ -f "$kc" ] || die "HELIOS_REAL_KC: $kc not found"; KCARGS+=(--kc "$kc"); done
+	python3 -I "$HERE/kc-audit.py" "${KCARGS[@]}" --kext "$BIN" --plist "$OUT/Contents/Info.plist" ${KCSIBLING[@]+"${KCSIBLING[@]}"} ||
 		die "real-collection audit (kc-audit.py)"
 else
 	echo "note: HELIOS_REAL_KC unset — imports/vtables not checked against a real kernel collection"

@@ -10,7 +10,12 @@ kext, verify what kxld/OpenCore will do at injection time:
      com.apple.kernel), or by a sibling binary built with it (--sibling);
      pad slots (_RESERVED<Class><N>) that only live in vtables are resolved by
      vtable patching and are accepted when the parent slot holds a method;
-  2. every vtable the kext defines (__ZTV<Class>) is laid out like its
+  2. every Apple class the kext subclasses has the size the kext was
+     compiled with: the kext exports kKcAuditParentSizes ({name, sizeof}
+     pairs, NULL-terminated) and the collection's <Class>::MetaClass::MetaClass()
+     passes the real classSize to OSMetaClass::OSMetaClass. A difference means
+     the kext's own ivars overlap the parent's (or the parent reads past them);
+  3. every vtable the kext defines (__ZTV<Class>) is laid out like its
      parent's vtable in the collection: for each slot the kext does not
      override, the symbol the kext names must be the symbol the parent's
      slot holds. OpenCore ("OCAK: Failed to patch symbol X for vtable Y")
@@ -18,8 +23,10 @@ kext, verify what kxld/OpenCore will do at injection time:
      mismatch means the reconstructed header's virtual order differs from the
      binary and the family would call the wrong method, so both fail here.
 
-Only symbol names and slot indices are read from the collection; nothing from
-it is written anywhere. --dump CLASS prints a class's real vtable.
+--kc may be given more than once (Boot and System collections) and their
+symbol tables are merged. Only symbol names, slot indices and class sizes
+are read from the collections; nothing from them is written anywhere.
+--dump CLASS prints a class's real vtable and size.
 
 Exit 0 pass, 1 findings, 2 usage. Kext vtable slots in the collection are
 chained fixups in the x86_64 kernel-cache format (target = low 30 bits,
@@ -51,6 +58,7 @@ def pad_slot(name):
 
 class Collection:
     def __init__(self, path):
+        self.path = path
         self.f = open(path, "rb").read()
         f = self.f
         magic, _, _, ft, ncmds, _, _, _ = struct.unpack_from("<IiiIIIII", f, 0)
@@ -105,6 +113,31 @@ class Collection:
         if raw >> 32 == 0xFFFFFF80:
             return raw  # the kernel's own vtables hold plain kernel addresses
         return self.base + (raw & 0x3FFFFFFF)  # chained fixup, x86_64 kernel-cache format
+
+    def class_size(self, cls):
+        """classSize passed by <cls>::MetaClass::MetaClass() to OSMetaClass::OSMetaClass."""
+        ctor = self.defined.get("__ZN11OSMetaClassC2EPKcPKS_j")
+        for suffix in ("C2Ev", "C1Ev"):
+            entry = self.defined.get("__ZN%d%s9MetaClass%s" % (len(cls), cls, suffix))
+            if not entry or not ctor:
+                continue
+            off = self.file_offset(entry[0])
+            code = self.f[off:off + 0x80]
+            size = None
+            i = 0
+            while i < len(code) - 5:
+                if code[i] == 0xB9:  # mov ecx, imm32
+                    size = struct.unpack_from("<I", code, i + 1)[0]
+                    i += 5
+                    continue
+                if code[i] == 0xE8:  # call rel32
+                    target = entry[0] + i + 5 + struct.unpack_from("<i", code, i + 1)[0]
+                    if target == ctor[0]:
+                        return size
+                    i += 5
+                    continue
+                i += 1
+        return None
 
     def vtable(self, cls):
         """Slot symbols after the two header words, until the next symbol or a null."""
@@ -175,6 +208,30 @@ class Kext:
                 return struct.unpack_from("<Q", self.f, sfo + vmaddr - sva)[0]
         return 0
 
+    def read_cstring(self, vmaddr):
+        for sva, svs, sfo in self.segs:
+            if sva <= vmaddr < sva + svs:
+                off = sfo + vmaddr - sva
+                return self.f[off:self.f.index(b"\0", off)].decode("utf-8", "replace")
+        return None
+
+    def parent_sizes(self):
+        """{class: sizeof} from the kext's kKcAuditParentSizes table, if it exports one."""
+        table = self.defined.get("_kKcAuditParentSizes")
+        out = {}
+        if table is None:
+            return out
+        addr = table
+        while True:
+            name_ptr, size = self.read64(addr), self.read64(addr + 8)
+            if not name_ptr:
+                break
+            name = self.read_cstring(name_ptr)
+            if name:
+                out[name] = size
+            addr += 16
+        return out
+
     def classes(self):
         return [m.group(1) for n in self.defined for m in [re.match(r"^__ZTV\d+(\w+)$", n)] if m]
 
@@ -198,6 +255,34 @@ class Kext:
         return [m.group(1) for n in self.undefined for m in [re.match(r"^__ZN\d+(\w+?)10gMetaClassE$", n)] if m]
 
 
+class Merged:
+    """Several collections seen as one symbol space (Boot + System)."""
+
+    def __init__(self, kcs):
+        self.kcs = kcs
+        self.defined = {}
+        for c in kcs:
+            for k, v in c.defined.items():
+                self.defined.setdefault(k, v)
+
+    def owner(self, sym):
+        for c in self.kcs:
+            if sym in c.defined:
+                return c
+        return None
+
+    def vtable(self, cls):
+        c = self.owner("__ZTV%d%s" % (len(cls), cls))
+        return c.vtable(cls) if c else None
+
+    def class_size(self, cls):
+        for c in self.kcs:
+            size = c.class_size(cls)
+            if size is not None:
+                return size
+        return None
+
+
 def demangle(names):
     stripped = [n[1:] if n.startswith("_") else n for n in names]
     try:
@@ -212,21 +297,23 @@ def demangle(names):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--kc", required=True, help="BootKernelExtensions.kc of the target Mac")
+    ap.add_argument("--kc", action="append", required=True, help="a kernel collection of the target Mac (repeatable: Boot and System)")
     ap.add_argument("--kext", help="the kext's Mach-O binary")
     ap.add_argument("--plist", help="its Info.plist (OSBundleLibraries)")
     ap.add_argument("--sibling", action="append", default=[], help="binary of another kext built alongside (exports count as resolved)")
     ap.add_argument("--dump", action="append", default=[], metavar="CLASS", help="print CLASS's vtable from the collection")
     a = ap.parse_args()
-    kc = Collection(a.kc)
-    print("kc-audit: %s: %d fileset entries, base 0x%x" % (os.path.basename(a.kc), len(kc.entries), kc.base))
+    kcs = [Collection(p) for p in a.kc]
+    kc = Merged(kcs)
+    for c in kcs:
+        print("kc-audit: %s: %d fileset entries, base 0x%x" % (os.path.basename(c.path), len(c.entries), c.base))
     for cls in a.dump:
         slots = kc.vtable(cls)
         if slots is None:
             print("no vtable for %s" % cls)
             continue
         names = demangle(slots)
-        print("## %s: %d slots" % (cls, len(slots)))
+        print("## %s: %d slots, classSize %s" % (cls, len(slots), hex(kc.class_size(cls) or 0)))
         for i, s in enumerate(slots):
             print("%4d %s" % (i, names[s]))
     if not a.kext:
@@ -258,7 +345,19 @@ def main():
             continue  # resolved by vtable patching if the parent slot holds a method (checked below)
         else:
             findings.append("import %s is not defined in the collection" % name)
-    # 2. vtables
+    # 2. class sizes
+    sizes = kext.parent_sizes()
+    for cls in sorted(sizes):
+        real = kc.class_size(cls)
+        if real is None:
+            findings.append("class %s: no MetaClass constructor in the collection(s) to read classSize from" % cls)
+        elif real != sizes[cls]:
+            findings.append("class %s: kext compiled with sizeof %#x, the collection's classSize is %#x" % (cls, sizes[cls], real))
+    if sizes:
+        print("  class sizes: %d checked (%s)" % (len(sizes), ", ".join("%s=%#x" % (k, v) for k, v in sorted(sizes.items()))))
+    else:
+        print("  class sizes: kext exports no kKcAuditParentSizes table; sizes not checked")
+    # 3. vtables
     parents = kext.parents()
     for cls in kext.classes():
         ours = kext.vtable(cls)
@@ -293,11 +392,11 @@ def main():
                 findings.append("vtable %s slot %d: kext names %s but the parent slot holds %s (header slot order differs)"
                                 % (cls, i, names.get(mine, mine), names.get(real, real)))
     if findings:
-        print("FAIL: %d finding(s) against %s:" % (len(findings), os.path.basename(a.kc)))
+        print("FAIL: %d finding(s) against %s:" % (len(findings), ", ".join(os.path.basename(p) for p in a.kc)))
         for x in findings:
             print("   ", x)
         return 1
-    print("PASS kc-audit: %d imports resolve and %d vtable(s) match the collection" % (len(set(kext.undefined)), len(kext.classes())))
+    print("PASS kc-audit: %d imports resolve, %d class size(s) and %d vtable(s) match the collection(s)" % (len(set(kext.undefined)), len(sizes), len(kext.classes())))
     return 0
 
 
