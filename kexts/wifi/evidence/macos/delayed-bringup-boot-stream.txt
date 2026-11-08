@@ -1,0 +1,242 @@
+Filtering the log data using "sender == "AirportAth10k" OR composedMessage CONTAINS "AirportAth10k" OR sender == "IO80211Family" OR sender == "Ath10kMac""
+Timestamp               Ty Process[PID:TID]
+2026-11-07 16:08:28.166 Df kernelmanagerd[117:3aa] Received kext load notification: com.helios300.AirportAth10k
+2026-11-07 16:08:28.167 E  kernelmanager_helper[318:783] Could not process load notification in helper: Could not find: Did not find identifier (com.helios300.AirportAth10k) in helper to process load notification
+2026-11-07 16:08:28.168 Df kernel[0:a19] (IOPCIFamily) [PCIe:0 27309936567 ns] [childPublished()] child AirportAth10kNub(0x1000005d8) published
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+=== Messages dropped during live streaming (use `log show` to see what they were)
+2026-11-07 16:09:58.525 Df kernel[0:1ba] (corecapture) CCPipe::withOwnerNameCapacity pipeOwner com.helios300.AirportAth10k pipeName DriverLogs
+2026-11-07 16:09:58.525 Df kernel[0:1ba] (corecapture) CCLogPipe::createReportersAndLegend() Done Creating Legend for owner: com.helios300.AirportAth10k pipe DriverLogs
+2026-11-07 16:09:58.525 Df kernel[0:1ba] (corecapture) Created CCLogPipe (Owner: com.helios300.AirportAth10k - Name: DriverLogs)
+2026-11-07 16:09:58.525 Df kernel[0:1ba] (corecapture) withOwnerNameCapacity:158 Pipe Owner:com.helios300.AirportAth10k Name:DriverLogs LogIdentifier:wlan0
+2026-11-07 16:09:58.525 Df kernel[0:1ba] (corecapture) CCLogStream::createReportersAndLegend() streamName AirportAth10k
+2026-11-07 16:09:58.526 Df kernel[0:1ba] (corecapture) Created CCLogStream (Name: AirportAth10k)
+2026-11-07 16:09:58.526 Df kernel[0:1ba] (corecapture) CCPipe::withOwnerNameCapacity pipeOwner com.helios300.AirportAth10k pipeName DatapathEvents
+2026-11-07 16:09:58.526 Df kernel[0:1ba] (corecapture) CCLogPipe::createReportersAndLegend() Done Creating Legend for owner: com.helios300.AirportAth10k pipe DatapathEvents
+2026-11-07 16:09:58.526 Df kernel[0:1ba] (corecapture) Created CCLogPipe (Owner: com.helios300.AirportAth10k - Name: DatapathEvents)
+2026-11-07 16:09:58.526 Df kernel[0:1ba] (corecapture) withOwnerNameCapacity:158 Pipe Owner:com.helios300.AirportAth10k Name:DatapathEvents LogIdentifier:
+2026-11-07 16:09:58.527 Df kernel[0:1ba] (corecapture) CCPipe::withOwnerNameCapacity pipeOwner com.helios300.AirportAth10k pipeName StateSnapshots
+2026-11-07 16:09:58.527 Df kernel[0:1ba] (corecapture) CCDataPipe::createReportersAndLegend() Done Creating Legend for owner: com.helios300.AirportAth10k pipe StateSnapshots
+2026-11-07 16:09:58.527 Df kernel[0:1ba] (corecapture) Created CCDataPipe (Owner: com.helios300.AirportAth10k - Name: StateSnapshots)
+2026-11-07 16:09:58.527 Df kernel[0:1ba] (corecapture) withOwnerNameCapacity:158 Pipe Owner:com.helios300.AirportAth10k Name:StateSnapshots LogIdentifier:0
+2026-11-07 16:09:58.527 Df kernel[0:1ba] (IO80211Family) controller common start
+2026-11-07 16:09:58.527 Df kernel[0:1ba] (IO80211Family) IO80211Controller::createIOReporters 0xe84f571dec50283b
+2026-11-07 16:09:58.529 Df kernel[0:1ba] (IO80211Family) IO80211 LQM Logging configure: 3
+2026-11-07 16:09:58.529 Df kernel[0:1ba] (IO80211Family)  CCFlags: 0x3, CCLevel: 5 ConsoleFlags: 0x0, ConsoleLevel: -1
+2026-11-07 16:09:58.530 Df kernel[0:1ba] (IO80211Family)  CCFlags: 0x4, CCLevel: 5 ConsoleFlags: 0x0, ConsoleLevel: -1
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211Controller::findAndAttachToFaultReporter found matching faultReporter
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211Controller::start, disabling IOCTL logic
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211Controller::start _controller is 0xe84f571dec50283b, provider is 0x68b6f88b63c7c17
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) {WiFiTimeSync} controller common start done. this=0x<decode: mismatch for [%p] got [SCALAR private sz:0]>
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211SkywalkInterface::init start
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211SkywalkInterface::initIvars complete
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211SkywalkInterface::init with controller start
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) initIvars: ivars already allocated, re-use
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211SkywalkInterface::initIvars complete
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211SkywalkInterface::init complete
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211PeerManager::initInterfaceConfigPeerReporters(6335) fPeerManagerReporters == NULL , skipping init
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211PeerManager::addPeerOperation(6401) fInterfacePeerCounters not yet present, storing operation for later
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211PeerManager::initInterfaceConfigPeerReporters(6335) fPeerManagerReporters == NULL , skipping init
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) IO80211PeerManager::addPeerOperation(6401) fInterfacePeerCounters not yet present, storing operation for later
+2026-11-07 16:09:58.531 Df kernel[0:1ba] (IO80211Family) Skywalk Interface added monitor timers
+2026-11-07 16:09:58.533 Df kernel[0:1ba] (corecapture) setLevel:339 Pipe Owner:com.helios300.AirportAth10k Name:DatapathEvents LogIdentifier:
+2026-11-07 16:09:58.533 Df kernel[0:1ba] (IO80211Family) Finding ivars->_faultReporter
+2026-11-07 16:09:58.533 Df kernel[0:1ba] (IO80211Family) [IOC DEBUG] INTERNAL: Get type=<APPLE80211_IOC_PLATFORM_CONFIG> Int=<Infrastructure> isDriverAvailable=<0> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 16:09:58.534 Df kernel[0:1ba] (IO80211Family) Override Adaptive Roaming support: 1
+2026-11-07 16:09:58.534 Df kernel[0:1ba] (IO80211Family) Adaptive Roaming support: 0
+2026-11-07 16:09:58.534 Df kernel[0:1ba] (IO80211Family) Adaptive roam is not supported
+2026-11-07 16:09:58.534 Df kernel[0:1ba] (IO80211Family) IO80211PeerManager::initInterfaceDatapathEventsReporters(6847) fPeerManagerReporters == NULL, skipping init
+2026-11-07 16:09:58.534 Df kernel[0:1ba] (IO80211Family) com.apple.stats.p2p: Family Skywalk Interface start done
+2026-11-07 16:09:58.534 Df kernel[0:1ba] (IO80211Family) IO80211InfraInterface:setDebugFlags:3176: debugFlags=0x880226080400004 settingOpts=0x0
+2026-11-07 16:09:58.534 Df kernel[0:1ba] (IO80211Family) com.apple.p2p: setPeerManagerLogFlags[7344] logflags: 880226080400004
+2026-11-07 16:09:58.534 Df kernel[0:1ba] (IO80211Family) com.apple.p2p: setPeerManagerLogFlags[7351] fPcapLogStream is NULL
+2026-11-07 16:09:58.534 Df kernel[0:1ba] (IO80211Family) Exit : IO80211ScanManager::initWithControllerAndSkywalkInterface()
+2026-11-07 16:09:58.534 Df kernel[0:1ca] (IO80211Family) com.apple.p2p: IO80211SkywalkInterface::setPowerState: interface[0x63ff5e26f264955e], role[1] powerStateOrdinal[0] fPowerState[0]
+2026-11-07 16:09:58.534 Df kernel[0:1c60] (IOPCIFamily) [PCIe:0 117320918328 ns] [childPublished()] child AirportAth10kEthernetInterface(0x100000971) published
+2026-11-07 16:09:58.535 Df kernel[0:1c61] (IOPCIFamily) [PCIe:0 117321269660 ns] [childPublished()] child AirportAth10k(0x1000005da) published
+2026-11-07 16:09:58.536 Df configd[98:368] [com.apple.SystemConfiguration:InterfaceNamer] copyUnitForEstablishedInterface: <SCNetworkInterface 0x7fbb4a0060f0 [0x7ff845ba08c0]> {type = IEEE80211, entity_device = (null), entity_type = Ethernet, name(k) = "airport", address = 02:00:00:00:00:01, builtin = TRUE, path = IOService:/AppleACPIPlatformExpert/PCI0@0/AppleACPIPCI/RP03@1C/IOPP/PXSX@0/Qualcomm Atheros QCA6174/AirportAth10kNub/AirportAth10k/AirportAth10kEthernetInterface, entryID = 0x100000971, type = 6, order = 12 (AirPort)} has no specific unit
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family) getFeatureFlags@3189: Enabling 'kFeatureOnDemandInterfaceEnable', 'en1' ifId[1] role[1]
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family) getFeatureFlags@3189: Enabling 'kFeatureOnDemandInterfaceEnable', 'en1' ifId[1] role[1]
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family)  Creating all peerManager reporters
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family) IO80211PeerManager::createDefaultReportersAndLegend(7222) Created OSSet <decode: bad range for [%p] got [offs:51 len:0 within:0]> for role 1 en1
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family) IO80211PeerManager::createDefaultReportersAndLegend(7230) Adding _unicastPeer <decode: bad range for [%p] got [offs:51 len:0 within:0]> for role 1 en1
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family) com.apple.p2p.en1: IO80211Peer::createIOReporters <en1> peer 0: 00:00:00:00:00:00 getPeerManager 0x5fab404c7ad32249
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family) com.apple.p2p.en1: IO80211Peer::createIOReporters success
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family) com.apple.p2p.en1: IO80211Peer::createIOReporters <en1> peer 0: 00:00:00:00:00:00 _statsIDValid 1 _statsID 1
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family) IO80211PeerManager::createDefaultReportersAndLegend(7234) Adding _multicastPeer <decode: bad range for [%p] got [offs:51 len:0 within:0]> for role 1 en1
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family) com.apple.p2p.en1: IO80211Peer::createIOReporters <en1> peer 15: FF:FF:FF:FF:FF:FF getPeerManager 0x5fab404c7ad32249
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family) com.apple.p2p.en1: IO80211Peer::createIOReporters success
+2026-11-07 16:09:58.539 Df kernel[0:368] (IO80211Family) com.apple.p2p.en1: IO80211Peer::createIOReporters <en1> peer 15: FF:FF:FF:FF:FF:FF _statsIDValid 1 _statsID 0
+2026-11-07 16:09:58.540 Df kernel[0:1c64] (IOPCIFamily) [PCIe:0 117326283423 ns] [childPublished()] child AirportAth10kInterface(0x100000970) published
+2026-11-07 16:09:58.541 Df configd[98:368] [com.apple.SystemConfiguration:InterfaceNamer] New interface named
+  path = IOService:/AppleACPIPlatformExpert/PCI0@0/AppleACPIPCI/RP03@1C/IOPP/PXSX@0/Qualcomm Atheros QCA6174/AirportAth10kNub/AirportAth10k/AirportAth10kEthernetInterface
+  unit = 1
+2026-11-07 16:09:58.577 Df kernel[0:1a83] (IO80211Family) com.apple.p2p.stats.en1: [wifip2pd] succeeded in calling newUserClient, type[0x00000000], role[1], ret[0x00000000]
+2026-11-07 16:09:58.577 Df kernel[0:1a83] (IO80211Family) [IOC DEBUG] EXTERNAL: Get type=<APPLE80211_IOC_DRIVER_VERSION> Int=<Infrastructure> isDriverAvailable=<0> res=<GOOD:0:0x0> handler=1
+2026-11-07 16:09:58.578 Df kernel[0:1a83] (IO80211Family) [IOC DEBUG] EXTERNAL: Get type=<APPLE80211_IOC_CARD_CAPABILITIES> Int=<Infrastructure> isDriverAvailable=<0> res=<GOOD:0:0x0> handler=1
+2026-11-07 16:09:58.594 Df kernel[0:1a83] (IO80211Family) [IOC DEBUG] EXTERNAL: Get type=<APPLE80211_IOC_VIRTUAL_IF_PARENT> Int=<Infrastructure> isDriverAvailable=<0> res=<FAIL:6:0x6> handler=1
+2026-11-07 16:09:58.617 Df kernel[0:1c66] (IO80211Family) com.apple.p2p.stats.en1: [configd] succeeded in calling newUserClient, type[0x00000000], role[1], ret[0x00000000]
+2026-11-07 16:09:58.617 Df kernel[0:1c66] (IO80211Family) [IOC DEBUG] EXTERNAL: Get type=<APPLE80211_IOC_DRIVER_VERSION> Int=<Infrastructure> isDriverAvailable=<0> res=<GOOD:0:0x0> handler=1
+2026-11-07 16:09:58.617 Df kernel[0:1c66] (IO80211Family) [IOC DEBUG] EXTERNAL: Get type=<APPLE80211_IOC_CARD_CAPABILITIES> Int=<Infrastructure> isDriverAvailable=<0> res=<GOOD:0:0x0> handler=1
+2026-11-07 16:09:58.618 Df kernel[0:1c66] (IO80211Family) [IOC DEBUG] EXTERNAL: Get type=<APPLE80211_IOC_SSID> Int=<Infrastructure> isDriverAvailable=<0> res=<FAIL:-528342013:0xe0822403> handler=1
+2026-11-07 16:09:58.618 Df kernel[0:1c35] (IO80211Family) com.apple.p2p.stats.en1: IOUC-WIFI: [configd] virtual IOReturn IO80211APIUserClient::clientClose()
+2026-11-07 16:09:58.618 Df kernel[0:6f] (IO80211Family) IO80211APIUserClient::stop(806) _onWLANQueue(1)
+2026-11-07 16:09:58.618 Df kernel[0:6f] (IO80211Family) IO80211APIUserClient::free
+2026-11-07 16:09:58.635 Df kernel[0:1474] (IO80211Family) com.apple.p2p.en1: IO80211PeerManager::reportDataPathEvents <en1> APPLE80211_M_RESET_INTERFACE received, chip reset complete, opening datapath: true
+2026-11-07 16:09:58.635 Df kernel[0:1474] (IO80211Family) com.apple.p2p.en1:   set Datapath Open needsTrigger 0
+2026-11-07 16:09:58.635 Df kernel[0:136] (IO80211Family) com.apple.p2p.en1: IO80211PeerManager::requestTxPacket no enabled
+2026-11-07 16:09:58.635 Df kernel[0:1474] (IO80211Family) loadCardCapabilities status=<0x0>
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) [IOC DEBUG] INTERNAL: Set type=<APPLE80211_IOC_WCL_CONFIG_BGSCAN> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_IDLE got event: BGCOMMON_FSM_EVENT_FWLOAD moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_IDLE got event: BGCOMMON_FSM_EVENT_FWLOAD moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) [IOC DEBUG] INTERNAL: Set type=<APPLE80211_IOC_PM_MODE> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) [IOC DEBUG] INTERNAL: Set type=<APPLE80211_IOC_WCL_ROAM_PROFILE_CONFIG> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) [IOC DEBUG] INTERNAL: Set type=<APPLE80211_IOC_WCL_SET_ROAM_LOCK> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) [IOC DEBUG] INTERNAL: Set type=<APPLE80211_IOC_WCL_CONFIG_BG_PARAMS> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:09:58.635 Df kernel[0:1c5f] (IO80211Family) [IOC DEBUG] INTERNAL: Set type=<APPLE80211_IOC_WCL_CONFIG_BG_PARAMS> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 16:09:58.875 Df kernel[0:1a83] (IO80211Family) extEventMonitorInit: enter
+2026-11-07 16:09:58.875 Df kernel[0:1a83] (IO80211Family) createEventPipe: enter: pipe count: 0
+2026-11-07 16:09:58.875 Df kernel[0:1a83] (IO80211Family) ClientMemoryForType[0x1]
+2026-11-07 16:09:58.875 Df kernel[0:1a83] (IO80211Family) getRingMD: enter : pipe count 1
+2026-11-07 16:09:58.875 Df kernel[0:1a83] (IO80211Family) ClientMemoryForType[0x2]
+2026-11-07 16:09:58.875 Df kernel[0:1a83] (IO80211Family) getRingMD: enter : pipe count 1
+2026-11-07 16:09:58.875 Df kernel[0:1a83] (IO80211Family) extSubscribeEvent: enter
+2026-11-07 16:13:22.484 Df corecaptured[902:24aa] [com.apple.corecaptured:corecapture] servicePublished Owner:com.helios300.AirportAth10k Name:StateSnapshots entry:10267
+2026-11-07 16:13:22.484 Df corecaptured[902:24aa] [com.apple.corecaptured:corecapture] withRegistryEntry:62 CCDataTap::withRegistryEntry entry:10267 Owner:com.helios300.AirportAth10k Name:StateSnapshots
+2026-11-07 16:13:22.484 Df corecaptured[902:24aa] [com.apple.corecaptured:corecapture] CCDataTap::tapLoop:107 tapLoop entry:10267 Owner:com.helios300.AirportAth10k Name:StateSnapshots
+2026-11-07 16:13:22.487 Df corecaptured[902:24aa] [com.apple.corecaptured:corecapture] servicePublished Owner:com.helios300.AirportAth10k Name:DatapathEvents entry:17667
+2026-11-07 16:13:22.487 Df corecaptured[902:24aa] [com.apple.corecaptured:corecapture] withRegistryEntry:62 CCLogTap::withRegistryEntry entry:17667 Owner:com.helios300.AirportAth10k Name:DatapathEvents
+2026-11-07 16:13:22.488 Df corecaptured[902:24aa] [com.apple.corecaptured:corecapture] CCLogTap::tapLoop:138 tapLoop entry:17667 Owner:com.helios300.AirportAth10k Name:DatapathEvents
+2026-11-07 16:13:22.488 Df corecaptured[902:24aa] [com.apple.corecaptured:corecapture] servicePublished Owner:com.helios300.AirportAth10k Name:DriverLogs entry:20995
+2026-11-07 16:13:22.488 Df corecaptured[902:24aa] [com.apple.corecaptured:corecapture] withRegistryEntry:62 CCLogTap::withRegistryEntry entry:20995 Owner:com.helios300.AirportAth10k Name:DriverLogs
+2026-11-07 16:13:22.488 Df corecaptured[902:24aa] [com.apple.corecaptured:corecapture] CCLogTap::tapLoop:138 tapLoop entry:20995 Owner:com.helios300.AirportAth10k Name:DriverLogs
+2026-11-07 16:15:22.358 Df kernel[0:6f] (corecapture) removeCapture:909 Pipe Owner:com.helios300.AirportAth10k Name:StateSnapshots LogIdentifier:0
+2026-11-07 16:15:22.358 Df kernel[0:6f] (corecapture) removeCapture:909 Pipe Owner:com.helios300.AirportAth10k Name:DatapathEvents LogIdentifier:
+2026-11-07 16:15:22.358 Df kernel[0:6f] (corecapture) removeCapture:909 Pipe Owner:com.helios300.AirportAth10k Name:DriverLogs LogIdentifier:wlan0
+Connection to 192.0.2.x closed by remote host.

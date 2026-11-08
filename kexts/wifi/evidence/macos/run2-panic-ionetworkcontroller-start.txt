@@ -1,0 +1,90 @@
+{"bug_type":"210","timestamp":"2026-11-07 15:44:02.00 -0800","os_version":"macOS 26.7.2 (25G332)","roots_installed":0,"incident_id":"904C73B1-AB8A-41DC-B672-9BF5C1E41DAF"}
+
+panic(cpu 1 caller 0xffffff800e2d5aca): Kernel trap at 0xffffff800e2cceb3, type = 14=page fault, registers:
+CR0: 0x000000008001003b, CR2: 0x0000000000000658, CR3: 0x0000000025299000, CR4: 0x00000000003626e0
+RAX: 0x0000000000000000, RBX: 0x0000000000000000, RCX: 0x0000000000000001, RDX: 0xffffffdd6cb94b8c
+RSP: 0xffffffdd6cb94b28, RBP: 0xffffffdd6cb94b70, RSI: 0x0000000000000658, RDI: 0x0000000000000658
+R8:  0xffffffdd69a87140, R9:  0xffffff8501507b00, R10: 0x0000000000001000, R11: 0x0000000000000010
+R12: 0xffffffdd6cb94b8c, R13: 0x0000000000000003, R14: 0x0000000000000001, R15: 0x0000000000000658
+RFL: 0x0000000000010286, RIP: 0xffffff800e2cceb3, CS:  0x0000000000000008, SS:  0x0000000000000010
+Fault CR2: 0x0000000000000658, Error code: 0x0000000000000000, Fault CPU: 0x1, PL: 0, VF: 1
+
+Panicked task 0xffffff869aed39a0: 204 threads: pid 0: kernel_task
+Backtrace (CPU 1), panicked thread: 0xffffff8b674c6a68, Frame : Return Address
+0xffffffdd6cb942c0 : 0xffffff800e159061 mach_kernel : _handle_debugger_trap + 0x421
+0xffffffdd6cb94310 : 0xffffff800e2e61c2 mach_kernel : _kdp_i386_trap + 0x122
+0xffffffdd6cb94350 : 0xffffff800e2d5478 mach_kernel : _kernel_trap + 0x778
+0xffffffdd6cb94410 : 0xffffff800e0eb971 mach_kernel : _return_from_trap + 0xc1
+0xffffffdd6cb94430 : 0xffffff800e159437 mach_kernel : _DebuggerTrapWithState + 0x67
+0xffffffdd6cb94530 : 0xffffff800e158ac9 mach_kernel : _panic_trap_to_debugger + 0x269
+0xffffffdd6cb946a0 : 0xffffff800e9a3b6d mach_kernel : _panic + 0x81
+0xffffffdd6cb94790 : 0xffffff800e2d5aca mach_kernel : _sync_iss_to_iks + 0x3fa
+0xffffffdd6cb94950 : 0xffffff800e2d5684 mach_kernel : _kernel_trap + 0x984
+0xffffffdd6cb94a10 : 0xffffff800e0eb971 mach_kernel : _return_from_trap + 0xc1
+0xffffffdd6cb94a30 : 0xffffff800e2cceb3 mach_kernel : _IOLockLock + 0x3
+0xffffffdd6cb94b70 : 0xffffff800e2cd987 mach_kernel : _ml_thread_policy + 0x27
+0xffffffdd6cb94b90 : 0xffffff80104f86b0 com.apple.iokit.IONetworkingFamily : __ZN19IONetworkController5startEP9IOService + 0x1d4
+0xffffffdd6cb94be0 : 0xffffff8010097265 com.apple.iokit.IO80211Family : __ZN17IO80211Controller5startEP9IOService + 0x41
+0xffffffdd6cb94c10 : 0xffffff8012794134 com.helios300.AirportAth10k : __ZN13AirportAth10k5startEP9IOService + 0xd4
+0xffffffdd6cb94d80 : 0xffffff800e89f047 mach_kernel : __ZN9IOService14startCandidateEPS_ + 0xf7
+0xffffffdd6cb94de0 : 0xffffff800e89e9a8 mach_kernel : __ZN9IOService15probeCandidatesEP12OSOrderedSet + 0xfc8
+0xffffffdd6cb94ec0 : 0xffffff800e89d85b mach_kernel : __ZN9IOService14doServiceMatchEj + 0x36b
+0xffffffdd6cb94f20 : 0xffffff800e8a0cc9 mach_kernel : __ZN15_IOConfigThread4mainEPvi + 0x159
+0xffffffdd6cb94fa0 : 0xffffff800e0eb19e mach_kernel : _call_continuation + 0x2e
+      Kernel Extensions in backtrace:
+         com.apple.iokit.IONetworkingFamily(3.4)[0E40B82F-4995-3F34-9955-EC28B68057A2]@0xffffff80104f0000->0xffffff8010505fff
+         com.apple.iokit.IO80211Family(1200.13.1)[4C2B4969-2B92-3646-9512-C1769BE0F9A4]@0xffffff800ff88000->0xffffff8010255fff
+            dependency: com.apple.driver.AppleMobileFileIntegrity(1.0.5)[8998D378-7467-3CCC-B015-6E61E9586CF0]@0xffffff800f972000->0xffffff800f9aefff
+            dependency: com.apple.driver.corecapture(1.0.4)[B1C1608A-D88B-3FE8-8FBC-A5A8569550D6]@0xffffff80110e7000->0xffffff801110afff
+            dependency: com.apple.iokit.CoreAnalyticsFamily(1)[C2AB7174-29B1-3101-8E7A-5F5FB4E9E0BD]@0xffffff800fd79000->0xffffff800fd83fff
+            dependency: com.apple.iokit.IONetworkingFamily(3.4)[0E40B82F-4995-3F34-9955-EC28B68057A2]@0xffffff80104f0000->0xffffff8010505fff
+            dependency: com.apple.iokit.IOSkywalkFamily(1.0)[A6EDB8DB-175B-3A49-8919-5769FCDB6BED]@0xffffff8010900000->0xffffff8010939fff
+            dependency: com.apple.kec.corecrypto(26.0)[98696237-5382-3702-909A-A2323C6F0B76]@0xffffff8011119000->0xffffff80111abfff
+         com.helios300.AirportAth10k(0.1)[3F97C46E-7FE2-3F73-AEFE-7B28016E7E8B]@0xffffff8012792000->0xffffff80127bffff
+            dependency: br.com.jonasw8.driver.ath10kmac(0.1.0)[20AD36C6-4381-3ED1-9869-71520D377BDB]@0xffffff8012651000->0xffffff801278efff
+            dependency: com.apple.driver.corecapture(1.0.4)[B1C1608A-D88B-3FE8-8FBC-A5A8569550D6]@0xffffff80110e7000->0xffffff801110afff
+            dependency: com.apple.iokit.IO80211Family(1200.13.1)[4C2B4969-2B92-3646-9512-C1769BE0F9A4]@0xffffff800ff88000->0xffffff8010255fff
+            dependency: com.apple.iokit.IONetworkingFamily(3.4)[0E40B82F-4995-3F34-9955-EC28B68057A2]@0xffffff80104f0000->0xffffff8010505fff
+            dependency: com.apple.iokit.IOSkywalkFamily(1.0)[A6EDB8DB-175B-3A49-8919-5769FCDB6BED]@0xffffff8010900000->0xffffff8010939fff
+
+Process name corresponding to current thread (0xffffff8b674c6a68): kernel_task
+Boot args: -v debug=0x100 keepsyms=1 -amfipassbeta -igfxblt -vi2c-force-polling revpatch=sbvmm
+
+Mac OS version:
+25G332
+
+Kernel version:
+Darwin Kernel Version 25.6.0: Mon Oct 12 00:33:09 PDT 2026; root:xnu-12377.161.15.701.48~2/RELEASE_X86_64
+Kernel UUID: 28267FD5-3E1E-3686-8A1C-E73E2466FCFB
+roots installed: 0
+KernelCache slide: 0x000000000de00000
+KernelCache base:  0xffffff800e000000
+Kernel slide:      0x000000000dee8000
+Kernel text base:  0xffffff800e0e8000
+__HIB  text base: 0xffffff800df00000
+System model name: MacBookPro14,3 (Mac-551B86E5744E2388)
+System shutdown begun: NO
+Panic diags file available: YES (0x0)
+Hibernation exit count: 0
+
+System uptime in nanoseconds: 24896353719
+Last Sleep:           absolute           base_tsc          base_nano
+  Uptime  : 0x00000005cbf03995
+  Sleep   : 0x0000000000000000 0x0000000000000000 0x0000000000000000
+  Wake    : 0x0000000000000000 0x00000006d363d6b3 0x0000000000000000
+Compressor Info: 0% of compressed pages limit (OK) and 0% of segments limit (OK) with 0 swapfiles and OK swap space
+Zone info:
+  Zone map: 0xffffff803484b000 - 0xffffffa03484b000
+  . VM    : 0xffffff803484b000 - 0xffffff8501517000
+  . RO    : 0xffffff8501517000 - 0xffffff869aebb000
+  . GEN0  : 0xffffff869aebb000 - 0xffffff8b67b87000
+  . GEN1  : 0xffffff8b67b87000 - 0xffffff9034853000
+  . GEN2  : 0xffffff9034853000 - 0xffffff950151f000
+  . GEN3  : 0xffffff950151f000 - 0xffffff99ce1eb000
+  . DATA  : 0xffffff99ce1eb000 - 0xffffffa03484b000
+  Metadata: 0xffffffdd49a68000 - 0xffffffdd69a68000
+  Bitmaps : 0xffffffdd69a68000 - 0xffffffdd6ca68000
+  Extra   : 0 - 0
+
+
+

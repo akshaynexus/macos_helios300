@@ -1,5 +1,7 @@
 # Linux cross-check evidence (Helios 300 G3-571, CachyOS, kernel 7.3.1)
 
+macOS 26.7.2 runs of the native front end (sanitized logs and panics): [`macos/`](macos/README.md).
+
 Captured 2026-11-07/08 over SSH on Ethernet, on the owner's laptop running Linux
 `ath10k_pci` with linux-firmware 20261019. MAC addresses, BSSIDs and SSIDs are replaced
 with `<mac>` / `<ssid>`. No key material is recorded: the trace print formats carry WMI

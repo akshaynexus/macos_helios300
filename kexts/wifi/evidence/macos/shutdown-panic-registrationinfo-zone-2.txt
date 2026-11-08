@@ -1,0 +1,143 @@
+{"bug_type":"210","timestamp":"2026-11-07 16:27:48.00 -0800","os_version":"macOS 26.7.2 (25G332)","roots_installed":0,"incident_id":"E1FDB4AA-4888-4995-AB59-51F959DAC353"}
+
+panic(cpu 2 caller 0xffffff800c5ab8e7): 0xffffff9b7337fd00 not in the expected zone early.kalloc.288[279], but found in kalloc.type.var4.384[423] @zalloc.c:786
+Panicked task 0xffffff96a055c9a0: 200 threads: pid 0: kernel_task
+Backtrace (CPU 2), panicked thread: 0xffffff91d38fd4d0, Frame : Return Address
+0xffffffb69b6f47e0 : 0xffffff800bd59061 mach_kernel : _handle_debugger_trap + 0x421
+0xffffffb69b6f4830 : 0xffffff800bee61c2 mach_kernel : _kdp_i386_trap + 0x122
+0xffffffb69b6f4870 : 0xffffff800bed5478 mach_kernel : _kernel_trap + 0x778
+0xffffffb69b6f4930 : 0xffffff800bceb971 mach_kernel : _return_from_trap + 0xc1
+0xffffffb69b6f4950 : 0xffffff800bd59437 mach_kernel : _DebuggerTrapWithState + 0x67
+0xffffffb69b6f4a50 : 0xffffff800bd58ac9 mach_kernel : _panic_trap_to_debugger + 0x269
+0xffffffb69b6f4bc0 : 0xffffff800c5a3b6d mach_kernel : _panic + 0x81
+0xffffffb69b6f4cb0 : 0xffffff800c5ab8e7 mach_kernel : _thread_corpse_continue + 0x1ad7
+0xffffffb69b6f4d10 : 0xffffff800c5abdaa mach_kernel : _thread_corpse_continue + 0x1f9a
+0xffffffb69b6f4d40 : 0xffffff800bdd3a78 mach_kernel : _workload_config_available + 0x3998
+0xffffffb69b6f4d70 : 0xffffff800e50efe7 com.apple.iokit.IOSkywalkFamily : __ZN25IOSkywalkNetworkInterface26deregisterNetworkInterfaceEj + 0x14b
+0xffffffb69b6f4da0 : 0xffffff800e50ee85 com.apple.iokit.IOSkywalkFamily : __ZN25IOSkywalkNetworkInterface4stopEP9IOService + 0x1f
+0xffffffb69b6f4dc0 : 0xffffff800dcfd831 com.apple.iokit.IO80211Family : __ZN23IO80211SkywalkInterface4stopEP9IOService + 0x175
+0xffffffb69b6f4df0 : 0xffffff800dd6558f com.apple.iokit.IO80211Family : __ZN21IO80211InfraInterface4stopEP9IOService + 0xf
+0xffffffb69b6f4e10 : 0xffffff800c49a84e mach_kernel : __ZN9IOService10actionStopEPS_S0_PvS1_S1_ + 0xde
+0xffffffb69b6f4e50 : 0xffffff800c4cb62e mach_kernel : __ZN10IOWorkLoop9runActionEPFiP8OSObjectPvS2_S2_S2_ES1_S2_S2_S2_S2_ + 0x3e
+0xffffffb69b6f4e90 : 0xffffff800c499646 mach_kernel : __ZN9IOService15terminateWorkerEj + 0x8b6
+0xffffffb69b6f4f10 : 0xffffff800c4a6e67 mach_kernel : __ZN9IOService15terminateThreadEPvi + 0x107
+0xffffffb69b6f4fa0 : 0xffffff800bceb19e mach_kernel : _call_continuation + 0x2e
+      Kernel Extensions in backtrace:
+         com.apple.iokit.IOSkywalkFamily(1.0)[A6EDB8DB-175B-3A49-8919-5769FCDB6BED]@0xffffff800e500000->0xffffff800e539fff
+            dependency: com.apple.driver.mDNSOffloadUserClient(1.0.1b8)[F4BEEB92-E262-3958-BE52-BFE8258EF121]@0xffffff800e3e3000->0xffffff800e3e7fff
+            dependency: com.apple.iokit.IONetworkingFamily(3.4)[0E40B82F-4995-3F34-9955-EC28B68057A2]@0xffffff800e0f0000->0xffffff800e105fff
+         com.apple.iokit.IO80211Family(1200.13.1)[4C2B4969-2B92-3646-9512-C1769BE0F9A4]@0xffffff800db88000->0xffffff800de55fff
+            dependency: com.apple.driver.AppleMobileFileIntegrity(1.0.5)[8998D378-7467-3CCC-B015-6E61E9586CF0]@0xffffff800d572000->0xffffff800d5aefff
+            dependency: com.apple.driver.corecapture(1.0.4)[B1C1608A-D88B-3FE8-8FBC-A5A8569550D6]@0xffffff800ece7000->0xffffff800ed0afff
+            dependency: com.apple.iokit.CoreAnalyticsFamily(1)[C2AB7174-29B1-3101-8E7A-5F5FB4E9E0BD]@0xffffff800d979000->0xffffff800d983fff
+            dependency: com.apple.iokit.IONetworkingFamily(3.4)[0E40B82F-4995-3F34-9955-EC28B68057A2]@0xffffff800e0f0000->0xffffff800e105fff
+            dependency: com.apple.iokit.IOSkywalkFamily(1.0)[A6EDB8DB-175B-3A49-8919-5769FCDB6BED]@0xffffff800e500000->0xffffff800e539fff
+            dependency: com.apple.kec.corecrypto(26.0)[98696237-5382-3702-909A-A2323C6F0B76]@0xffffff800ed19000->0xffffff800edabfff
+
+Process name corresponding to current thread (0xffffff91d38fd4d0): kernel_task
+Boot args: -v debug=0x100 keepsyms=1 -amfipassbeta -igfxblt -vi2c-force-polling revpatch=sbvmm ath10k_native_delay=90 pg106_selftest=2
+
+Mac OS version:
+25G332
+
+Kernel version:
+Darwin Kernel Version 25.6.0: Mon Oct 12 00:33:09 PDT 2026; root:xnu-12377.161.15.701.48~2/RELEASE_X86_64
+Kernel UUID: 28267FD5-3E1E-3686-8A1C-E73E2466FCFB
+roots installed: 0
+KernelCache slide: 0x000000000ba00000
+KernelCache base:  0xffffff800bc00000
+Kernel slide:      0x000000000bae8000
+Kernel text base:  0xffffff800bce8000
+__HIB  text base: 0xffffff800bb00000
+System model name: MacBookPro14,3 (Mac-551B86E5744E2388)
+System shutdown begun: YES
+Panic diags file available: NO (0xe00002cd)
+Hibernation exit count: 0
+
+System uptime in nanoseconds: 227037558111
+Last Sleep:           absolute           base_tsc          base_nano
+  Uptime  : 0x00000034dca178a5
+  Sleep   : 0x0000000000000000 0x0000000000000000 0x0000000000000000
+  Wake    : 0x0000000000000000 0x000000071567bb30 0x0000000000000000
+Compressor Info: 0% of compressed pages limit (OK) and 0% of segments limit (OK) with 0 swapfiles and OK swap space
+Zone info:
+  Zone map: 0xffffff8b6d236000 - 0xffffffab6d236000
+  . VM    : 0xffffff8b6d236000 - 0xffffff9039f02000
+  . RO    : 0xffffff9039f02000 - 0xffffff91d38a6000
+  . GEN0  : 0xffffff91d38a6000 - 0xffffff96a0572000
+  . GEN1  : 0xffffff96a0572000 - 0xffffff9b6d23e000
+  . GEN2  : 0xffffff9b6d23e000 - 0xffffffa039f0a000
+  . GEN3  : 0xffffffa039f0a000 - 0xffffffa506bd6000
+  . DATA  : 0xffffffa506bd6000 - 0xffffffab6d236000
+  Metadata: 0xffffffb6db710000 - 0xffffffb6fb710000
+  Bitmaps : 0xffffffb6fb710000 - 0xffffffb6fe710000
+  Extra   : 0 - 0
+
+kalloc type arrays in zone, addr belongs to (kalloc.type.var4.384):
+	struct cpc_cyclic.struct cpc_call                 
+	block_list_header.block_info                      
+	struct heap.struct heap_elem                      
+	mach_msg_base_t.mach_msg_kdescriptor_t            
+	struct ioGMDData.struct ioPLBlock                 
+	fs_event_watcher.kfs_event *                      
+	struct Block_byref.void *                         
+	struct vms_slot                                   
+	struct upl_page_info                              
+	struct c_slot                                     
+	A                                                 
+	typeof(*(temp_cache_mounts))                      
+	typeof(*(cache_mounts))                           
+	typeof(*(BC_cache->c_mounts))                     
+	MMIORecord                                        
+	struct msqid_kernel                               
+	struct user_msghdr_x                              
+	rx_ring_t                                         
+	IOSACVictim                                       
+	struct _bucket                                    
+	struct _sr_file_mappings                          
+	struct ifnet_demux_desc                           
+	ACMParameter                                      
+	A                                                 
+	MinorSlot                                         
+	AnchorSlot                                        
+	ACPIEventVector                                   
+	A                                                 
+	struct ipc_entry                                  
+	actionFrameQueueEntry_t                           
+	IRQInfo                                           
+	tx_dirty_work_t                                   
+	acipcRTIRing                                      
+	RxElement                                         
+	IOPCIEvent                                        
+	struct ivac_entry_s                               
+	struct in_mfilter                                 
+	struct in6_mfilter                                
+	A                                                 
+	typeof(*n)                                        
+	thread_watchlist_t                                
+	struct shmmap_state                               
+	struct sav_dump_elem                              
+	struct kd_region                                  
+	struct ipc_port_request                           
+	struct iovec                                      
+	struct devfs_vnode_event                          
+	memorystatus_internal_properties_t                
+	encode_list_data                                  
+	decmpfs_vector                                    
+	debug_apfs_t                                      
+	__OSHashEntryBucket                               
+	TxElement                                         
+	TableEntry                                        
+	PathEntry                                         
+	MemoryBuffer                                      
+	ItemSlice                                         
+	IOVirtualRange                                    
+	IOAddressRange                                    
+	DriverCallParam                                   
+	BandwidthLimitEntry                               
+	ApplePortMultiplierIORequest                      
+	AppleATAIORequest                                 
+	SystemSlotEntry                                   
+	apfs_rawdev_desc_t                                
+	TDMBlockServicesClientData            
+

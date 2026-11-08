@@ -1,0 +1,3 @@
+16:08  up 18 secs, 0 users, load averages: 3.84 0.87 0.31
+boot-args	-v debug=0x100 keepsyms=1 -amfipassbeta -igfxblt -vi2c-force-polling revpatch=sbvmm ath10k_native_delay=90
+br.com.jonasw8.driver.ath10kmac (0.1.0)

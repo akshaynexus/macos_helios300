@@ -1,0 +1,107 @@
+== IOC assoc/auth/key (IO80211)
+2026-11-07 16:29:33.051 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_IDLE got event: BGCOMMON_FSM_EVENT_FWLOAD moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:29:33.051 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_IDLE got event: BGCOMMON_FSM_EVENT_FWLOAD moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:29:33.051 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:29:33.052 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:29:33.052 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:29:33.052 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:29:37.162 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:29:37.162 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:30:32.503 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:30:32.503 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:30:32.503 Df kernel[0:1ed7] (IO80211Family) Exit-setASSOCIATE:153 ret:-536870201
+2026-11-07 16:30:32.503 Df kernel[0:1ed7] (IO80211Family) [IOC DEBUG] EXTERNAL: Set type=<APPLE80211_IOC_ASSOCIATE> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 16:30:32.708 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:30:32.708 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:30:32.708 Df kernel[0:1ed7] (IO80211Family) Exit-setASSOCIATE:153 ret:-536870201
+2026-11-07 16:30:32.708 Df kernel[0:1ed7] (IO80211Family) [IOC DEBUG] EXTERNAL: Set type=<APPLE80211_IOC_ASSOCIATE> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 16:30:52.092 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:30:52.092 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:30:52.092 Df kernel[0:1d85] (IO80211Family) Exit-setASSOCIATE:153 ret:-536870201
+2026-11-07 16:30:52.092 Df kernel[0:1d85] (IO80211Family) [IOC DEBUG] EXTERNAL: Set type=<APPLE80211_IOC_ASSOCIATE> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 16:30:52.301 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:30:52.301 Df kernel[0:1b4d] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 16:30:52.301 Df kernel[0:1d85] (IO80211Family) Exit-setASSOCIATE:153 ret:-536870201
+2026-11-07 16:30:52.301 Df kernel[0:1d85] (IO80211Family) [IOC DEBUG] EXTERNAL: Set type=<APPLE80211_IOC_ASSOCIATE> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+== airportd join
+2026-11-07 16:31:22.038 Df airportd[208:20ed] [com.apple.WiFiManager:] [corewifi] AUTO-JOIN: Will run request (qos=21, request=uuid=49D80, addedAt=2026-11-07 16:31:22.038 -0800, params=trigger=retry (ac), mode=best, preferredChannels=((null)), target=((null)),
+2026-11-07 16:31:22.044 Df airportd[208:20ed] [com.apple.WiFiManager:] [corewifi] AUTO-JOIN: Auto-join STARTED (uuid=49D80, addedAt=2026-11-07 16:31:22.038 -0800, params=trigger=retry (ac), mode=best, preferredChannels=((null)), target=((null)), autoHotspot=1,
+2026-11-07 16:31:22.044 Df airportd[208:20ed] [com.apple.WiFiManager:] [corewifi] AUTO-JOIN: No configured known networks or nearby recommended networks
+2026-11-07 16:31:22.045 Df airportd[208:20ee] [com.apple.WiFiManager:] AutoJoin: <airport[208]> user: USER
+2026-11-07 16:31:22.046 Df airportd[208:20ee] [com.apple.WiFiManager:] AutoJoin: <airport[208]> Non-WiFi network path available [satisfied (Path is satisfied), interface: en0, ipv4, ipv6, dns]
+2026-11-07 16:31:22.046 Df airportd[208:20ed] [com.apple.WiFiManager:] [corewifi] AUTO-JOIN: Auto-hotspot is not allowed (error=(1 'Network path already available on another interface'))
+2026-11-07 16:31:22.046 Df airportd[208:20ed] [com.apple.WiFiManager:] [corewifi] AUTO-JOIN: Scheduling auto-join retry attempt in 10154ms (schedule=ac, index=5 interval=(interval=10, count=12, BSSChannelsOnly=0, maxBSSChannelAge=2592000, maxBSSChannelCount=3,
+2026-11-07 16:31:22.046 Df airportd[208:20ed] [com.apple.WiFiManager:] [corewifi] -[CWFAutoJoinMetric coreAnalyticsEventPayload]: coreAnalyticsEventPayload self.result 0 matchingNetworkProfile networkName (null) approved 0 payloadIdentifier (null) cb 0
+2026-11-07 16:31:22.046 Df airportd[208:20ed] [com.apple.WiFiManager:] [corewifi] -[CWFAutoJoinMetric coreAnalyticsEventPayload]: coreAnalyticsEventPayload addReason is not CarrierBundle
+2026-11-07 16:31:22.046 Df airportd[208:20ed] [com.apple.WiFiManager:] [corewifi] AUTO-JOIN: Auto-join METRIC (uuid=49D80, duration=2, durationFromDeviceUnlockTrigger=108951, durationFromWiFiPowerOnTrigger=108895, mode=best, retrySchedule=ac, retryScheduleInde
+2026-11-07 16:31:22.046 Df airportd[208:20ed] [com.apple.WiFiManager:] [corewifi] AUTO-JOIN: Will not submit 'com.apple.wifi.autojoin' CoreAnalytics metric
+2026-11-07 16:31:22.046 Df airportd[208:20ed] [com.apple.WiFiManager:] [corewifi] AUTO-JOIN: Auto-join COMPLETED (uuid=49D80, duration=2ms, result=0, error=((null)), wasCancelled=0, wasRequeued=0, scanChannelCount=0, autoHotspot=[duration=0ms, result=0, error=
+2026-11-07 16:31:22.047 Df airportd[208:20ee] [com.apple.WiFiManager:] Info: <airport[208]> -[CWEAPOLClient eapolClientControlMode]: failed to retrieve 8021X state (2)
+2026-11-07 16:31:22.047 Df airportd[208:20ee] [com.apple.WiFiManager:] AutoJoin: <airport[208]> user: USER
+2026-11-07 16:31:22.049 Df airportd[208:20ee] [com.apple.WiFiManager:] Info: <airport[208]> -[CWXPCSubsystem queryBSSIDForInterfaceWithName:connection:error:]: Failed to query current BSSID, returned error code -528342013
+2026-11-07 16:31:22.049 Df airportd[208:20ee] [com.apple.WiFiManager:] Info: <airport[208]> -[CWXPCSubsystem querySSIDForInterfaceWithName:connection:error:]: Failed to query current SSID, returned error code -528342013
+2026-11-07 16:31:22.051 Df airportd[208:406] [com.apple.WiFiManager:] SC: <airport[208]> _SC_callback: Changed keys: count[  1] key@[  0] = 'State:/Network/Interface/en1/AirPort/AutoJoinTimestamp'
+    "State:/Network/Interface/en1/AirPort/AutoJoinTimestamp"
+2026-11-07 16:31:22.051 Df airportd[208:20ee] [com.apple.WiFiManager:] Info: <airport[208]> -[CWXPCSubsystem queryBSSIDForInterfaceWithName:connection:error:]: Failed to query current BSSID, returned error code -528342013
+    "State:/Network/Interface/en1/AirPort/AutoJoinTimestamp"
+2026-11-07 16:31:22.051 Df airportd[208:2252] [com.apple.WiFiManager:] SC: <airport[208]> airportdProcessSystemConfigurationEvent: Processing 'State:/Network/Interface/en1/AirPort/AutoJoinTimestamp'
+2026-11-07 16:31:22.051 Df airportd[208:20ee] [com.apple.WiFiManager:] Info: <airport[208]> -[CWXPCSubsystem querySSIDForInterfaceWithName:connection:error:]: Failed to query current SSID, returned error code -528342013
+2026-11-07 16:31:22.052 Df airportd[208:406] [com.apple.WiFiManager:] SC: <airport[208]> _SC_callback: Changed keys: count[  1] key@[  0] = 'State:/Network/Interface/en1/AirPort/Power Status'
+    "State:/Network/Interface/en1/AirPort/Power Status"
+    "State:/Network/Interface/en1/AirPort/Power Status"
+2026-11-07 16:31:22.053 Df airportd[208:2252] [com.apple.WiFiManager:] SC: <airport[208]> airportdProcessSystemConfigurationEvent: Processing 'State:/Network/Interface/en1/AirPort/Power Status'
+2026-11-07 16:31:22.054 Df airportd[208:20ee] [com.apple.WiFiManager:] AutoJoin: <airport[208]> Non-WiFi network path available [satisfied (Path is satisfied), interface: en0, ipv4, ipv6, dns]
+2026-11-07 16:31:22.054 Df airportd[208:20ee] [com.apple.WiFiManager:] AutoJoin: <airport[208]> [atj] Network path already available on another interface, will not show available networks UI
+2026-11-07 16:31:22.054 Df airportd[208:406] [com.apple.WiFiManager:] SC: <airport[208]> _SC_callback: Changed keys: count[  1] key@[  0] = 'State:/Network/Interface/en1/AirPort/AutoJoinTimestamp'
+    "State:/Network/Interface/en1/AirPort/AutoJoinTimestamp"
+    "State:/Network/Interface/en1/AirPort/AutoJoinTimestamp"
+2026-11-07 16:31:22.054 Df airportd[208:2252] [com.apple.WiFiManager:] SC: <airport[208]> airportdProcessSystemConfigurationEvent: Processing 'State:/Network/Interface/en1/AirPort/AutoJoinTimestamp'
+2026-11-07 16:31:22.055 Df airportd[208:406] [com.apple.WiFiManager:] SC: <airport[208]> _SC_callback: Changed keys: count[  1] key@[  0] = 'State:/Network/Interface/en1/AirPort/Power Status'
+    "State:/Network/Interface/en1/AirPort/Power Status"
+    "State:/Network/Interface/en1/AirPort/Power Status"
+2026-11-07 16:31:22.056 Df airportd[208:20ed] [com.apple.WiFiManager:] SC: <airport[208]> airportdProcessSystemConfigurationEvent: Processing 'State:/Network/Interface/en1/AirPort/Power Status'
+2026-11-07 16:31:22.057 Df airportd[208:1b75] [com.apple.WiFiManager:] [corewifi] BEGIN REQ [GET LINK DOWN STATUS] (pid=644 proc=WiFiAgent bundleID=com.apple.wifi.WiFiAgent codesignID=com.apple.wifi.WiFiAgent service=com.apple.private.corewifi.internal-xpc qos
+2026-11-07 16:31:22.057 Df airportd[208:1b75] [com.apple.WiFiManager:] [corewifi] END REQ [GET LINK DOWN STATUS] took 0.000294679s (pid=644 proc=WiFiAgent bundleID=com.apple.wifi.WiFiAgent codesignID=com.apple.wifi.WiFiAgent service=com.apple.private.corewifi.
+2026-11-07 16:31:22.061 Df airportd[208:1b75] [com.apple.WiFiManager:] [corewifi] BEGIN REQ [GET LINK DOWN STATUS] (pid=644 proc=WiFiAgent bundleID=com.apple.wifi.WiFiAgent codesignID=com.apple.wifi.WiFiAgent service=com.apple.private.corewifi.internal-xpc qos
+2026-11-07 16:31:22.061 Df airportd[208:20ed] [com.apple.WiFiManager:] [corewifi] END REQ [GET LINK DOWN STATUS] took 0.000201596s (pid=644 proc=WiFiAgent bundleID=com.apple.wifi.WiFiAgent codesignID=com.apple.wifi.WiFiAgent service=com.apple.private.corewifi.
+== core connection props
+      "Ath10kConnectionLastDisconnectSecurity" = 0
+      "Ath10kBSS10" = "bssid=02:00:00:00:00:02 ssid="" hidden=1 rx-channel=153 advertised-channel=153 snr=31 privacy=1 rsn-ie=1 wpa-ie=0 seen=5"
+      "Ath10kBSS2" = "bssid=02:00:00:00:00:03 ssid="" hidden=1 rx-channel=10 advertised-channel=2 snr=18 privacy=1 rsn-ie=1 wpa-ie=0 seen=34"
+      "Ath10kConnectionVdevUp" = No
+      "Ath10kSecurityIndMapped" = No
+      "Ath10kBSS5" = "bssid=02:00:00:00:00:04 ssid="SSID-B" hidden=0 rx-channel=3 advertised-channel=2 snr=8 privacy=1 rsn-ie=1 wpa-ie=0 seen=8"
+      "Ath10kConnectionLastRollbackStage" = 0
+      "Ath10kConnectionVdevStarted" = No
+      "Ath10kSecurityIndLateClears" = 0
+      "Ath10kConnectionPeerEventMAC" = <000000000000>
+      "Ath10kSecurityIndDisconnectStage" = 0
+      "Ath10kConnectionPHY" = "legacy"
+      "Ath10kConnectionWMILastStage" = 0
+      "Ath10kBSS8" = "bssid=02:00:00:00:00:05 ssid="SSID-A" hidden=0 rx-channel=12 advertised-channel=11 snr=20 privacy=1 rsn-ie=1 wpa-ie=1 seen=10"
+      "Ath10kConnectionPeerCreateIssued" = No
+      "Ath10kConnectionPeerEventAfter" = 0
+      "Ath10kConnectionState" = "disabled"
+      "Ath10kConnectionMLMESubtype" = 0
+      "Ath10kConnectionCenterChannel" = 0
+      "Ath10kSecurityPhase" = 0
+      "Ath10kConnectionVdevStartIssued" = No
+      "Ath10kSecurityIndIgnored" = 0
+      "Ath10kSecurityGeneration" = 0
+      "Ath10kBSS0" = "bssid=02:00:00:00:00:06 ssid="" hidden=1 rx-channel=3 advertised-channel=2 snr=10 privacy=1 rsn-ie=1 wpa-ie=0 seen=8"
+      "Ath10kConnectionPeerEventOwn" = No
+      "Ath10kSecurityIndFlags" = 0
+      "Ath10kSecurityEAPOLHold" = No
+      "Ath10kConnectionRollbackCount" = 0
+      "Ath10kConnectionWMILastSecurity" = 0
+      "Ath10kBSS3" = "bssid=02:00:00:00:00:07 ssid="" hidden=1 rx-channel=4 advertised-channel=2 snr=23 privacy=1 rsn-ie=1 wpa-ie=0 seen=14"
+      "Ath10kConnectionWMILastAPStep" = 0
+      "Ath10kConnectionPeerEventBefore" = 0
+      "Ath10kConnectionPeerMaps" = 0
+      "Ath10kConnectionWMILastDisconnect" = 0
+      "Ath10kConnectionChannelPowerLimitHalfDbm" = 0
+      "Ath10kConnectionMLMEReason" = 0
+      "Ath10kSecurityIndications" = 0
+      "Ath10kConnectionMLMEChannel" = 0
+      "Ath10kConnectionWMICommands" = 0
+      "Ath10kSecurityRekeyKind" = 0

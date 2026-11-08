@@ -1,0 +1,114 @@
+17:42  up 3 mins, 1 user, load averages: 12.15 12.16 5.57
+-v debug=0x100 keepsyms=1 -amfipassbeta -igfxblt -vi2c-force-polling revpatch=sbvmm pg106_selftest=2
+br.com.jonasw8.driver.ath10kmac (0.1.0)
+com.helios300.AirportAth10k (0.1.0)
+== registry
+    | |   |         |   "AirportAth10kLastStep" = "30 station MAC: private address set"
+    | |   |         |   "AirportAth10kLastMessage" = "station MAC now 02:00:00:00:00:08"
+    | |   |           |   "AirportAth10kJoinState" = "ready"
+    | |   |           |   "AirportAth10kLastError" = "none"
+    | |   |           |   "AirportAth10kLastDisconnectReason" = 3
+      "Ath10kConnectionLastDisconnectSecurity" = 0
+      "Ath10kConnectionVdevUp" = No
+      "Ath10kConnectionVdevStarted" = No
+      "Ath10kConnectionWMILastStage" = 10
+      "Ath10kConnectionPeerCreateIssued" = No
+      "Ath10kConnectionState" = "disabled"
+      "Ath10kSecurityPhase" = 0
+      "Ath10kSecurityGeneration" = 0
+      "Ath10kSecurityIndFlags" = 0
+      "Ath10kSecurityEAPOLHold" = No
+      "Ath10kConnectionRollbackCount" = 0
+== IOC
+2026-11-07 17:41:58.125 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:41:58.125 Df kernel[0:14a] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 17:41:58.527 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:41:58.527 Df kernel[0:14d] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 17:41:58.755 Df kernel[0:1a25] (IO80211Family) Exit-setASSOCIATE:153 ret:0
+2026-11-07 17:41:59.132 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:41:59.132 Df kernel[0:14d] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 17:41:59.535 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:41:59.536 Df kernel[0:14a] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 17:41:59.940 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:41:59.940 Df kernel[0:14a] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 17:42:04.888 Df kernel[0:18a7] (IO80211Family) Exit-setASSOCIATE:153 ret:0
+2026-11-07 17:42:05.167 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:42:05.168 Df kernel[0:14a] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 17:42:05.570 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:42:05.571 Df kernel[0:14a] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 17:42:05.973 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:42:05.974 Df kernel[0:14d] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 17:42:06.203 Df kernel[0:18a7] (IO80211Family) Exit-setASSOCIATE:153 ret:0
+2026-11-07 17:42:06.578 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:42:06.579 Df kernel[0:14d] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 17:42:06.984 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:42:06.984 Df kernel[0:14d] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:42:07.389 Df kernel[0:14d] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+== WCL join
+2026-11-07 17:42:06.984 Df kernel[0:a0f] (corecapture) 000130.611850 InterfaceLogs.E[677] [wcl] updateBGScanState@188:WCLPNOFsm: Vote PNO Disable From BGScanSourceJoinManager, PNODisableSources 0x19 --> 0x19
+2026-11-07 17:42:06.985 Df kernel[0:a0f] (corecapture) 000130.611868 InterfaceLogs.E[678] [wcl] updateBGScanState@203:WCLEPNOFsm: Vote EPNO Disable From BGScanSourceJoinManager, EPNODisableSources 0x9 --> 0x9
+2026-11-07 17:42:06.985 Df kernel[0:a0f] (corecapture) 000130.611901 InterfaceLogs.I[679] WCLJoinRequest Beacon Info:  @0x6e9955de52168cc6 BSSID=02:00:00:00:00:04 rssi=-87  snr=  0  channel=< 2:0> enc=0x8 akm=0x00004080:0x00000014ap=1 age=1
+2026-11-07 17:42:06.985 Df kernel[0:a0f] (corecapture) 000130.611915 InterfaceLogs.E[680] [wcl] handleSendCandidateToDriver@1306:WCLWnm: WCLJoinManager::handleJoinRequest nwassurance:0x0xffffffc7d28bcbc8
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015117 InterfaceLogs.E[685] [wcl] logTransition@207:FSM JOIN_MANAGER: in state: JOIN_MANAGER_STATE_IN_PROGRESS got event: JOIN_MANAGER_EVENT_JOIN_ASSOC_COMPLETE moved into: JOIN_
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015197 InterfaceLogs.I[688] WCL Joined Bss @0x6e9955de52168cc6 BSSID=02:00:00:00:00:04 rssi=-87  snr=  0  channel=< 2:0> enc=0x8 akm=0x00004080:0x00000014ap=1 age=0 ntmb=0 oweT=0
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015214 InterfaceLogs.E[689] [wcl] cmdIouc@145:Fail to Get cmd=<APPLE80211_IOC_WCL_EXTENDED_BSS_INFO, 460> res=<unknown Apple80211 ReturnToString, 0xe00002d8>
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015220 InterfaceLogs.E[690] [wcl] setCurrentBSS@2446:Fail to get EXTENDED_BSS_INFO
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015224 InterfaceLogs.E[691] [wcl] setCurrentBSS@2510:SEND Bssid change with reason 3
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015233 InterfaceLogs.E[692] [wcl] leaveNetworkCommand@2381:ask to leave network due to <Update Bss fail> isAbortJoin=<0> isDisconnectInVoluntary=<1> enhancedDisassocReason=<10>
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015239 InterfaceLogs.E[693] [wcl] logTransition@207:FSM NET_MANAGER: in state: NET_MANAGER_STATE_WAITING_FOR_CONNECT_COMPLETE got event: NET_MANAGER_EVENT_LEAVE_NETWORK moved int
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015282 InterfaceLogs.I[697] [wcl] setLinkChangedEventData@2841: isLinkDown = 1, inVol=1, apple80211 reason=3, IEEE reason=1, rssi=0
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015343 InterfaceLogs.E[698] [wcl] logTransition@207:FSM NET_MANAGER: in state: NET_MANAGER_STATE_DEAUTH got event: NET_MANAGER_EVENT_LINK_DOWN_COMPLETE moved into: NET_MANAGER_ST
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015373 InterfaceLogs.E[700] [wcl] setCurrentBSS@2510:SEND Bssid change with reason 2
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015626 InterfaceLogs.E[706] [wcl] cmdIouc@145:Fail to Set cmd=<APPLE80211_IOC_PM_MODE, 392> res=<unknown Apple80211 ReturnToString, 0xe00002c7>
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (IO80211Family) [IOC DEBUG] INTERNAL: Set type=<APPLE80211_IOC_WCL_ARP_MODE> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 17:42:07.388 Df kernel[0:a0f] (corecapture) 000131.015669 InterfaceLogs.E[708] [wcl] cmdIouc@145:Fail to Set cmd=<APPLE80211_IOC_WCL_ARP_MODE, 437> res=<unknown Apple80211 ReturnToString, 0xe00002c7>
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016150 InterfaceLogs.E[711] [wcl] logTransition@207:FSM JOIN_MANAGER: in state: JOIN_MANAGER_STATE_ASSOC_DONE got event: JOIN_MANAGER_EVENT_JOIN_CONNECT_COMPLETE moved into: JOIN
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016179 InterfaceLogs.E[712] [wcl] updateAndCheckForNextCandidate@491:Unable to retrieve next join candidate
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016198 InterfaceLogs.E[713] [wcl] isJoinProcessDone@825:isJoinDone =<1> AssocDoneNotified=<0> statusCode=<1> indexNextCandidate=<-1> joinTime=<1186> joinMaxTimeout=<35000> isNeed
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016220 InterfaceLogs.E[714] [wcl] logTransition@207:FSM JOIN_MANAGER: in state: JOIN_MANAGER_STATE_CONNECT_COMPLETE got event: JOIN_MANAGER_EVENT_JOIN_COMPLETE moved into: JOIN_M
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016245 InterfaceLogs.E[715] [wcl] leaveNetworkCommand@2381:ask to leave network due to <join failure> isAbortJoin=<0> isDisconnectInVoluntary=<1> enhancedDisassocReason=<8>
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016278 InterfaceLogs.E[717] [wcl] sendWCLJoinDone@537:WCLJoinManager sendWCLJoinDone, lastStatusCode=1, extendedCode=3, joinedBSSID=02:00:00:00:00:04
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016302 InterfaceLogs.E[718] [wcl] populateJoinStatus_block_invoke@439:{0} BSSID Addr: 02:00:00:00:00:09 flags 0xa authStatus 0x0 authReason 0x0 assocStatus 0x0 assocReason 0x0 fi
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016327 InterfaceLogs.E[719] [wcl] populateJoinStatus_block_invoke@439:{1} BSSID Addr: 02:00:00:00:00:0a flags 0xa authStatus 0x0 authReason 0x0 assocStatus 0x0 assocReason 0x0 fi
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016351 InterfaceLogs.E[720] [wcl] populateJoinStatus_block_invoke@439:{2} BSSID Addr: 02:00:00:00:00:04 flags 0xa authStatus 0x0 authReason 0x0 assocStatus 0x0 assocReason 0x0 fi
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (IO80211Family) WCLJoinRequest NULL current join candidate
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016389 InterfaceLogs.E[721] [wcl] populateJoinStatus@459:Join Addr 00:00:00:00:00:00 assoc status 0x2 retVal: 0x1 ieeeStatus: 0x1
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016418 InterfaceLogs.E[722] [wcl] notifyAssocDone@502:TRACER:notifyAssocDone@502:1/3
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016459 InterfaceLogs.E[723] [wcl] updateBGScanState@188:WCLPNOFsm: Vote PNO Enable From BGScanSourceJoinManager, PNODisableSources 0x19 --> 0x11
+2026-11-07 17:42:07.389 Df kernel[0:a0f] (corecapture) 000131.016490 InterfaceLogs.E[724] [wcl] updateBGScanState@203:WCLEPNOFsm: Vote EPNO Enable From BGScanSourceJoinManager, EPNODisableSources 0x9 --> 0x1
+2026-11-07 17:42:07.394 Df kernel[0:a0f] (corecapture) 000131.021488 InterfaceLogs.E[726] [wcl] leaveNetworkCommand@2381:ask to leave network due to <setDISASSOCIATE> isAbortJoin=<1> isDisconnectInVoluntary=<0> enhancedDisassocReason=<0>
+2026-11-07 17:42:07.600 Df kernel[0:a0f] (corecapture) 000131.227423 InterfaceLogs.E[729] [wcl] leaveNetworkCommand@2381:ask to leave network due to <setDISASSOCIATE> isAbortJoin=<1> isDisconnectInVoluntary=<0> enhancedDisassocReason=<10>
+2026-11-07 17:42:07.619 Df kernel[0:a0f] (corecapture) 000131.245865 InterfaceLogs.E[733] [wcl] cmdIouc@145:Fail to Set cmd=<APPLE80211_IOC_WCL_SCAN_REQ, 441> res=<unknown Apple80211 ReturnToString, 0xe00002d5>
+2026-11-07 17:42:07.619 Df kernel[0:a0f] (corecapture) 000131.245871 InterfaceLogs.E[735] [wcl] logTransition@207:FSM SCAN_MANAGER: in state: SCAN_MANAGER_STATE_IN_PROGRESS got event: SCAN_MANAGER_EVENT_SCAN_REQ_FAILED moved into: SCAN_MANA
+2026-11-07 17:42:07.626 Df kernel[0:a0f] (corecapture) 000131.253395 InterfaceLogs.E[740] [wcl] cmdIouc@145:Fail to Set cmd=<APPLE80211_IOC_WCL_SCAN_REQ, 441> res=<unknown Apple80211 ReturnToString, 0xe00002d5>
+2026-11-07 17:42:07.626 Df kernel[0:a0f] (corecapture) 000131.253401 InterfaceLogs.E[742] [wcl] logTransition@207:FSM SCAN_MANAGER: in state: SCAN_MANAGER_STATE_IN_PROGRESS got event: SCAN_MANAGER_EVENT_SCAN_REQ_FAILED moved into: SCAN_MANA
+2026-11-07 17:42:30.528 Df kernel[0:6f] (corecapture) removeCapture:909 Pipe Owner:com.helios300.AirportAth10k Name:DatapathEvents LogIdentifier:
+2026-11-07 17:42:30.528 Df kernel[0:6f] (corecapture) removeCapture:909 Pipe Owner:com.helios300.AirportAth10k Name:DriverLogs LogIdentifier:wlan0
+2026-11-07 17:42:30.528 Df kernel[0:6f] (corecapture) removeCapture:909 Pipe Owner:com.helios300.AirportAth10k Name:StateSnapshots LogIdentifier:0
+== airportd
+2026-11-07 17:42:48.137 Df airportd[208:1c8c] [com.apple.WiFiManager:] Info: <airport[208]> -[CWXPCSubsystem querySSIDForInterfaceWithName:connection:error:]: Failed to query current SSID, returned error code -528342013
+2026-11-07 17:42:48.139 Df airportd[208:3ed] [com.apple.WiFiManager:] SC: <airport[208]> _SC_callback: Changed keys: count[  1] key@[  0] = 'State:/Network/Interface/en1/AirPort/AutoJoinTimestamp'
+    "State:/Network/Interface/en1/AirPort/AutoJoinTimestamp"
+    "State:/Network/Interface/en1/AirPort/AutoJoinTimestamp"
+2026-11-07 17:42:48.139 Df airportd[208:1c91] [com.apple.WiFiManager:] SC: <airport[208]> airportdProcessSystemConfigurationEvent: Processing 'State:/Network/Interface/en1/AirPort/AutoJoinTimestamp'
+2026-11-07 17:42:48.139 Df airportd[208:1c8c] [com.apple.WiFiManager:] Info: <airport[208]> -[CWXPCSubsystem queryBSSIDForInterfaceWithName:connection:error:]: Failed to query current BSSID, returned error code -528342013
+2026-11-07 17:42:48.140 Df airportd[208:1c8c] [com.apple.WiFiManager:] Info: <airport[208]> -[CWXPCSubsystem querySSIDForInterfaceWithName:connection:error:]: Failed to query current SSID, returned error code -528342013
+2026-11-07 17:42:48.140 Df airportd[208:3ed] [com.apple.WiFiManager:] SC: <airport[208]> _SC_callback: Changed keys: count[  1] key@[  0] = 'State:/Network/Interface/en1/AirPort/Power Status'
+    "State:/Network/Interface/en1/AirPort/Power Status"
+    "State:/Network/Interface/en1/AirPort/Power Status"
+2026-11-07 17:42:48.142 Df airportd[208:1c91] [com.apple.WiFiManager:] SC: <airport[208]> airportdProcessSystemConfigurationEvent: Processing 'State:/Network/Interface/en1/AirPort/Power Status'
+2026-11-07 17:42:48.142 Df airportd[208:1c8c] [com.apple.WiFiManager:] AutoJoin: <airport[208]> Non-WiFi network path available [satisfied (Path is satisfied), interface: en0, ipv4, ipv6, dns]
+2026-11-07 17:42:48.142 Df airportd[208:1c8c] [com.apple.WiFiManager:] AutoJoin: <airport[208]> [atj] Network path already available on another interface, will not show available networks UI
+2026-11-07 17:42:48.144 Df airportd[208:3ed] [com.apple.WiFiManager:] SC: <airport[208]> _SC_callback: Changed keys: count[  1] key@[  0] = 'State:/Network/Interface/en1/AirPort/AutoJoinTimestamp'
+    "State:/Network/Interface/en1/AirPort/AutoJoinTimestamp"
+    "State:/Network/Interface/en1/AirPort/AutoJoinTimestamp"
+2026-11-07 17:42:48.144 Df airportd[208:1b4c] [com.apple.WiFiManager:] SC: <airport[208]> airportdProcessSystemConfigurationEvent: Processing 'State:/Network/Interface/en1/AirPort/AutoJoinTimestamp'
+2026-11-07 17:42:48.145 Df airportd[208:3ed] [com.apple.WiFiManager:] SC: <airport[208]> _SC_callback: Changed keys: count[  1] key@[  0] = 'State:/Network/Interface/en1/AirPort/Power Status'
+    "State:/Network/Interface/en1/AirPort/Power Status"
+    "State:/Network/Interface/en1/AirPort/Power Status"
+2026-11-07 17:42:48.146 Df airportd[208:1c72] [com.apple.WiFiManager:] SC: <airport[208]> airportdProcessSystemConfigurationEvent: Processing 'State:/Network/Interface/en1/AirPort/Power Status'
+2026-11-07 17:42:48.147 Df airportd[208:1c8c] [com.apple.WiFiManager:] [corewifi] BEGIN REQ [GET LINK DOWN STATUS] (pid=476 proc=WiFiAgent bundleID=com.apple.wifi.WiFiAgent codesignID=com.apple.wifi.WiFiAgent service=com.apple.private.corew
+2026-11-07 17:42:48.147 Df airportd[208:1c8c] [com.apple.WiFiManager:] [corewifi] END REQ [GET LINK DOWN STATUS] took 0.000445760s (pid=476 proc=WiFiAgent bundleID=com.apple.wifi.WiFiAgent codesignID=com.apple.wifi.WiFiAgent service=com.app
+2026-11-07 17:42:48.152 Df airportd[208:1c8c] [com.apple.WiFiManager:] [corewifi] BEGIN REQ [GET LINK DOWN STATUS] (pid=476 proc=WiFiAgent bundleID=com.apple.wifi.WiFiAgent codesignID=com.apple.wifi.WiFiAgent service=com.apple.private.corew
+2026-11-07 17:42:48.152 Df airportd[208:1e5d] [com.apple.WiFiManager:] [corewifi] END REQ [GET LINK DOWN STATUS] took 0.000267064s (pid=476 proc=WiFiAgent bundleID=com.apple.wifi.WiFiAgent codesignID=com.apple.wifi.WiFiAgent service=com.app
