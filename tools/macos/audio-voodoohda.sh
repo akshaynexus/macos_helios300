@@ -86,7 +86,7 @@ preflight() {
 	done
 	local o; for o in "$EXT"/*HDA*.kext "$EXT"/*ALC*.kext; do
 		[ -e "$o" ] && [ "$o" != "$DEST" ] && say "other audio kext in $EXT: $o"; done
-	say "loaded:"; kmutil showloaded 2>/dev/null | grep -E 'Lilu|AppleALC|NMHDA|IOAudioFamily|VoodooHDA|WhateverGreen' | sed 's/^/  /' || true
+	say "loaded:"; kmutil showloaded 2>/dev/null </dev/null | grep -E 'Lilu|AppleALC|NMHDA|IOAudioFamily|VoodooHDA|WhateverGreen' | sed 's/^/  /' || true
 
 	step "Device"
 	hda_props | sed 's/^/  /'
@@ -199,7 +199,8 @@ install_kext() {
 }
 
 # The auxiliary collection from every kext in /Library/Extensions against the running boot/system collections:
-# kmutil create -n aux ... -p <each> -A <file> -z, kmutil inspect, then publish (previous copy kept in $STATE).
+# kmutil create -n aux ... -p <each> -A <file> -z, every bundle ID checked in kmutil inspect, then publish (the previous
+# copy kept as $STATE/aux-previous.kc and put back if the copy fails).
 aux_rebuild() {
 	local k ids="" a=(create -n aux --volume-root / --allow-missing-kdk -a x86_64 -B "$KB")
 	[ -s "$KS" ] && a+=(-S "$KS")
@@ -208,7 +209,7 @@ aux_rebuild() {
 	for k in "$EXT"/*.kext; do
 		[ -d "$k" ] || continue
 		if [ "$k" = "$DEST" ] && [ "$MODE" = revert ]; then continue; fi
-		a+=(-p "$k"); ids="$ids $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$k/Contents/Info.plist" 2>/dev/null)"
+		a+=(-p "$k"); ids="$ids $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$k/Contents/Info.plist" 2>/dev/null </dev/null)"
 	done
 	if [ "$MODE" = install ] && [ ! -d "$DEST" ]; then a+=(-p "$DEST"); ids="$ids org.voodoo.driver.VoodooHDA"; fi
 	if [ -z "$ids" ]; then run rm -f "$AUX"; say "no kexts left in $EXT: auxiliary collection removed"; return 0; fi
@@ -218,12 +219,24 @@ aux_rebuild() {
 	say "+ kmutil ${a[*]}"
 	if ! R kmutil "${a[@]}" > "$W2/log" 2>&1; then sed 's/^/    /' "$W2/log" | tail -15; R rm -rf "$W2"; return 1; fi
 	R kmutil inspect -a x86_64 -A "$W2/aux.kc" > "$W2/inspect" 2>&1 || { tail -5 "$W2/inspect"; R rm -rf "$W2"; return 1; }
-	for k in $ids; do grep -q "$k" "$W2/inspect" || { say "  $k missing from the built collection"; R rm -rf "$W2"; return 1; }; done
+	for k in $ids; do grep -qF "$k" "$W2/inspect" || { say "  $k missing from the built collection"; R rm -rf "$W2"; return 1; }; done
+	local had=0 rc=0
 	R mkdir -p "$STATE"
-	if [ -f "$AUX" ]; then R cp -p "$AUX" "$STATE/aux-previous.kc"; fi
-	R cp "$W2/aux.kc" "$AUX"; R chown root:wheel "$AUX"; R chmod 644 "$AUX"
-	say "  published $AUX with$ids (previous: $STATE/aux-previous.kc)"
+	if [ -f "$AUX" ]; then
+		R cp -p "$AUX" "$STATE/aux-previous.kc" || { say "  cannot keep $AUX as $STATE/aux-previous.kc: not replaced"; R rm -rf "$W2"; return 1; }
+		had=1
+	fi
+	if R cp "$W2/aux.kc" "$AUX" && R chown root:wheel "$AUX" && R chmod 644 "$AUX" && R cmp -s "$W2/aux.kc" "$AUX"; then
+		say "  published $AUX with$ids (previous: $STATE/aux-previous.kc)"
+	else
+		rc=1
+		if [ "$had" = 1 ]; then
+			R cp -p "$STATE/aux-previous.kc" "$AUX" && say "  publishing failed: $AUX put back from $STATE/aux-previous.kc" \
+				|| say "  publishing failed and the restore too: sudo cp -p $STATE/aux-previous.kc $AUX"
+		else R rm -f "$AUX"; say "  publishing failed: the partial $AUX removed (there was none before)"; fi
+	fi
 	R rm -rf "$W2"
+	return $rc
 }
 
 revert() {
@@ -246,17 +259,19 @@ status() {
 			"InhibitCache $(/usr/libexec/PlistBuddy -c 'Print :IOKitPersonalities:VoodooHDA:InhibitCache' "$DEST/Contents/Info.plist" 2>/dev/null)" \
 			"($( [ "$(sha "$DEST/Contents/Info.plist")" = "$PLIST_SHA" ] && echo 'release Info.plist' || echo 'changed by TUNE/NODES'))"
 	fi
-	kmutil showloaded 2>/dev/null | grep -E 'VoodooHDA|IOAudioFamily|AppleALC|NMHDA|PG106' | sed 's/^/  /' || true
+	kmutil showloaded 2>/dev/null </dev/null | grep -E 'VoodooHDA|IOAudioFamily|AppleALC|NMHDA|PG106' | sed 's/^/  /' || true
 	ioreg -rw0 -c VoodooHDADevice -d1 2>/dev/null | head -5 || true
 	say "audio engines:"; ioreg -rw0 -c IOAudioEngine -l 2>/dev/null | grep -E '"IOAudioEngineDescription"|"IOAudioEngineState"' | sed 's/^/  /' | head -10 || true
 	say "Core Audio devices:"; system_profiler SPAudioDataType 2>/dev/null | sed -n '1,40p'
 	say "VoodooHDA log:"; log show --last boot --predicate 'senderImagePath CONTAINS "VoodooHDA" OR eventMessage CONTAINS "VoodooHDA"' 2>/dev/null | tail -25 || true
 }
 
+# The whole dispatch reads /dev/null (see R): over hbmac bash has read this case statement before it runs, and resumes
+# reading the script (or what the caller sent after it) from its own stdin afterwards.
 case "$MODE" in
 	dry-run) preflight; stage; install_kext; say; say "dry run: nothing was changed (temp dir $WORK)";;
 	install) preflight; stage; install_kext;;
 	revert) revert;;
 	status) status;;
 	*) die "MODE must be dry-run, install, revert or status";;
-esac
+esac </dev/null

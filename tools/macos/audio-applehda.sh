@@ -11,10 +11,11 @@
 #   MODE=dry-run   every check and every download (sha256-verified into $CACHE); the payload mounted read-only and
 #                  hashed; the KDK package's signature checked; the auxiliary collection test-built in a temp dir;
 #                  every command install would run is printed. Nothing on the root volume or in /Library changes.
-#   MODE=install   option 1 (VoodooHDA) out first; KDK installed if missing; root volume mounted rw at
-#                  /System/Volumes/Update/mnt1; KDK merge; AppleHDA.kext; OCLP's patch record; kmutil boot+system
-#                  collections; RSRRepair; the auxiliary collection (PG106FB, PG106Accel) rebuilt against the NEW
-#                  boot/system collections; new snapshot blessed. Restart.
+#   MODE=install   KDK installed if missing; root volume mounted rw at /System/Volumes/Update/mnt1; KDK merge;
+#                  AppleHDA.kext; OCLP's patch record; kmutil boot+system collections; RSRRepair; the auxiliary
+#                  collection (PG106FB, PG106Accel, without VoodooHDA) rebuilt against the NEW boot/system collections;
+#                  new snapshot blessed; only then option 1 (VoodooHDA) removed and that collection published. A stop
+#                  before the bless leaves the machine as it was, VoodooHDA included. Restart.
 #   MODE=aux       rebuild the auxiliary collection from /Library/Extensions against the RUNNING boot/system
 #                  collections and publish it (a boot where PG106FB/PG106Accel did not load). Restart.
 #   MODE=revert    bless Apple's last sealed snapshot and put back the auxiliary collection built for it. Restart.
@@ -73,9 +74,9 @@ sha() { shasum -a 256 "$1" | awk '{print $1}'; }
 live() { [ "$MODE" = install ] || [ "$MODE" = revert ] || [ "$MODE" = aux ]; }
 run() { if live; then say "+ $*"; R "$@"; else say "would run: $*"; fi; }
 ver_ge() { [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" = "$2" ]; }   # $1 >= $2
-plist_get() { /usr/libexec/PlistBuddy -c "Print :$2" "$1" 2>/dev/null || true; }
+plist_get() { /usr/libexec/PlistBuddy -c "Print :$2" "$1" 2>/dev/null </dev/null || true; }
 tree_sha() { (cd "$1" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do shasum -a 256 "$f"; done) | shasum -a 256 | awk '{print $1}'; }
-LOADED=$(kmutil showloaded 2>/dev/null || true)
+LOADED=$(kmutil showloaded 2>/dev/null </dev/null || true)
 # here-strings and awk without an early exit: under pipefail a reader that quits early fails the writer (SIGPIPE)
 is_loaded() { grep -q " $1 (" <<<"$LOADED"; }
 loaded_ver() { awk -v id=" $1 (" 'v == "" && (i = index($0, id)) { v = substr($0, i + length(id)); sub(/\).*/, "", v) } END { print v }' <<<"$LOADED"; }
@@ -83,7 +84,7 @@ loaded_ver() { awk -v id=" $1 (" 'v == "" && (i = index($0, id)) { v = substr($0
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/applehda.XXXXXX")
 UB_MNT="$WORK/Universal-Binaries"; PL_MNT="$WORK/payloads"; KDK_MNT="$WORK/kdkmnt"
 cleanup() {
-	local m; for m in "$UB_MNT" "$PL_MNT" "$KDK_MNT"; do hdiutil detach "$m" >/dev/null 2>&1 || true; done
+	local m; for m in "$UB_MNT" "$PL_MNT" "$KDK_MNT"; do hdiutil detach "$m" </dev/null >/dev/null 2>&1 || true; done
 	R rm -rf "$WORK" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -242,12 +243,12 @@ kdk() {
 	grep -q 'Status: signed' <<<"$sig" && grep -q 'Apple' <<<"$sig" || die "KernelDebugKit.pkg is not signed by Apple"
 	if live; then
 		run /usr/sbin/installer -pkg "$KDK_MNT/KernelDebugKit.pkg" -target / || die "KDK install failed"
-		hdiutil detach "$KDK_MNT" >/dev/null || true
+		hdiutil detach "$KDK_MNT" </dev/null >/dev/null || true
 		KDK=$(kdk_find); [ -n "$KDK" ] || die "the KDK install did not produce $KDK_DIR/*_$KDK_BUILD.kdk"
 		say "installed: $KDK"
 	else
 		say "would run: installer -pkg KernelDebugKit.pkg -target /"
-		hdiutil detach "$KDK_MNT" >/dev/null || true
+		hdiutil detach "$KDK_MNT" </dev/null >/dev/null || true
 		KDK="$KDK_DIR/KDK_26.7.2_$KDK_BUILD.kdk (after install)"
 	fi
 }
@@ -272,43 +273,55 @@ aux_build() {   # boot-kc system-kc kernel out -> 0 built, 2 nothing to build, 1
 	say "  kmutil ${a[*]}"
 	if ! R kmutil "${a[@]}" > "$WORK/aux-build.log" 2>&1; then sed 's/^/    /' "$WORK/aux-build.log" | tail -15; return 1; fi
 	if ! R kmutil inspect -a x86_64 -A "$out" > "$WORK/aux-inspect.txt" 2>&1; then sed 's/^/    /' "$WORK/aux-inspect.txt" | tail -5; return 1; fi
-	for k in $ids; do grep -q "$k" "$WORK/aux-inspect.txt" || { say "  $k is not in the built collection"; return 1; }; done
+	for k in $ids; do grep -qF "$k" "$WORK/aux-inspect.txt" || { say "  $k is not in the built collection"; return 1; }; done
 	say "  built and inspected: $(wc -c < "$out" | tr -d ' ') bytes, contains$ids"
 	R kmutil inspect -a x86_64 -A "$out" --show-prelink-info 2>/dev/null | grep -o '_PrelinkBundlePath[^;]*;[^;]*' | head -4 | sed 's/^/    /' || true
 }
-aux_publish() {   # file
+aux_publish() {   # file -> 0 published; 1 not published ($AUX as it was: kept, or put back from aux-previous.kc)
+	local had=0
 	R mkdir -p "$STATE"
 	if [ -f "$AUX" ]; then
 		[ -f "$STATE/aux-original.kc" ] || R cp -p "$AUX" "$STATE/aux-original.kc"
-		R cp -p "$AUX" "$STATE/aux-previous.kc"
+		R cp -p "$AUX" "$STATE/aux-previous.kc" || { say "  cannot keep $AUX as $STATE/aux-previous.kc: not replaced"; return 1; }
+		had=1
 	fi
-	R cp "$1" "$AUX"; R chown root:wheel "$AUX"; R chmod 644 "$AUX"
-	say "  published $AUX (previous: $STATE/aux-previous.kc, first one replaced: $STATE/aux-original.kc)"
+	if R cp "$1" "$AUX" && R chown root:wheel "$AUX" && R chmod 644 "$AUX" && R cmp -s "$1" "$AUX"; then
+		say "  published $AUX (previous: $STATE/aux-previous.kc, first one replaced: $STATE/aux-original.kc)"; return 0
+	fi
+	if [ "$had" = 1 ]; then
+		R cp -p "$STATE/aux-previous.kc" "$AUX" && say "  publishing failed: $AUX put back from $STATE/aux-previous.kc" \
+			|| say "  publishing failed and the restore too: sudo cp -p $STATE/aux-previous.kc $AUX"
+	else R rm -f "$AUX"; say "  publishing failed: the partial $AUX removed (there was none before)"; fi
+	return 1
 }
 aux_save() {   # file name: a copy + the /Library/Extensions manifest it was built from
 	R mkdir -p "$STATE"; R cp "$1" "$STATE/$2.kc"
 	aux_manifest > "$WORK/$2.lext"; R cp "$WORK/$2.lext" "$STATE/$2.lext"
 }
 
-voodoo_out() {
-	step "Option 1 out first (VoodooHDA and AppleHDA would both claim HDEF)"
-	local v=0 p; for p in "$VOODOO" /Library/PreferencePanes/VoodooHDA.prefPane "$HOME/Library/PreferencePanes/VoodooHDA.prefPane"; do
-		if [ -e "$p" ]; then v=1; run rm -rf "$p"; fi; done
-	if is_loaded org.voodoo.driver.VoodooHDA; then say "VoodooHDA is loaded now; it goes away with the restart"; fi
-	[ "$v" = 1 ] || say "VoodooHDA not installed"
-	step "Auxiliary collection for the CURRENT (sealed) snapshot, without VoodooHDA"
+# Option 1 (VoodooHDA) and AppleHDA would both claim HDEF, so VoodooHDA goes, but only after the bless (voodoo_out):
+# every stop before it leaves the machine as it was, with working audio. Up front only the auxiliary collection for
+# the sealed snapshot is built without it (what MODE=revert publishes) and kept; /Library/Extensions is not touched.
+VOODOO_FILES=("$VOODOO" /Library/PreferencePanes/VoodooHDA.prefPane "$HOME/Library/PreferencePanes/VoodooHDA.prefPane")
+voodoo_check() {
+	step "Option 1 (VoodooHDA): removed after the new snapshot is blessed, not before"
+	local p v=0; for p in "${VOODOO_FILES[@]}"; do if [ -e "$p" ]; then v=1; say "  present: $p"; fi; done
+	[ "$v" = 1 ] || say "  VoodooHDA not installed"
+	step "Auxiliary collection for the CURRENT (sealed) snapshot, without VoodooHDA (kept for MODE=revert)"
 	local rc=0; aux_build "/$KCDIR/BootKernelExtensions.kc" "/$KCDIR/SystemKernelExtensions.kc" /System/Library/Kernels/kernel "$WORK/aux-sealed.kc" || rc=$?
 	case $rc in
-		0) if live; then
-			aux_save "$WORK/aux-sealed.kc" aux-sealed; say "  kept as $STATE/aux-sealed.kc (MODE=revert puts it back)"
-			if [ "$v" = 1 ]; then aux_publish "$WORK/aux-sealed.kc"; fi
-		   else say "  dry run: test build only (install keeps it as $STATE/aux-sealed.kc, and publishes it if VoodooHDA was there)"; fi;;
-		2) if [ "$v" = 1 ]; then run rm -f "$AUX"; fi;;
-		*) if live; then
-			[ "$v" = 1 ] && say "VoodooHDA.kext was removed: reinstall it with audio-voodoohda.sh MODE=install if you stop here"
-			die "the auxiliary collection did not build (log above); nothing on the root volume was changed"
+		0) if live; then aux_save "$WORK/aux-sealed.kc" aux-sealed; say "  kept as $STATE/aux-sealed.kc (not published: MODE=revert puts it back)"
+		   else say "  dry run: test build only (install keeps it as $STATE/aux-sealed.kc)"; fi;;
+		2) ;;
+		*) if live; then die "the auxiliary collection did not build (log above); nothing was changed"
 		   else warn "the auxiliary collection test build failed (log above): install would stop here"; fi;;
 	esac
+}
+voodoo_out() {   # after the bless
+	step "Option 1 out (VoodooHDA and AppleHDA would both claim HDEF)"
+	local p v=0; for p in "${VOODOO_FILES[@]}"; do if [ -e "$p" ]; then v=1; run rm -rf "$p"; fi; done
+	if is_loaded org.voodoo.driver.VoodooHDA; then say "  VoodooHDA is loaded now; it goes away with the restart"; fi
+	[ "$v" = 1 ] || say "  VoodooHDA not installed"
 }
 
 mount_root() {
@@ -323,7 +336,7 @@ mount_root() {
 }
 
 install_all() {
-	voodoo_out
+	voodoo_check
 	mount_root
 	local libkern="$MNT/System/Library/Extensions/System.kext/PlugIns/Libkern.kext/Libkern"
 	step "Merge the KDK's /System/Library/Extensions (OCLP kdk_merge.py)"
@@ -407,9 +420,14 @@ EOF
 
 	step "Create and bless a new snapshot (OCLP mount/snapshot.py, Intel form)"
 	run /usr/sbin/bless --folder "$MNT/System/Library/CoreServices" --bootefi --create-snapshot \
-		|| die "bless failed: the next boot is still the sealed snapshot; $AUX was not touched"
-	if [ "$auxok" = 1 ]; then aux_save "$WORK/aux-patched.kc" aux-patched; aux_publish "$WORK/aux-patched.kc"
-	elif [ "$auxok" = 2 ]; then run rm -f "$AUX"; fi
+		|| die "bless failed: the next boot is still the sealed snapshot; VoodooHDA and $AUX were not touched"
+	voodoo_out
+	step "Publish the auxiliary collection for the new snapshot"
+	if [ "$auxok" = 1 ]; then   # only set by install
+		aux_save "$WORK/aux-patched.kc" aux-patched
+		aux_publish "$WORK/aux-patched.kc" || warn "PG106FB/PG106Accel will not load after the restart: run MODE=aux then"
+	elif [ "$auxok" = 2 ]; then run rm -f "$AUX"
+	else say "  dry run, or the build above failed: $AUX not touched"; fi
 	run /sbin/umount "$MNT" || true
 	say ""; say "Restart. Then MODE=status (AppleHDA, layout 29, NMHDA, PG106FB/PG106Accel)."
 	say "If the patched system does not come up: OpenCore picker -> Recovery -> Terminal (MODE=revert prints the lines; docs/HARDWARE.md has them too)."
@@ -440,7 +458,7 @@ revert() {
 	step "Auxiliary collection for the sealed snapshot"
 	if [ -f "$STATE/aux-sealed.kc" ] && [ -f "$STATE/aux-sealed.lext" ]; then
 		aux_manifest > "$WORK/now.lext"
-		if cmp -s "$WORK/now.lext" "$STATE/aux-sealed.lext"; then aux_publish "$STATE/aux-sealed.kc"
+		if cmp -s "$WORK/now.lext" "$STATE/aux-sealed.lext"; then aux_publish "$STATE/aux-sealed.kc" || say "after the restart run MODE=aux"
 		else say "/Library/Extensions changed since it was built: after the restart run MODE=aux, restart again"; diff "$STATE/aux-sealed.lext" "$WORK/now.lext" | sed 's/^/  /' || true; fi
 	else say "no saved aux-sealed.kc: after the restart run MODE=aux if PG106FB/PG106Accel did not load"; fi
 	if [ "$REMOVE_KDK" = 1 ]; then
@@ -457,7 +475,7 @@ aux_mode() {
 	step "Auxiliary collection from $EXT against the running boot/system collections"
 	local rc=0; aux_build "/$KCDIR/BootKernelExtensions.kc" "/$KCDIR/SystemKernelExtensions.kc" /System/Library/Kernels/kernel "$WORK/aux.kc" || rc=$?
 	case $rc in
-		0) aux_publish "$WORK/aux.kc"
+		0) aux_publish "$WORK/aux.kc" || die "$AUX was not replaced (above). Fallback: sudo kmutil load -p $EXT/PG106FB.kext and $EXT/PG106Accel.kext, restart"
 		   if [ -e "/$RECORD" ]; then aux_save "$WORK/aux.kc" aux-patched; else aux_save "$WORK/aux.kc" aux-sealed; fi;;
 		2) run rm -f "$AUX";;
 		*) die "the build failed (log above); $AUX left as it was. Fallback: sudo kmutil load -p $EXT/PG106FB.kext and $EXT/PG106Accel.kext, restart";;
@@ -496,6 +514,8 @@ status() {
 	say "docs/HARDWARE.md 'Headset microphone' if there is no headset input."
 }
 
+# The whole dispatch reads /dev/null (see R): over hbmac bash has read this case statement before it runs, and resumes
+# reading the script (or what the caller sent after it) from its own stdin afterwards.
 case "$MODE" in
 	dry-run) preflight; payload; kdk; install_all; say; say "dry run: nothing on the system was changed (downloads, if any, are in $CACHE)";;
 	install) preflight; payload; [ -n "$SRC" ] || die "no payload"; kdk; install_all;;
@@ -503,4 +523,4 @@ case "$MODE" in
 	revert) revert;;
 	status) status;;
 	*) die "MODE must be dry-run, install, aux, revert or status";;
-esac
+esac </dev/null

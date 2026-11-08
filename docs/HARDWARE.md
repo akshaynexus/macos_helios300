@@ -98,8 +98,8 @@ Step for step what OCLP 3.0.0's sys_patch does for Modern Audio (sources: OCLP 3
   FileVault off; Apple Secure Boot off (SecureBootModel Disabled); AMFIPass >= 1.2.1 loaded (1401 ships 1.4.1 with
   `-amfipassbeta`); not already patched (OCLP: revert first); Lilu + AppleALC loaded; alc-layout-id 29; 12 GiB free
   (14 GiB when the KDK still has to be downloaded).
-- **Install, in order:** VoodooHDA (option 1) removed and an auxiliary collection without it built and published
-  (both drivers would claim HDEF otherwise); KDK installed if missing; the root volume mounted read-write at
+- **Install, in order:** an auxiliary collection for the sealed snapshot without VoodooHDA (option 1) built and kept
+  for `MODE=revert` (both drivers would claim HDEF); KDK installed if missing; the root volume mounted read-write at
   `/System/Volumes/Update/mnt1`; `rsync -r -i -a <KDK>/System/Library/Extensions/ mnt1/System/Library/Extensions`;
   AppleHDA.kext copied to `mnt1/System/Library/Extensions` (`chmod -Rf 755`, `chown -Rf root:wheel`, copy verified);
   OCLP's record `mnt1/System/Library/CoreServices/OpenCore-Legacy-Patcher.plist` ("Modern Audio" → Overwrite System
@@ -107,8 +107,9 @@ Step for step what OCLP 3.0.0's sys_patch does for Modern Audio (sources: OCLP 3
   /System/Volumes/Update/mnt1 --update-all --variant-suffix release`; RSRRepair from the app's payloads.dmg (OCLP
   installs it after a full rebuild; `RSRREPAIR=0` skips it); the auxiliary collection rebuilt against the new
   boot/system collections (below); `bless --folder mnt1/System/Library/CoreServices --bootefi --create-snapshot`;
-  then that auxiliary collection is published. If kmutil or bless fails, nothing is blessed and the next boot is the
-  sealed snapshot as before.
+  only then VoodooHDA removed from /Library/Extensions and that auxiliary collection published. If anything before
+  the bless fails (kmutil, the KDK, the copy, bless itself), nothing is blessed, VoodooHDA is still installed and the
+  next boot is the sealed snapshot as before, with its audio.
 - **PG106FB and PG106Accel after the rebuild:** they load from the auxiliary collection
   (`/Library/KernelCollections/AuxiliaryKernelExtensions.kc`, on the Data volume), and an auxiliary collection is
   linked against one pair of boot/system collections. `--update-all` on the mounted root makes new ones, so the old
@@ -119,7 +120,7 @@ Step for step what OCLP 3.0.0's sys_patch does for Modern Audio (sources: OCLP 3
   --repository /Library/Extensions -p <each kext> -A <file> -z`. It checks each build with `kmutil inspect`. Both
   collections are kept in `/Library/Helios300/audio-applehda` (`aux-sealed.kc`, `aux-patched.kc`, with the list of
   kexts each was built from), and the one matching what boots is published. The replaced file is kept as
-  `aux-previous.kc`, and the very first one as `aux-original.kc`. If PG106FB or PG106Accel is missing after a restart
+  `aux-previous.kc` (and copied back if publishing fails), and the very first one as `aux-original.kc`. If PG106FB or PG106Accel is missing after a restart
   (`MODE=status` says so), `MODE=aux` rebuilds the collection against the running collections; restart. If that
   build fails, the fallback is the route of the first install: `sudo kmutil load -p
   /Library/Extensions/PG106FB.kext` (and PG106Accel), then restart. After the patched boot, also run

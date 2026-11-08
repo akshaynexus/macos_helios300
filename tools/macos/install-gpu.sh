@@ -16,7 +16,8 @@
 # (EFI/Helios300 on the stick, or a copy of it). MODE (default dry-run, which changes nothing):
 #   MODE=dry-run   checks the Mac and every file against manifest.json, prints every command install would run
 #   MODE=install   installs; restart afterwards (approve in System Settings > Privacy & Security if asked, restart again)
-#   MODE=revert    removes everything install put there, rebuilds the auxiliary kernel collection; restart
+#   MODE=revert    removes everything install put there, rebuilds the auxiliary kernel collection from the kexts left in
+#                  /Library/Extensions (each one checked in it; the previous one kept and put back on failure); restart
 #   MODE=status    what is present, loaded and published now
 # ONLY="PG106FB PG106Accel plugin xlate nvk allow" limits install to some parts (one change per boot).
 # MANIFEST_SHA256=<sha256> refuses a manifest.json with another hash (the release's SHA256SUMS.txt has it).
@@ -228,32 +229,83 @@ install_all() {
 	say "Then: MODE=status bash install-gpu.sh. Backup of the previous files: $bk. Allow list: $ALLOW"
 }
 
+# The auxiliary collection without the recorded kexts, as audio-applehda.sh's aux_build/aux_publish (kept inline: this
+# script runs piped over SSH and from the release folder, with nothing to source). kmutil create links in only the
+# kexts named with -p (--repository just resolves dependencies), so every kext that stays in /Library/Extensions
+# (VoodooHDA, any other third-party one) gets its own -p, and each bundle ID must show up in kmutil inspect.
+aux_keep() { # the kexts in $EXT that revert leaves there
+	local k; for k in "$EXT"/*.kext; do
+		[ -d "$k" ] || continue
+		grep -qxF "$k" "$RECORD" 2>/dev/null && continue
+		echo "$k"
+	done
+}
+aux_build() { # out -> 0 built and checked, 2 no kext stays (no collection), 1 failed
+	local out=$1 k id ids="" a=(create -n aux --volume-root / --allow-missing-kdk -a x86_64 -B "$KB")
+	[ -s "$KS" ] && a+=(-S "$KS")
+	[ -f /System/Library/Kernels/kernel ] && a+=(--kernel /System/Library/Kernels/kernel)
+	a+=(--repository "$EXT")
+	while IFS= read -r k; do
+		id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$k/Contents/Info.plist" 2>/dev/null </dev/null) || id=""
+		[ -n "$id" ] || { say "  $k has no CFBundleIdentifier"; return 1; }
+		a+=(-p "$k"); ids="$ids $id"
+	done < <(aux_keep)
+	[ -n "$ids" ] || { say "  no other kext in $EXT: no auxiliary collection needed"; return 2; }
+	a+=(-A "$out" -z)
+	say "+ kmutil ${a[*]}"
+	if ! R kmutil "${a[@]}" > "$WORK/aux-build.log" 2>&1; then sed 's/^/    /' "$WORK/aux-build.log" | tail -15; return 1; fi
+	if ! R kmutil inspect -a x86_64 -A "$out" > "$WORK/aux-inspect.txt" 2>&1; then sed 's/^/    /' "$WORK/aux-inspect.txt" | tail -5; return 1; fi
+	for id in $ids; do grep -qF "$id" "$WORK/aux-inspect.txt" || { say "  $id is not in the built collection"; return 1; }; done
+	say "  built and inspected, contains$ids"
+}
+aux_publish() { # file -> 0 published; 1 not published ($AUX as it was: kept, or put back from aux-previous.kc)
+	local had=0
+	R mkdir -p "$STATE"
+	if [ -f "$AUX" ]; then
+		R cp -p "$AUX" "$STATE/aux-previous.kc" || { say "  cannot keep $AUX as $STATE/aux-previous.kc: not replaced"; return 1; }
+		had=1
+	fi
+	if R cp "$1" "$AUX" && R chown root:wheel "$AUX" && R chmod 644 "$AUX" && R cmp -s "$1" "$AUX"; then
+		say "  published $AUX (previous: $STATE/aux-previous.kc)"; return 0
+	fi
+	if [ "$had" = 1 ]; then
+		R cp -p "$STATE/aux-previous.kc" "$AUX" && say "  publishing failed: $AUX put back from $STATE/aux-previous.kc" \
+			|| say "  publishing failed and the restore too: sudo cp -p $STATE/aux-previous.kc $AUX"
+	else R rm -f "$AUX"; say "  publishing failed: the partial $AUX removed (there was none before)"; fi
+	return 1
+}
+
 revert_all() {
 	step "Remove what install-gpu.sh installed ($RECORD)"
 	[ -f "$RECORD" ] || die "no $RECORD: nothing was installed by this script"
-	local t kexts=0
+	local t kexts=0 auxrc=0
+	grep -q '\.kext$' "$RECORD" && kexts=1
+	if [ "$kexts" = 1 ]; then
+		# Built before anything is removed: if it fails, revert stops with the machine as it was.
+		step "Auxiliary kernel collection without them, from the kexts that stay in $EXT"
+		mkdir -p "$WORK/kc"
+		aux_build "$WORK/kc/aux.kc" || auxrc=$?
+		[ "$auxrc" != 1 ] || die "the auxiliary collection without them did not build (above): nothing removed, $AUX left as it was"
+	fi
+	step "Remove the files"
 	while IFS= read -r t; do
 		[ -n "$t" ] || continue
 		case "$t" in "$EXT"/*|"$GB"/*) ;; *) say "  skipped $t (outside $EXT and $GB)"; continue;; esac
-		case "$t" in *.kext) kexts=1;; esac
 		if [ -e "$t" ]; then run rm -rf "$t"; else say "  $t: already gone"; fi
 	done < "$RECORD"
 	[ -d "$NV" ] && [ -z "$(ls -A "$NV" 2>/dev/null)" ] && run rmdir "$NV"
 	if [ "$kexts" = 1 ]; then
-		step "Auxiliary kernel collection without them (kmutil create from /Library/Extensions)"
-		if find "$EXT" -maxdepth 1 -name '*.kext' 2>/dev/null | grep -q .; then
-			R mkdir -p "$WORK/kc"
-			run kmutil create -n aux --volume-root / --allow-missing-kdk -B "$KB" -S "$KS" --repository "$EXT" -A "$WORK/kc/aux.kc" -z
-			if live; then
-				kmutil inspect -a x86_64 -A "$WORK/kc/aux.kc" </dev/null >/dev/null 2>&1 || die "the rebuilt collection does not inspect; $AUX left as it was"
-				R cp "$WORK/kc/aux.kc" "$AUX"
-			else say "would run: cp <rebuilt> $AUX"; fi
-		else
+		step "Publish the auxiliary collection"
+		if [ "$auxrc" = 2 ]; then
+			if [ -f "$AUX" ]; then R mkdir -p "$STATE"; run cp -p "$AUX" "$STATE/aux-previous.kc"; fi
 			run rm -f "$AUX"
+		elif ! aux_publish "$WORK/kc/aux.kc"; then
+			say "The files are removed but $AUX still holds PG106FB/PG106Accel: run MODE=revert again (the record is kept)."
+			die "auxiliary collection not replaced"
 		fi
 	fi
-	live && R rm -f "$RECORD"
-	say "Removed. Restart. The pre-install copies (if any) stay in $STATE/backup-*."
+	R rm -f "$RECORD"
+	say "Removed. Restart. The pre-install copies (if any) stay in $STATE/backup-*; the previous collection: $STATE/aux-previous.kc."
 }
 
 status() {
