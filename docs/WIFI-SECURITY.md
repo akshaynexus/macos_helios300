@@ -5,11 +5,12 @@ join, so it is required for any join on macOS 26; the station-MAC-only extended 
 (flags 16) is accepted in every build and the core's vdev recreation at the Scan stage is
 implemented (`serviceMacChangeOnly`) and host-tested. The rest below is still gated.
 
-**Status: PAUSED by the owner (2026-11-08), not in the first release.** Everything below is
-compiled out of the shipped kexts by the build gate `AIRPORT_ATH10K_WPASEC` (default `0`).
-With the gate off, both kexts join networks exactly as before this work started (WPA2-PSK,
-CCMP pairwise, CCMP/TKIP group; the join path of `adff19e`/`2f7ff2a`). The host tests for the
-new code build and run regardless of the gate; they do not ship.
+**Status: code complete behind the gate, host-tested, not yet run on the laptop (2026-11-08).**
+Everything below is compiled out of the shipped kexts by the build gate
+`AIRPORT_ATH10K_WPASEC` (default `0`). With the gate off, both kexts join networks exactly as
+before this work started (WPA2-PSK, CCMP pairwise, CCMP/TKIP group; the join path of
+`adff19e`/`2f7ff2a`). The gate stays off for releases until the steps in
+[On-device test](#on-device-test) pass on the laptop.
 
 ## The gate
 
@@ -43,7 +44,8 @@ What the gate off guarantees (checked by `tests/test_control.cpp`, `test_connect
 - Front end: `setHardwareAddress` accepts a changed MAC (Private Wi-Fi Address, shipped since
   hardware run 5: `ifnet_set_lladdr` at once, the core's vdev at the next join); capabilities
   advertise WPA2/CCMP/TKIP only; SAE/Enterprise/PMF-required joins are refused with an 802.11
-  status (`planJoin`/`refusalStatus`: 43, 31).
+  status (`planJoin`/`refusalStatus`: 43, 31); scan results show the WPA2 view of a transition
+  network; PMK/MSK `setCIPHER_KEY` is refused.
 
 ## What is done (all on `main`, gate-independent host tests)
 
@@ -66,49 +68,122 @@ hostap `sae.c`/`dragonfly.c`/`wpa_common.c` (BSD, see `kexts/wifi/UPSTREAM.md`);
 `AirportItlwmV2.cpp` (MAC change: `ifnet_set_lladdr` + re-init) and `WCL.cpp` (PMK/MSK via
 `setCIPHER_KEY` for enterprise).
 
-## What is not done (resume here, gate on)
+## What the gate-on build does
 
-1. **Core `serviceConnection` (`Ath10kNetwork.cpp`)** — the state exists, the servicing does not:
-   - external-auth Auth stage: do not auto-send Open System auth when `s.externalAuth`; transmit
-     `s.authTx` through `buildExternalAuth` when `authTxPending`, reset `sinceMs` on each TX/RX,
-     advance to Assoc when `authDone`;
-   - MAC change at stage Scan before Start: run `buildMacChangeWMI` steps 1..3 on CE3 (VDEV_DELETE,
-     VDEV_CREATE with `s.local`, ECHO `kMacChangeEchoCookie`), then `_vdevMAC = s.local`; do not
-     honour cancel between delete and create; allowVdevDelete is already OR-ed with `macChange.step`;
-   - PMF TX slot: send `s.pmfTx` (SA Query request/response) when idle like the spectrum report;
-     set `lastTxPMF` in `submitNetworkPacket` and clear `pmfTx.inFlight` on completion; SA Query
-     timing (`saQuery`: retry every 201 ms, fail after 1000 ms with `cancelRequested`);
-   - enterprise: in `releaseRXBatch` deliver EAPOL frames other than EAPOL-Key (type 3) to the
-     network interface before the port opens; in `outputPacket` let 0x888e frames out while
-     `stage==Connected && enterprise && !portAuthorized` (via `submitNetworkPacket`).
-2. **Front end (`AirportAth10kBridge.hpp`, `AirportAth10kInterface.cpp`, `AirportAth10k.cpp`)**:
-   - ~~`setHardwareAddress`: accept the private MAC~~ done and shipped (hardware run 5, 32be721);
-     with the gate on, report the active MAC from Info [120..125];
-   - SAE join: `planJoin` accepts `APPLE80211_AUTHTYPE_WPA3_SAE` (the WCL join request embeds an
-     `apple80211_key` at 0x40: expect the password as cipher `APPLE80211_CIPHER_PWD`, up to 62 bytes
-     from 0x50; unverified on the Mac), H2E when the AP's RSNXE has bit 5, drive
-     `AthSAE::Session` through SendAuth/ReceiveAuth (commit, token retry, confirm), then
-     `AuthResult 1`; station RSN from `buildStationRSN(group, 8, mfpc, mfpr, pmkid)`; supplicant
-     `begin()` with AKM 8 and the SAE PMK/PMKID; keep a PMKSA cache per BSSID for `setCLEAR_PMKSA_CACHE`;
-   - PMF policy (boot-arg, default: on when the AP is capable, required for WPA3) and the 81-byte key
-     payload (`kKeyPayloadBytes`);
-   - Enterprise: `planJoin` accepts the 802.1X upper-auth bits, extended Connect flag 8, PMK/MSK
-     from `setCIPHER_KEY` (cipher 6/7/9, 32 bytes) starts the supplicant (AKM 1 or 5); hold
-     ReceiveEAPOL polling until the PMK exists;
-   - capabilities: advertise WPA3/PMF/802.1X to WCL only with the gate on; stop rewriting
-     transition-mode RSN IEs to WPA2 when SAE is available.
-3. **Tests**: core flow tests for SAE external auth, PMF deauth/SA Query, MAC change
-   (`test_connection.cpp` harness); bridge tests for the three joins; the laptop trace comparison
-   (random MAC VDEV sequence, PMF peer flags) against Linux ath10k.
-4. **Docs**: move the three items out of the known-gaps lists in `kexts/wifi/README.md`,
-   `docs/WIFI-NATIVE.md`, `docs/WIFI.md` when they work; record what remains Mac-only.
+Join paths (`native/src/AirportAth10kBridge.hpp`, `planJoin`/`planSecurity`, `AirportWCL.hpp`
+`classifyLegacyAuth`):
+
+- **WPA3-SAE** (`APPLE80211_AUTHTYPE_WPA3_SAE`, AKM 8). WCL's join request carries the password
+  in the `apple80211_key` at 0x40 (`APPLE80211_CIPHER_PWD`, up to 64 bytes: read from
+  `WCLJoinRequest::checkValidationForApple80211Key`, 26.7.2). The core stops at the Auth stage
+  (`externalAuth`); the session drives `AthSAE::Session` through `SendAuth`/`ReceiveAuth`:
+  Commit, Anti-Clogging Token retry (status 76, raw for H&P, the token container for H2E),
+  Confirm, `AuthResult 1`, then the association with the station RSN
+  (`buildStationRSN(group, 8, mfpc, mfpr, pmkid)`) and, with H2E (AP RSNXE bit 5), RSNXE
+  {244,1,0x20}. Group 19 only; a rejected or different group fails the join. Reason 23 goes
+  to WCL so macOS treats it as a credentials problem.
+- **Transition networks** (AKM 2 + 8, MFPC set, MFPR clear). Scan results now show the RSN as it
+  is plus the RSNXE (no `selectWPA2TransitionMode` rewrite). A join with a password runs SAE, a
+  join with a PMK runs PSK (with PMF: the AP is capable).
+- **802.1X** (`WPA`/`WPA2`/`SHA256_8021X`/`WPA3_ENTERPRISE`, AKM 1 or 5). The core raises the data
+  link at association; EAP frames pass to and from `eapolclient` while the port is closed,
+  EAPOL-Key frames stay in the core's queue until a key exists. The PMK/MSK arrives through
+  `setCIPHER_KEY` (cipher 6/7/9, 32 bytes, or a 64-byte MSK whose first 32 bytes are the PMK);
+  the session then starts the 4-way handshake. The join completes when the port opens.
+- **PMF** (`airportath10k_pmf`): 1 (default) capable when the AP is, required when it requires
+  it, SAE needs an MFPC AP; 2 required on every MFPC AP; 0 off (SAE and PMF-required networks
+  refused with status 31). BIP-CMAC-128 in software like Linux ath10k. The 81-byte key payload
+  carries the IGTK.
+- **PMKSA cache** (8 entries, 12 h, `setCLEAR_PMKSA_CACHE`): SAE and 802.1X joins that have a live
+  entry for BSSID+AKM associate with Open System authentication and the PMKID; if the AP refuses
+  (status 53 or any failure before association) the entry is dropped and full authentication
+  runs once.
+- `getCARD_CAPABILITIES` adds byte 6 bit 0 (MFP capable); `EXTENDED_BSS_INFO` reports the station
+  RSN the join built. `getWCL_EXTENDED_BSS_INFO` keeps the fixed WPA2 RSN when the join used none.
+
+Core (`src/kext/Ath10kConnection.hpp`, `Ath10kNetwork.cpp`, `Ath10kUserClient.cpp`): the
+external-auth stage, the PMF TX slot with SA Query timing (retry 201 TU, fail after 1000 TU,
+power save leaves first), protected management TX (host-built CCMP header and PN, firmware
+encrypts: HTT flags 0x61, `IEEE80211_KEY_FLAG_GENERATE_IV_MGMT` in Linux), PMKSA joins
+(SAE AKM with a PMKID in the RSN), and the 802.1X data path (`releaseRXBatch`, `outputPacket`;
+ordinary packets are dropped while the port is closed so they cannot stall EAP behind them).
+
+Host tests: `tests/test_wpasec.cpp` (production `controlAction`, `serviceConnection`,
+`receiveStationManagement`, `buildHTTPacket` and the real front-end session against a simulated
+AP and firmware), `tests/test_network_rx.cpp` and `tests/test_native_tx.cpp` with the gate on
+(production `releaseRXBatch`/`outputPacket` for 802.1X), `native/tests/test_native_bridge.cpp`
+with the gate on (run by `tests/run-tests.sh`). Coverage: SAE H&P and H2E with Anti-Clogging
+Tokens, group 19 rejection and mismatch, wrong password, the 4-way handshake with the IGTK
+against an OpenSSL authenticator, PMF deauth with SA Query both ways, BIP-CMAC with replay,
+unprotected robust frame drop, SA Query timeout, EAPOL pass-through with a 64-byte MSK handover,
+PMKSA caching with the status 53 fallback, transition networks.
+
+## On-device test
+
+Build the gate-on pair and boot it through the usual run procedure (`docs/WIFI-NATIVE.md`):
+
+```sh
+cd kexts/wifi
+WPASEC=1 OUT=$HOME/pascal-build/wpasec-work/k1 \
+  HELIOS_REAL_KC=$HOME/pascal-build/macos-26.7.2-25G332/BootKernelExtensions.kc:$HOME/pascal-build/macos-26.7.2-25G332/SystemKernelExtensions.kc \
+  bash scripts/cross-build.sh
+```
+
+After each join, on the Mac:
+
+```sh
+ioreg -rn AirportAth10k | grep -E 'AirportAth10k(JoinState|LastError|LastJoinMs|LastDisconnectReason|PMKSACount)'
+sudo log show --last 3m --predicate 'eventMessage CONTAINS "WCLJoinRequest" OR eventMessage CONTAINS "AirportAth10k" OR eventMessage CONTAINS "Ath10kMac:"' | tail -60
+wdutil info | sed -n '/WIFI/,/NETWORK/p'
+```
+
+The first line `WCLJoinRequest: lowerAuth = ..., upperAuth = ..., key = ...` in the log is the first
+thing to read: it says which AKM and key type airportd really chose (see "Unverified on the Mac").
+
+1. **WPA3-only network** (WPA3-Personal, PMF required; an AP or `hostapd` with `sae_pwe=2` for
+   H2E if available). Expect `AirportAth10kJoinState` connected, `AirportAth10kLastError` none,
+   Security "WPA3 Personal" in System Settings and `wdutil info`, working DHCP/ping (needs the
+   pending TX fix). `AirportAth10kPMKSACount` is 1. Disable and re-enable Wi-Fi: the rejoin uses
+   PMKSA caching (no SAE frames in a capture), still connected. Wrong password: Settings asks
+   for the password again, `LastError` names `sae-no-response` (or `sae-confirm-rejected`).
+2. **Transition network** (WPA2/WPA3): joined with WPA3 and the menu shows WPA3 unless macOS
+   chooses otherwise; with the join key type being a PMK (see the first log line) it joins as
+   WPA2-PSK with PMF negotiated. Both must end up connected.
+3. **Enterprise**: a WPA2-Enterprise network with PEAP-MSCHAPv2 (or EAP-TLS with a profile). The
+   prompt appears, EAP completes, the link comes up and DHCP runs. `AirportAth10kPMKSACount`
+   is 1. Toggle Wi-Fi: reconnects without another credentials prompt (PMKSA) or with a fresh
+   EAP exchange if the AP refuses the cached key.
+4. **PMF** on the WPA3 network: `sudo tcpdump -I -i en1 'wlan type mgt'` (Monitor mode to be
+   tried from a second device when possible). The association shows MFPC/MFPR in the RSN; a
+   deauth from a sniffer or a spoofed frame must not drop the link when protected (a reason 6
+   or 7 triggers SA Query instead).
+
+Gate-off regression: run the release pair as before on a WPA2-PSK network; the join and TX
+checks of hardware run 8 must not change.
+
+### Unverified on the Mac
+
+- airportd's actual choice for SAE: `upperAuth` with bit 12 and cipher `APPLE80211_CIPHER_PWD` is
+  what Apple's Broadcom join adaptor accepts ("Failed to program the password"), but a host-side
+  supplicant may have to be enabled by a capability bit no one has found yet. If airportd
+  refuses or sends a PMK only, read `WCLJoinRequest` and `getCARD_CAPABILITIES` (KC) next.
+- Capability byte 6 bit 0 (MFP) is what laobamac's list names; Apple's own flags gate WPA3 per
+  feature (SAE-PK, OCV). If airportd rejects WPA3 networks, these are the first suspect.
+- WCL's handling of the LinkStatus/ConnectComplete timing for Enterprise (the data link is
+  up at association, ConnectComplete at the end of the 4-way handshake).
+- Firmware: Linux sends `pdev_param pmf_qos=1` at start (`ath10k_start`); the core does not,
+  because no sequence point exists for it. If protected management TX does not get a response
+  from the AP, add it first.
+- SAE crypto runs on the IO80211 work queue during the join (milliseconds on the laptop; watch
+  for a watchdog complaint in the log).
 
 ## Files
 
 ```
 kexts/wifi/src/shared/Ath10kSHA256.hpp  Ath10kAES.hpp  Ath10kP256.hpp  Ath10kSAE.hpp
 kexts/wifi/src/shared/Ath10kSecurity.hpp  Ath10kSupplicant.hpp  Ath10kControl.hpp
-kexts/wifi/src/kext/Ath10kConnection.hpp  Ath10kUserClient.cpp  Ath10kBSS.hpp  Ath10kPCIDevice.{hpp,cpp}
-kexts/wifi/tests/test_wpa3_crypto.cpp  test_wpa3_supplicant.cpp
-kexts/wifi/native/src/AirportAth10kBridge.hpp (key payload size only)
+kexts/wifi/src/kext/Ath10kConnection.hpp  Ath10kNetwork.cpp  Ath10kUserClient.cpp  Ath10kBSS.hpp  Ath10kPCIDevice.{hpp,cpp}
+kexts/wifi/native/src/AirportAth10kBridge.hpp  AirportWCL.hpp  AirportAth10kInterface.{hpp,cpp}  AirportAth10k.cpp
+kexts/wifi/tests/test_wpasec.cpp  test_wpa3_crypto.cpp  test_wpa3_supplicant.cpp  test_network_rx.cpp  test_native_tx.cpp
+kexts/wifi/native/tests/test_native_bridge.cpp
 ```
