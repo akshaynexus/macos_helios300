@@ -41,7 +41,8 @@ KB=/System/Library/KernelCollections/BootKernelExtensions.kc
 KS=/System/Library/KernelCollections/SystemKernelExtensions.kc
 STATE=/Library/Helios300/audio-voodoohda
 
-R() { if declare -F asroot >/dev/null; then asroot "$@"; else sudo "$@"; fi; }
+# stdin from /dev/null: over hbmac the script itself is on stdin, and asroot hands it to the command
+R() { if declare -F asroot >/dev/null; then asroot "$@" </dev/null; else sudo "$@" </dev/null; fi; }
 say() { printf '%s\n' "$*"; }
 step() { printf '\n== %s\n' "$*"; }
 die() { printf 'STOP: %s\n' "$*" >&2; exit 1; }
@@ -101,7 +102,7 @@ preflight() {
 stage() {
 	step "Fetch and verify VoodooHDA 3.6.8 (Release368)"
 	WORK=$(mktemp -d "${TMPDIR:-/tmp}/vhda.XXXXXX")
-	curl -fsSL --retry 2 -o "$WORK/v.zip" "$ZIP_URL" || die "download failed: $ZIP_URL"
+	curl -fsSL --retry 2 -o "$WORK/v.zip" "$ZIP_URL" </dev/null || die "download failed: $ZIP_URL"
 	[ "$(sha "$WORK/v.zip")" = "$ZIP_SHA" ] || die "zip sha256 $(sha "$WORK/v.zip") != pinned $ZIP_SHA"
 	say "zip sha256 OK ($ZIP_SHA)"
 	(cd "$WORK" && ditto -x -k v.zip x)

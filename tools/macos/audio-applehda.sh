@@ -63,7 +63,8 @@ KCDIR=System/Library/KernelCollections
 STATE=/Library/Helios300/audio-applehda
 VOODOO=$EXT/VoodooHDA.kext
 
-R() { if declare -F asroot >/dev/null; then asroot "$@"; else sudo "$@"; fi; }
+# stdin from /dev/null: over hbmac the script itself is on stdin, and asroot hands it to the command
+R() { if declare -F asroot >/dev/null; then asroot "$@" </dev/null; else sudo "$@" </dev/null; fi; }
 say() { printf '%s\n' "$*"; }
 step() { printf '\n== %s\n' "$*"; }
 die() { printf 'STOP: %s\n' "$*" >&2; exit 1; }
@@ -110,7 +111,7 @@ fetch() {   # url sha256 size name
 	mkdir -p "$CACHE"
 	if [ -f "$f" ] && [ "$(sha "$f")" = "$want" ]; then say "  cached: $f (sha256 OK)" >&2; echo "$f"; return; fi
 	say "  downloading $url ($size bytes) -> $f" >&2
-	curl -fL --retry 3 -C - -o "$f.part" "$url" >&2 || die "download failed: $url"
+	curl -fL --retry 3 -C - -o "$f.part" "$url" </dev/null >&2 || die "download failed: $url"
 	[ "$(stat -f %z "$f.part")" = "$size" ] || die "$4: size $(stat -f %z "$f.part") != $size"
 	[ "$(sha "$f.part")" = "$want" ] || { rm -f "$f.part"; die "$4: sha256 mismatch (file removed)"; }
 	mv "$f.part" "$f"; say "  sha256 OK ($want)" >&2; echo "$f"
@@ -195,7 +196,7 @@ payload() {
 		UB_DMG=$(fetch "$UB_URL" "$UB_SHA" "$UB_SIZE" Universal-Binaries.dmg)
 	fi
 	mkdir -p "$UB_MNT"
-	hdiutil attach -readonly -noverify -nobrowse -mountpoint "$UB_MNT" -passphrase password "$UB_DMG" >/dev/null \
+	hdiutil attach -readonly -noverify -nobrowse -mountpoint "$UB_MNT" -passphrase password "$UB_DMG" </dev/null >/dev/null \
 		|| die "cannot mount Universal-Binaries.dmg"
 	SRC="$UB_MNT/$SRC_REL"
 	[ -d "$SRC" ] || die "no '$SRC_REL' in the payload"
@@ -234,7 +235,7 @@ kdk() {
 	fi
 	say "not installed: $KDK_URL"
 	local dmg; dmg=$(fetch "$KDK_URL" "$KDK_SHA" "$KDK_SIZE" "$(basename "$KDK_URL")")
-	mkdir -p "$KDK_MNT"; hdiutil attach -readonly -nobrowse -mountpoint "$KDK_MNT" "$dmg" >/dev/null || die "cannot mount the KDK image"
+	mkdir -p "$KDK_MNT"; hdiutil attach -readonly -nobrowse -mountpoint "$KDK_MNT" "$dmg" </dev/null >/dev/null || die "cannot mount the KDK image"
 	[ -f "$KDK_MNT/KernelDebugKit.pkg" ] || die "no KernelDebugKit.pkg in the KDK image"
 	local sig; sig=$(pkgutil --check-signature "$KDK_MNT/KernelDebugKit.pkg" 2>&1 || true)
 	printf '%s\n' "$sig" | sed -n '1,4p' | sed 's/^/  /'
@@ -390,7 +391,7 @@ EOF
 		local pdmg=""; if [ -d "$APP" ]; then pdmg=$(find "$APP/Contents" -name payloads.dmg -print -quit 2>/dev/null || true); fi
 		if [ -n "$pdmg" ]; then
 			mkdir -p "$PL_MNT"
-			if hdiutil attach -readonly -noverify -nobrowse -mountpoint "$PL_MNT" -passphrase password "$pdmg" >/dev/null; then
+			if hdiutil attach -readonly -noverify -nobrowse -mountpoint "$PL_MNT" -passphrase password "$pdmg" </dev/null >/dev/null; then
 				if [ -x "$PL_MNT/Tools/RSRRepair" ]; then run "$PL_MNT/Tools/RSRRepair" --install || say "RSRRepair install failed (OCLP logs and continues)"
 				else say "no Tools/RSRRepair in payloads.dmg; skipped"; fi
 			else say "cannot mount payloads.dmg; RSRRepair skipped"; fi
