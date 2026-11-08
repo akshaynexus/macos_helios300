@@ -37,7 +37,9 @@ STATE=/Library/Helios300/install-gpu
 RECORD=$STATE/installed.txt
 PINNED_BUILD=25G332
 
-R() { if declare -F asroot >/dev/null; then asroot "$@"; else sudo "$@"; fi; }
+# stdin from /dev/null: run over SSH as `{ echo MODE=...; cat install-gpu.sh; } | hbmac`, the rest of this script is
+# on stdin, and asroot (sudo -A) hands its stdin to the command, which would swallow the script (kmutil, ditto...)
+R() { if declare -F asroot >/dev/null; then asroot "$@" </dev/null; else sudo "$@" </dev/null; fi; }
 say() { printf '%s\n' "$*"; }
 step() { printf '\n== %s\n' "$*"; }
 die() { printf 'STOP: %s\n' "$*" >&2; exit 1; }
@@ -108,7 +110,7 @@ verify() {
 	case "$file" in
 	*.zip)
 		rm -rf "$WORK/x/$name"
-		ditto -x -k "$SRC/$file" "$WORK/x" || die "cannot unzip $file"
+		ditto -x -k "$SRC/$file" "$WORK/x" </dev/null || die "cannot unzip $file"
 		[ -d "$WORK/x/$name" ] || die "$file does not hold $name/ at its top"
 		local n=0 k h p
 		while IFS=$'\t' read -r _ _ p h; do
@@ -243,7 +245,7 @@ revert_all() {
 			R mkdir -p "$WORK/kc"
 			run kmutil create -n aux --volume-root / --allow-missing-kdk -B "$KB" -S "$KS" --repository "$EXT" -A "$WORK/kc/aux.kc" -z
 			if live; then
-				kmutil inspect -a x86_64 -A "$WORK/kc/aux.kc" >/dev/null 2>&1 || die "the rebuilt collection does not inspect; $AUX left as it was"
+				kmutil inspect -a x86_64 -A "$WORK/kc/aux.kc" </dev/null >/dev/null 2>&1 || die "the rebuilt collection does not inspect; $AUX left as it was"
 				R cp "$WORK/kc/aux.kc" "$AUX"
 			else say "would run: cp <rebuilt> $AUX"; fi
 		else
@@ -258,7 +260,7 @@ status() {
 	step "macOS"
 	say "build $(sw_vers -buildVersion), Darwin $(uname -r); boot-args: $(nvram boot-args 2>/dev/null | cut -f2- || echo '-')"
 	step "Loaded"
-	kmutil showloaded 2>/dev/null | grep -E 'org\.helios300\.pg106|com\.nullmoth\.PG106Accel' | sed 's/^/  /' \
+	kmutil showloaded </dev/null 2>/dev/null | grep -E 'org\.helios300\.pg106|com\.nullmoth\.PG106Accel' | sed 's/^/  /' \
 		|| say "  none of PG106, PG106FB, PG106Accel"
 	step "Published (ioreg)"
 	local k v
@@ -317,9 +319,11 @@ default_allow() {
 EOF
 }
 
+# The whole dispatch reads /dev/null (see R): bash has read this case statement before it runs, and resumes reading
+# the script (or what an SSH caller sent after it) from its own stdin afterwards.
 case "$MODE" in
 	dry-run|install) preflight; install_all ;;
 	revert) revert_all ;;
 	status) status ;;
 	*) die "MODE=dry-run|install|revert|status" ;;
-esac
+esac </dev/null
