@@ -5,11 +5,11 @@ and Settings › Wi-Fi, network selection and joining by macOS, passwords in the
 interface shown as Wi-Fi in Network settings.
 
 **State (2026-11-08):** implemented as `AirportAth10k.kext` over the `Ath10kMac.kext` core in
-`kexts/wifi/native/`, cross-built for macOS 26 and host-tested. Six boots on the owner's
-Helios 300 with macOS 26.7.2 (25G332) so far (table below): the card is a Wi-Fi interface,
-powers on, scans and lists networks; joining failed up to run 6 and the fix for that (and the
-in-place sleep/wake) has not run on the Mac yet. Install and owner test steps:
-[`kexts/wifi/README.md`](../kexts/wifi/README.md); sanitized logs in
+`kexts/wifi/native/`, cross-built for macOS 26 and host-tested. Seven boots on the owner's
+Helios 300 with macOS 26.7.2 (25G332) so far (table below). Run 7 joined (WPA2, 1.3 s) and
+received, but transmitted nothing: the BSD interface's output thread was never started. That
+fix and the 5 GHz/chanspec fixes are host-tested and wait for run 8. Install and owner test
+steps: [`kexts/wifi/README.md`](../kexts/wifi/README.md); sanitized logs in
 [`kexts/wifi/evidence/macos/`](../kexts/wifi/evidence/macos/).
 
 ## macOS run history (26.7.2 25G332, OpenCore)
@@ -23,7 +23,8 @@ in-place sleep/wake) has not run on the Mac yet. Install and owner test steps:
 | — | nub build, reboot/shutdown | Panic "not in the expected zone early.kalloc.288" in `deregisterNetworkInterface` (also the wake restart: black screen) | ac7d33a |
 | 5 | 9c7f470 | Wi-Fi on, scans and the network list work; joins refused (`ASSOCIATE` 0xe00002c7: Private Wi-Fi Address refused) | 36dc4f4, 32be721 |
 | 6 | core 4535d42b, front 2d2a4880 | Associates, but WCL's `EXTENDED_BSS_INFO` answered NotReady until the handshake: "Update Bss fail", password prompt again | d39e247 |
-| 7 | d39e247 + a3da2e8 … | pending (join, active scans, in-place sleep/wake) | — |
+| 7 | core 9691701b, front 35b26511 (5a05896), `ath10k_cc=IN` | Joins (WPA2, `connected-wpa2`, 1262 ms), RX works (727 frames, IPv6 RA), **no TX**: `netstat` Opkts 0, core sent only the 2 EAPOL frames, no DHCP lease. Joined 2.4 GHz (ch 2, HT40) although the AP has 5 GHz ch 44 VHT80 | 19272e4 ("Run 7" below) |
+| 8 | 19272e4 (Ath10kMac 2d315733, AirportAth10k 6a935733) | pending (TX/DHCP, chanspec widths, 5 GHz) | — |
 
 ## How it is built
 
@@ -277,6 +278,96 @@ Only macOS can verify (not done): that WCL accepts the capability bits and event
 DHCP over the Skywalk interface, sleep/wake, Settings details. The reconstructed headers are
 now proven against 26.7.2; another point release can still move slots, so rerun the build
 with that release's collection before installing it.
+
+## Run 7: TX dead, 2.4 GHz chosen (fixed in 19272e4, host-tested)
+
+Evidence: [`run7-join-tx-dead.txt`](../kexts/wifi/evidence/macos/run7-join-tx-dead.txt).
+
+**TX root cause: the output thread of the BSD interface was never started.** With the output
+pull model, IONetworkingFamily 3.4 (26.7.2, read from the collection) creates the TX thread
+*halted*: `IONetworkInterface::init` sets its state to `0x801` (bit 0 "never ran", bit 11
+"halted"); `if_start_precheck` returns without calling the driver while bit 11 is set, and only
+`IONetworkInterface::startOutputThread` clears it. AirportItlwm calls `startOutputThread` on
+link-up and `stopOutputThread` + `flushOutputQueue` on link-down (its `setLinkStatus`); our front
+end only configured the pull model and signalled the thread. So every packet stayed in the ifnet
+send queue: `outputStart` (vtable slot 325, which `drainOutputQueue` calls as `*0xa28(%rax)`)
+never ran, nothing was dequeued, and since the pull model counts output in
+`dequeueOutputPackets` (`ifnet_stat_increment_out`), Opkts stayed 0. The core's own counters
+agree: 2 TX packets (the supplicant's EAPOL, which bypasses the interface), no data stall, no
+TX error. Fix (`native/src/AirportAth10kTx.hpp`, `AirportAth10k::setOutputThread`): the session's
+data link (which follows the core's authorized port) starts the thread, link-down stops and
+flushes it, and `stop()` halts it before the core detaches. `stopOutputThread` inside the gate
+of the interface's TX work loop (the controller's IO80211 work queue, `kIONetworkWorkLoopSynchronous`)
+halts at once (`haltOutputThread` checks `inGate()`), so the session poll never blocks on it.
+
+Red herrings in the run-7 registry: `Ath10kDataTxPauseEvents` 940 counts every firmware
+`TX_PAUSE` event, including the peer-scoped ids the core ignores, as Linux does (the vdev pause
+mask was 0); `Ath10kDataTxResumePending` 48 was a constant (`kDataTxSlots*3/4`, the wake
+threshold), now published as `Ath10kDataTxResumeThreshold`. New: `Ath10kDataTxLinkDropped`
+(frames reaching the core while its link is down), `Ath10kDataTxPauseLastId/Action/VdevMap`; on
+the controller `AirportAth10kTxThread`, `AirportAth10kTxStarts/Stops`, `AirportAth10kTxPackets`
+(moved by `outputStart`), `AirportAth10kTxCalls`, `AirportAth10kTxQueueFull`.
+
+The data path below the interface was checked as well and is unchanged: 802.3 frames (HTT
+TX_FRM packet type Ethernet, `flags0` 0x42 with the WPA2 port open so the firmware encrypts,
+0x46 on an open network), the source must be the join's station address (the Private Wi-Fi
+Address, which `setHardwareAddress` also puts on the ifnet), TID from 802.1Q priority or DSCP
+as mac80211 (EF -> 6, best effort 0, non-QoS AP 16, ACM downgrade), EAPOL VO.
+
+**Host proof** (`kexts/wifi/tests/test_native_tx.cpp`): a model of the pull model as read from
+the collection (init state, drain loop, NoResources/signal handshake, start/halt/flush), the
+front end's `outputStart` and thread control (the code the kext runs), a model of
+`IOGatedOutputQueue`/`IOBasicOutputQueue` (stall keeps the packet, `service` resumes) and the
+production `Ath10kPCIDevice::outputPacket`, `submitDataPacket`, CE4/HTT descriptor and
+`serviceDataTX`. It reproduces run 7 (thread never started: Opkts 0, core TX 0), then sends 700
+frames with a slow "air" (21 slot stalls and wakes, gated queue full, NoResources and
+`signalOutputThread` resuming): all 700 reach HTT TX in order, complete, Opkts 700, 0 pending, no
+mbuf leaked. A firmware TX pause stalls and resumes to 0 pending; link-down halts and flushes,
+rejoin restarts. DHCP DISCOVER/REQUEST (broadcast, BOOTP broadcast flag), ARP probe/announce/
+request and a DNS query leave as 802.3 frames with the right ethertype, addresses and TID; the
+replies' acceptance (broadcast, unicast to the station) is the core's multicast filter; a foreign
+source MAC is refused. `tests/test_native_tx_wiring.py` checks that the kext source and binary
+actually call `startOutputThread`/`stopOutputThread`/`flushOutputQueue`.
+
+**2.4 GHz chosen.** WCL's candidate list for the join held two BSSIDs, both channel 2 (RSSI -26
+and -67, "bandWidth 2"), and after the join WCL skipped its roam scan ("isDualBand:0"): no 5 GHz
+BSS of the SSID was in WCL's cache when it chose, although the 2.1 s pre-join sweep covered 5 GHz
+and run 6 had listed the AP's channel 44. Two defects fixed:
+- *Chanspecs*: IO80211/WCL decode Broadcom (d11ac) chanspecs, and "bandWidth 2" is `0x1000>>11`,
+  i.e. 20 MHz, for an HT40 BSS; the family also logged "bw 20" for the HT40 link. Every scan
+  result carried a 20 MHz chanspec (as AirportItlwm sends), so a VHT80 BSS scored no better than
+  a 20 MHz one. Scan results now carry the width the BSS operates with (HT operation secondary
+  offset + any-width bit, VHT operation CCFS0, validated against the 40/80 MHz channel blocks,
+  capped at 80 MHz), with the center channel and control sideband (ch 44 VHT80 = `0xe22a`,
+  ch 2 HT40+ = `0x1804`); the associated BSS reports the width the core negotiated; join
+  chanspecs from WCL are decoded to the control channel; `getCHANNEL` sets "extension above" for
+  HT40+. `airportath10k_bw=0` restores the 20 MHz chanspecs.
+- *Caches*: the core's per-scan BSS cache (64) dropped every BSS heard once full, and the plan
+  sweeps 2.4 GHz first; with active probing (new in run 7) every 2.4 GHz AP in range answers,
+  so the 5 GHz BSSes were the ones lost. A new BSS now replaces the weakest entry when it is
+  stronger (`Ath10kBSSEvicted`). The front end's cache (64) replaced the stalest entry, which in
+  practice was the 5 GHz one (fewer scans refresh it); it now replaces a non-fresh entry, else
+  the weakest if the new one is stronger (`cacheEvicted`/`cacheDropped`).
+- *Candidates*: WCL's ASSOCIATE carries up to 10 candidates (count at 0x214, 18-byte entries); all
+  are decoded and mirrored without addresses as `AirportAth10kJoinCandidates`
+  (`"2: ch2 -26 40MHz*, ch44 -55 80MHz"`, `*` = joined). With `airportath10k_bandpref=1` the front
+  end joins a 5 GHz candidate of the same SSID at -68 dBm or better instead of WCL's first 2.4 GHz
+  one (Apple's deployment guidance prefers 5 GHz from about -68 dBm); off by default because it
+  is unverified whether WCL accepts the association of a candidate other than its first.
+Host tests: `native/tests/test_native_bridge.cpp` (widths, chanspec encode/decode for every
+primary of an 80 MHz block, invalid elements, deprecated 160 MHz signalling, the 20 MHz option,
+scan results and BSS info from the session, candidate decoding from a raw request, band
+preference on/off and below threshold, full-cache eviction) and `tests/test_wmi_bss.cpp` (core
+eviction).
+
+Link quality and rate (`wdutil info`, the menu): RSSI and the 100/50/20 link quality come from
+the core's live signal (run 7: -26 dBm, correct); the channel width is now right in the family's
+channel info; the rate is the top PHY rate of the negotiated width and streams (HT40 2SS 300,
+VHT80 2SS 867 Mb/s) until firmware rate stats are exported. The `IO80211PeerManager ...
+RSSI_CHANGED RSSI 0 noise 0` lines every 2 s come from the P2P peer manager's own link monitor,
+which this driver (like AirportItlwm) does not feed; its payload layout is not known, so nothing
+is guessed there. Not verified on hardware yet: that WCL ranks the 5 GHz BSS first with the
+right chanspec, and DHCP/ARP/DNS over the air.
 
 ## Not implemented
 

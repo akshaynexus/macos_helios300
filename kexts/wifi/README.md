@@ -12,9 +12,11 @@ With both loaded the card appears in the **system Wi-Fi menu and Settings › Wi
 are chosen and joined by macOS, passwords live in the Keychain, and the interface is listed
 as Wi-Fi in Network settings.
 
-> **Status: six boots on macOS 26.7.2 (25G332) on the Helios 300.** The card appears as a
-> Wi-Fi interface, powers on, scans and lists networks; joins failed through run 6 (fixed in
-> d39e247, not yet run on the Mac), and the in-place sleep/wake (a3da2e8) has not run either.
+> **Status: seven boots on macOS 26.7.2 (25G332) on the Helios 300.** The card appears as a
+> Wi-Fi interface, scans, lists networks and joins WPA2 networks (run 7); received traffic
+> works, but run 7 transmitted nothing (the interface's output thread was never started) and
+> chose 2.4 GHz over the AP's 5 GHz BSS. Both are fixed and host-tested, not yet run on the Mac;
+> the in-place sleep/wake (a3da2e8) has not run either.
 > Run history: [`docs/WIFI-NATIVE.md`](../../docs/WIFI-NATIVE.md#macos-run-history-2672-25g332-opencore);
 > sanitized logs: [`evidence/macos/`](evidence/macos/). The IO80211/Skywalk layouts come from
 > reconstructed headers checked against the real 26.7.2 collections (kc-audit); another
@@ -133,6 +135,10 @@ Keep Ethernet (RTL8111) or a USB adapter available.
      probe: no firmware, no sleep notification, no front end; use it to tell whether a sleep or
      boot problem is Wi-Fi). `-airportath10k_frontoff` keeps the core and skips only AirportAth10k.
      `ath10k_wake_reinit=0`: after wake use the guarded restart instead of the in-place reload.
+   - Band/width reporting: `airportath10k_bw=0` reports every BSS as 20 MHz (AirportItlwm's
+     chanspec; the default reports the BSS's 40/80 MHz width so WCL can rank a VHT80 5 GHz BSS);
+     `airportath10k_bandpref=1` joins the strongest 5 GHz candidate of a WCL join at -68 dBm or
+     better instead of WCL's first 2.4 GHz one (off by default, unverified on macOS).
    - Diagnostics for the front end: `ath10k_native_delay=<seconds>`
      makes AirportAth10k return from start() at once and run its whole bring-up N seconds
      later, so the system reaches login and SSH first; every bring-up stage logs one
@@ -178,7 +184,9 @@ properties and network status; remove SSIDs and MACs before sharing) and
    `networksetup -listallhardwareports` lists it as "Wi-Fi".
 3. **Join the home AP** (WPA2, 5 GHz channel 44) from the menu, entering the password once.
    Expect the handshake to finish within 5 s, then DHCP: `ifconfig en<n>` shows an address,
-   `ping 1.1.1.1` and web browsing work. Settings › Wi-Fi › Details shows channel 44, 80 MHz,
+   `ipconfig getpacket en<n>` shows the lease, `netstat -I en<n> -b` shows Opkts growing,
+   `ping 1.1.1.1` and web browsing work. On the controller `AirportAth10kTxThread = Yes` and
+   `AirportAth10kTxPackets` grow; `AirportAth10kJoinCandidates` lists WCL's candidates. Settings › Wi-Fi › Details shows channel 44, 80 MHz,
    RSSI and the country.
 4. **Private Wi-Fi Address.** Leave it on (macOS default). The kernel log shows
    `AirportAth10k: station MAC now …` followed by `Ath10kMac: STATION MAC change begin/complete`

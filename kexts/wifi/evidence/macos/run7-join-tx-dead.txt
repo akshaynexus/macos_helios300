@@ -1,0 +1,168 @@
+# Hardware run 7 (macOS 26.7.2 25G332): core 9691701b + front end 35b26511, boot-arg ath10k_cc=IN.
+# Join works, RX works (IPv6 RA received), TX dead. Root cause and fix: docs/WIFI-NATIVE.md (run 7).
+
+## state1.txt: ifconfig en1, netstat -I en1 -b, registry (front end, core), ipconfig, configd
+	ether 02:00:00:00:00:08
+	inet 192.0.2.x netmask 0xffffffff broadcast 192.0.2.x
+	media: autoselect
+	status: active
+en1        1500  2001:db8:x 2001:db8:x      687     -      62150        0     -          0     -
+en1        1500  2001:db8:x 2001:db8:x      687     -      62150        0     -          0     -
+"AirportAth10kJoinState" = "connected"
+"AirportAth10kLastJoinMs" = 1262
+"AirportAth10kLastError" = "none"
+"AirportAth10kLastDisconnectReason" = 0
+"AirportAth10kRoams" = 0
+      "Ath10kDataTxPauseEvents" = 940
+      "Ath10kRxSecurityHTTPeer" = 65535
+      "Ath10kDataTxCEObservedCount" = 0
+      "Ath10kDataTxCapacity" = 64
+      "Ath10kRxSecurityTransmitter" = 0
+      "Ath10kRxSecurityEvidenceValid" = No
+      "Ath10kDataTxCEObservedTotalMs" = 0
+      "Ath10kRxSecurityDecap" = 0
+      "Ath10kDataRxBytes" = 68628
+      "Ath10kDataRxDropped" = 0
+      "Ath10kConnectionVdevUp" = Yes
+      "Ath10kDataTxErrors" = 0
+      "Ath10kDataTxQueueWatchdogArmed" = No
+      "Ath10kRxSecurityFragmentNumber" = 0
+      "Ath10kRxSecurityHeaderType" = 0
+      "Ath10kRxSecurityFC" = 0
+      "Ath10kDataTxDelayedFrames" = 0
+      "Ath10kDataTxWakeups" = 0
+      "Ath10kRxSecurityMPDUInfo" = 0
+      "Ath10kDataTxLatencyMaxMs" = 0
+      "Ath10kConnectionPHY" = "HT40-2SS"
+      "Ath10kDataTxHTTObservedTotalMs" = 0
+      "Ath10kRxSecurityExpectedBSSID" = <000000000000>
+      "Ath10kConnectionState" = "connected-wpa2"
+      "Ath10kConnectionCenterChannel" = 4
+      "Ath10kSecurityPhase" = 5
+      "Ath10kRxSecurityMSDUFlags" = 0
+      "Ath10kDataTxPackets" = 2
+      "Ath10kDataTxStallFirmwarePause" = 0
+      "Ath10kRxSecurityOriginalHeader" = <0000000000000000000000000000000000000000000000000000>
+      "Ath10kDataRxPackets" = 727
+      "Ath10kDataTxPauseMask" = 0
+      "Ath10kDataTxHTTObservedCount" = 0
+      "Ath10kRxSecurityMoreFragments" = 0
+      "Ath10kRxSecurityLength" = 0
+      "Ath10kDataTxStallManagement" = 0
+      "Ath10kRxSecuritySequenceControl" = 0
+      "Ath10kRxSecurityMixedCipher" = 0
+      "Ath10kDataTxResumePending" = 48
+      "Ath10kDataTxNoAck" = 0
+ipconfig_get_packet(en1) failed: not found
+2026-11-07 19:26:30.754 Df configd[98:2c00] [com.apple.IPConfiguration:Server] en0: DHCPv6 client still active
+2026-11-07 19:26:30.756 Df configd[98:2c00] [com.apple.IPConfiguration:Server] en0: DHCPv6 client still active
+2026-11-07 19:26:30.759 Df configd[98:2c00] [com.apple.IPConfiguration:Server] en0: DHCPv6 client still active
+2026-11-07 19:26:30.760 Df configd[98:3e2] [com.apple.captive:Controller] interface en1 is active
+2026-11-07 19:26:30.763 Df configd[98:2862] [com.apple.SystemConfiguration:IPMonitor] network changed: v4(en0:192.0.2.x) v6(en0+:2001:db8:x, en1!:2001:db8:x) DNS! Proxy SM
+2026-11-07 19:26:30.859 Df configd[98:2bf1] [com.apple.IPConfiguration:Server] AUTOMATIC-V6 en1: publish success { IPv6, DNS, RankLast } [PLATDiscovery]
+2026-11-07 19:26:30.859 Df configd[98:2bf1] [com.apple.IPConfiguration:Server] en1: DHCPv6 client still active
+2026-11-07 19:26:30.947 Df configd[98:2bf1] [com.apple.IPConfiguration:Server] DHCPv6 en0: added FQDN option for 'HOST'
+
+## log stream excerpt: pre-join scans, WCL join candidates, join, waiting for IP, TX counters, RSSI events
+2026-11-07 19:23:46.978 Df kernel[0:15da] (IO80211Family) IO80211ScanManager::startScan: scanType = 1
+2026-11-07 19:23:46.979 Df kernel[0:a0c] (corecapture) 000153.854039 InterfaceLogs.E[160] [wcl] logTransition@207:FSM SCAN_MANAGER: in state: SCAN_MANAGER_STATE_IDLE got event: SCAN_MANAGER_EVENT_SCAN_REQ moved into: SCAN_MANAGER_STATE_IN_PROGRESS
+2026-11-07 19:23:46.979 Df kernel[0:a0c] (IO80211Family)  Active scan
+2026-11-07 19:23:46.979 Df kernel[0:a0c] (IO80211Family) Scan type to FW 1
+2026-11-07 19:23:47.020 Df kernel[0:a0c] (IO80211Family) IO80211Queue empty
+2026-11-07 19:23:47.371 Df kernel[0:1922] (IO80211Family) IO80211ScanManager::startScan: scanType = 3
+2026-11-07 19:23:47.551 Df kernel[0:a0c] (corecapture) 000154.426024 InterfaceLogs.E[178] [wcl] logTransition@207:FSM SCAN_MANAGER: in state: SCAN_MANAGER_STATE_IN_PROGRESS got event: SCAN_MANAGER_EVENT_SCAN_COMPLETE moved into: SCAN_MANAGER_STATE_IDLE
+2026-11-07 19:23:47.568 Df kernel[0:192e] (IO80211Family) IO80211ScanManager::startScan: scanType = 1
+2026-11-07 19:23:47.568 Df kernel[0:a0c] (corecapture) 000154.443566 InterfaceLogs.E[180] [wcl] logTransition@207:FSM SCAN_MANAGER: in state: SCAN_MANAGER_STATE_IDLE got event: SCAN_MANAGER_EVENT_SCAN_REQ moved into: SCAN_MANAGER_STATE_IN_PROGRESS
+2026-11-07 19:23:47.568 Df kernel[0:a0c] (IO80211Family)  Active scan
+2026-11-07 19:23:47.568 Df kernel[0:a0c] (IO80211Family) Scan type to FW 1
+2026-11-07 19:23:49.659 Df kernel[0:a0c] (corecapture) 000156.534280 InterfaceLogs.E[181] [wcl] logTransition@207:FSM SCAN_MANAGER: in state: SCAN_MANAGER_STATE_IN_PROGRESS got event: SCAN_MANAGER_EVENT_SCAN_COMPLETE moved into: SCAN_MANAGER_STATE_IDLE
+2026-11-07 19:23:52.557 Df kernel[0:15da] (IO80211Family) IO80211ScanManager::startScan: scanType = 3
+2026-11-07 19:23:53.190 Df kernel[0:a0c] (corecapture) 000160.065645 InterfaceLogs.E[183] [wcl] leaveNetworkCommand@2381:ask to leave network due to <setDISASSOCIATE> isAbortJoin=<1> isDisconnectInVoluntary=<0> enhancedDisassocReason=<8>
+2026-11-07 19:23:53.190 Df kernel[0:a0c] (corecapture) 000160.065664 InterfaceLogs.E[184] [wcl] logTransition@207:FSM NET_MANAGER: in state: NET_MANAGER_STATE_LINK_DOWN got event: NET_MANAGER_EVENT_LEAVE_NETWORK moved into: NET_MANAGER_STATE_LINK_DOWN
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081236 InterfaceLogs.E[185] [wcl] logTransition@207:FSM JOIN_MANAGER: in state: JOIN_MANAGER_STATE_IDLE got event: JOIN_MANAGER_EVENT_JOIN_REQ moved into: JOIN_MANAGER_STATE_IN_PROGRESS
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081256 InterfaceLogs.E[186] [wcl] initWCLJoinRequest@717:WCLJoinRequest: lowerAuth = AUTHTYPE_OPEN, upperAuth = AUTHTYPE_WPA2_PSK, key = CIPHER_PMK       , Valid Private Mac Addr .
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081265 InterfaceLogs.E[187] [wcl] logTransition@207:FSM SCAN_MANAGER: in state: SCAN_MANAGER_STATE_IDLE got event: SCAN_MANAGER_EVENT_SCAN_ABORT_REQ moved into: SCAN_MANAGER_STATE_IDLE
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081276 InterfaceLogs.E[189] [wcl] logTransition@207:FSM NDD_MANAGER: in state: NDD_MANAGER_STATE_IDLE got event: NDD_MANAGER_EVENT_NDD_ABORT_REQ moved into: NDD_MANAGER_STATE_IDLE
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081292 InterfaceLogs.E[190] [wcl] getJoinCandidatesList@92:WCLJoinCandidateSelector: transition terminated mode=0x0, OWE candidate type = 0x0, upper_auth=0x8, allow_auth=0x4
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081306 InterfaceLogs.E[191] [wcl] getJoinCandidatesList_block_invoke@149:BSSID 02:00:00:00:00:09 is in Channel 2 RSSI -26 bandWidth 2, band 0 deny  0, preference 0
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081312 InterfaceLogs.E[192] [wcl] getJoinCandidatesList_block_invoke@149:BSSID 02:00:00:00:00:0a is in Channel 2 RSSI -67 bandWidth 2, band 0 deny  0, preference 0
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081403 InterfaceLogs.E[195] [wcl] logTransition@207:FSM JOIN_MANAGER: in state: JOIN_MANAGER_STATE_IN_PROGRESS got event: JOIN_MANAGER_EVENT_TRY_NEXT_CANDIDATE moved into: JOIN_MANAGER_STATE_IN_PROGRESS
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081415 InterfaceLogs.E[196] [wcl] updateBGScanState@188:WCLPNOFsm: Vote PNO Disable From BGScanSourceJoinManager, PNODisableSources 0x11 --> 0x19
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081425 InterfaceLogs.E[197] [wcl] updateBGScanState@203:WCLEPNOFsm: Vote EPNO Disable From BGScanSourceJoinManager, EPNODisableSources 0x1 --> 0x9
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081451 InterfaceLogs.E[199] [wcl] handleSendCandidateToDriver@1306:WCLWnm: WCLJoinManager::handleJoinRequest nwassurance:0x0xffffffde6cfc8bb8
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081457 InterfaceLogs.E[200] [wcl] sendProductIeTemplate@219:WCLWnmAgent:sendProductIeTemplate enable=0 devProdInfo:0 enterprise:0 template:0
+2026-11-07 19:23:53.206 Df kernel[0:a0c] (corecapture) 000160.081462 InterfaceLogs.E[201] [wcl] sendProductIeTemplate@242:WCLWnmAgent:sendProductIeTemplate No external product info configured for template
+2026-11-07 19:23:53.206 Df kernel[0:15da] (IO80211Family) Exit-setASSOCIATE:153 ret:0
+2026-11-07 19:23:53.391 Df kernel[0:a0c] (corecapture) 000160.266116 InterfaceLogs.E[202] [wcl] logTransition@207:FSM JOIN_MANAGER: in state: JOIN_MANAGER_STATE_IN_PROGRESS got event: JOIN_MANAGER_EVENT_JOIN_ASSOC_COMPLETE moved into: JOIN_MANAGER_STATE_ASSOC_DONE
+2026-11-07 19:23:53.391 Df kernel[0:a0c] (corecapture) 000160.266144 InterfaceLogs.E[203] [wcl] logTransition@207:FSM NET_MANAGER: in state: NET_MANAGER_STATE_LINK_DOWN got event: NET_MANAGER_EVENT_LINK_UP moved into: NET_MANAGER_STATE_WAITING_FOR_CONNECT_COMPLETE
+2026-11-07 19:23:53.391 Df kernel[0:a0c] (corecapture) 000160.266204 InterfaceLogs.E[206] [wcl] setCurrentBSS@2451:MLO connection <0> StaMloCapable<0> ApMloCapable<0>
+2026-11-07 19:23:53.391 Df kernel[0:a0c] (corecapture) 000160.266225 InterfaceLogs.E[207] [wcl] setCurrentBSS@2510:SEND Bssid change with reason 3
+2026-11-07 19:23:53.391 Df kernel[0:a0c] (IO80211Family) [IOC DEBUG] INTERNAL: Get type=<APPLE80211_IOC_WCL_FW_HOT_CHANNELS> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 19:23:53.391 Df kernel[0:a0c] (corecapture) 000160.266279 InterfaceLogs.E[211] [wcl] cmdIouc@145:Fail to Get cmd=<APPLE80211_IOC_WCL_FW_HOT_CHANNELS, 424> res=<unknown Apple80211 ReturnToString, 0xe00002c7>
+2026-11-07 19:23:53.391 Df kernel[0:a0c] (corecapture) 000160.266286 InterfaceLogs.E[212] [wcl] constructNeighborCacheFromFWHotChannels@120:constructNeighborCacheFromFWHotChannels fail e00002c7
+2026-11-07 19:23:53.391 Df kernel[0:77c] (IO80211Family) channel changed from<0:0> to<2:a>
+2026-11-07 19:23:53.391 Df kernel[0:77c] (IO80211Family) IO80211ControllerMonitor::getChanCCA no ivars->fCCAReporterValue
+2026-11-07 19:23:53.391 Df kernel[0:77c] (IO80211Family) com.apple.p2p.en1: Failed to getChanCCA e00002f0 2 0
+2026-11-07 19:23:53.391 Df kernel[0:77c] (IO80211Family) en1: channel changed to 2
+2026-11-07 19:23:53.391 Df kernel[0:77c] (IO80211Family) en1: Extended channel change info: channel[2] band['2.4 GHz'] freq[2417 MHz] bw['20'] flags[0x0000000a]
+2026-11-07 19:23:53.392 Df kernel[0:1cb] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 19:23:53.392 Df kernel[0:1cb] (IO80211Family) IO80211Family: ERROR: IO80211QueueCall::handleEntry - called type 3, error 0xe00002c7
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343338 InterfaceLogs.E[229] [wcl] logTransition@207:FSM JOIN_MANAGER: in state: JOIN_MANAGER_STATE_ASSOC_DONE got event: JOIN_MANAGER_EVENT_JOIN_CONNECT_COMPLETE moved into: JOIN_MANAGER_STATE_CONNECT_COMPLETE
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343356 InterfaceLogs.E[230] [wcl] isJoinProcessDone@825:isJoinDone =<1> AssocDoneNotified=<0> statusCode=<0> indexNextCandidate=<-1> joinTime=<0> joinMaxTimeout=<0> isNeedToDelayReq=<0>
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343362 InterfaceLogs.E[231] [wcl] logTransition@207:FSM JOIN_MANAGER: in state: JOIN_MANAGER_STATE_CONNECT_COMPLETE got event: JOIN_MANAGER_EVENT_JOIN_COMPLETE moved into: JOIN_MANAGER_STATE_IDLE
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343370 InterfaceLogs.E[232] [wcl] logTransition@207:FSM NET_MANAGER: in state: NET_MANAGER_STATE_WAITING_FOR_CONNECT_COMPLETE got event: NET_MANAGER_EVENT_CONNECT_COMPLETE moved into: NET_MANAGER_STATE_WAITING_FOR_IP
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) [IOC DEBUG] INTERNAL: Set type=<APPLE80211_IOC_WCL_QOS_PARAMS> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343395 InterfaceLogs.E[233] [wcl] cmdIouc@145:Fail to Set cmd=<APPLE80211_IOC_WCL_QOS_PARAMS, 443> res=<unknown Apple80211 ReturnToString, 0xe00002c7>
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) com.apple.p2p.en1: IO80211PeerManager::enable: <en1> enable 1 ont 0 ivars->_enabling 0 ivars->_enabled 0 setLinkState
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) com.apple.p2p.en1: enableWorkQueueSources[1934] ENABLE PeerManager Work Queue Sources (ifMonitorTimer 0x899ec62650b85dc8)
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) com.apple.p2p.en1: --------------------------------------------------------------------------------------
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) com.apple.p2p.en1: doEnable[2340] Setting _enabled to TRUE !! RunTimerAlways 1
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) com.apple.p2p.en1: --------------------------------------------------------------------------------------
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) com.apple.p2p.en1: <en1> enable Done 1 ont 0
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) [IOC DEBUG] INTERNAL: Set type=<APPLE80211_IOC_BSS_BLACKLIST> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343608 InterfaceLogs.E[235] [wcl] cmdIouc@145:Fail to Set cmd=<APPLE80211_IOC_BSS_BLACKLIST, 372> res=<unknown Apple80211 ReturnToString, 0xe00002c7>
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343616 InterfaceLogs.E[236] [wcl] updateBGScanState@188:WCLPNOFsm: Vote PNO Disable From BGScanSourceNetManager, PNODisableSources 0x19 --> 0x1d
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343631 InterfaceLogs.E[237] [wcl] updateBGScanState@203:WCLEPNOFsm: Vote EPNO Disable From BGScanSourceNetManager, EPNODisableSources 0x9 --> 0xd
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343642 InterfaceLogs.E[238] [wcl] logTransition@207:FSM ROAM_MANAGER: in state: ROAM_MANAGER_STATE_LINK_DOWN got event: ROAM_MANAGER_EVENT_CONNECT_COMPLETE moved into: ROAM_MANAGER_STATE_LINK_UP
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) [IOC DEBUG] INTERNAL: Set type=<APPLE80211_IOC_WCL_SET_ROAM_LOCK> Int=<Infrastructure> isDriverAvailable=<1> res=<FAIL:-536870201:0xe00002c7> handler=1
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343665 InterfaceLogs.E[239] [wcl] cmdIouc@145:Fail to Set cmd=<APPLE80211_IOC_WCL_SET_ROAM_LOCK, 428> res=<unknown Apple80211 ReturnToString, 0xe00002c7>
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343671 InterfaceLogs.E[240] [wcl] updateRoamLockState@1362:Set lock<0> by <10> before =<0x00000400> after=<0x00000000> , isNeedToUpdateDriver=<1> isForce=<0> pending=<0>
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343676 InterfaceLogs.E[241] [wcl] sendWCLJoinDone@537:WCLJoinManager sendWCLJoinDone, lastStatusCode=0, extendedCode=0, joinedBSSID=02:00:00:00:00:09
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343684 InterfaceLogs.E[242] [wcl] populateJoinStatus_block_invoke@439:{0} BSSID Addr: 02:00:00:00:00:09 flags 0xa authStatus 0x0 authReason 0x0 assocStatus 0x0 assocReason 0x0 firstBeaconStatus 0x0 firstBeaconReason 0x0 connectCompleteStatus 0x0 connectCompleteReason 0x0
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343692 InterfaceLogs.E[243] [wcl] populateJoinStatus_block_invoke@439:{1} BSSID Addr: 02:00:00:00:00:0a flags 0x0 authStatus 0x0 authReason 0x0 assocStatus 0x0 assocReason 0x0 firstBeaconStatus 0x0 firstBeaconReason 0x0 connectCompleteStatus 0x0 connectCompleteReason 0x0
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343699 InterfaceLogs.E[244] [wcl] populateJoinStatus@459:Join Addr 02:00:00:00:00:09 assoc status 0x1 retVal: 0x0 ieeeStatus: 0x0
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343704 InterfaceLogs.E[245] [wcl] notifyAssocDone@502:TRACER:notifyAssocDone@502:0/0
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343714 InterfaceLogs.E[246] [wcl] updateBGScanState@188:WCLPNOFsm: Vote PNO Enable From BGScanSourceJoinManager, PNODisableSources 0x1d --> 0x15
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (corecapture) 000161.343724 InterfaceLogs.E[247] [wcl] updateBGScanState@203:WCLEPNOFsm: Vote EPNO Enable From BGScanSourceJoinManager, EPNODisableSources 0xd --> 0x5
+2026-11-07 19:23:54.468 Df kernel[0:a0c] (IO80211Family) FSM BGCOMMON_FSM: in state: BGCOMMON_FSM_STATE_FWLOADED got event: BGCOMMON_FSM_EVENT_SUSPEND moved into: BGCOMMON_FSM_STATE_FWLOADED
+2026-11-07 19:23:54.499 Df kernel[0:1a3e] (IO80211Family) com.apple.p2p.stats.en1: [configd] succeeded in calling newUserClient, type[0x00000000], role[1], ret[0x00000000]
+...
+2026-11-07 19:23:56.469 Df kernel[0:1a79] (IO80211Family) com.apple.p2p.en1: IO80211PeerManager::reportDataPathEvents APPLE80211_M_RSSI_CHANGED RSSI 0 noise 0 snr 0. Core0Rssi:0 Core1Rssi:0
+2026-11-07 19:23:58.391 Df kernel[0:77c] (corecapture) 000165.266309 InterfaceLogs.E[291] [wcl] logTransition@207:FSM NET_MANAGER: in state: NET_MANAGER_STATE_WAITING_FOR_IP got event: NET_MANAGER_EVENT_ASSOC_TIMER moved into: NET_MANAGER_STATE_WAITING_FOR_IP
+2026-11-07 19:23:58.483 Df kernel[0:77c] (IO80211Family) com.apple.p2p.en1: IO80211PeerManager::reportDataPathEvents APPLE80211_M_RSSI_CHANGED RSSI 0 noise 0 snr 0. Core0Rssi:0 Core1Rssi:0
+2026-11-07 19:23:59.469 Df kernel[0:77c] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> BE<0 0 0 0 0 0 0 0 0 0 0> (166344ms)
+2026-11-07 19:23:59.469 Df kernel[0:77c] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> BK<0 0 0 0 0 0 0 0 0 0 0> (166344ms)
+2026-11-07 19:23:59.469 Df kernel[0:77c] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> VI<0 0 0 0 0 0 0 0 0 0 0> (166344ms)
+2026-11-07 19:23:59.469 Df kernel[0:77c] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> VO<0 0 0 0 0 0 0 0 0 0 0> (166344ms)
+2026-11-07 19:23:59.469 Df kernel[0:77c] (IO80211Family) LQM-WIFI: L3 Control VO TX(02:00:00:00:00:09) Success=0 NoACK=0 Expired=0 OtherErr=0
+2026-11-07 19:24:00.000 Df kernel[0:77c] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> BE<0 0 0 0 0 0 0 0 0 0 0> (531ms)
+2026-11-07 19:24:00.000 Df kernel[0:77c] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> BK<0 0 0 0 0 0 0 0 0 0 0> (531ms)
+2026-11-07 19:24:00.000 Df kernel[0:77c] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> VI<0 0 0 0 0 0 0 0 0 0 0> (531ms)
+2026-11-07 19:24:00.000 Df kernel[0:77c] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> VO<0 0 0 0 0 0 0 0 0 0 0> (531ms)
+2026-11-07 19:24:00.000 Df kernel[0:77c] (IO80211Family) LQM-WIFI: L3 Control VO TX(02:00:00:00:00:09) Success=0 NoACK=0 Expired=0 OtherErr=0
+2026-11-07 19:24:00.489 Df kernel[0:77c] (IO80211Family) com.apple.p2p.en1: IO80211PeerManager::reportDataPathEvents APPLE80211_M_RSSI_CHANGED RSSI 0 noise 0 snr 0. Core0Rssi:0 Core1Rssi:0
+2026-11-07 19:24:02.508 Df kernel[0:77c] (IO80211Family) com.apple.p2p.en1: IO80211PeerManager::reportDataPathEvents APPLE80211_M_RSSI_CHANGED RSSI 0 noise 0 snr 0. Core0Rssi:0 Core1Rssi:0
+2026-11-07 19:24:03.391 Df kernel[0:77c] (corecapture) 000170.266908 InterfaceLogs.E[309] [wcl] logTransition@207:FSM NET_MANAGER: in state: NET_MANAGER_STATE_WAITING_FOR_IP got event: NET_MANAGER_EVENT_ASSOC_TIMER moved into: NET_MANAGER_STATE_WAITING_FOR_IP
+2026-11-07 19:24:04.468 Df kernel[0:77c] (corecapture) 000171.343853 InterfaceLogs.E[313] [wcl] logTransition@207:FSM NET_MANAGER: in state: NET_MANAGER_STATE_WAITING_FOR_IP got event: NET_MANAGER_EVENT_IPV4_STATUS moved into: NET_MANAGER_STATE_LINK_UP
+2026-11-07 19:24:04.469 Df kernel[0:77c] (corecapture) 000171.344154 InterfaceLogs.E[336] [wcl] sendArpCmd@3009:send arp command periodMsec=<90000> enable=<1> isIPv4Routable=<0>
+2026-11-07 19:24:04.469 Df kernel[0:77c] (corecapture) 000171.344185 InterfaceLogs.N[337] [wcl] startRoamScan@830:830 SKIPPING RoamScan; Env:11 isDualBand:0 isOnHighBand:0
+2026-11-07 19:24:04.527 Df kernel[0:1a79] (IO80211Family) com.apple.p2p.en1: IO80211PeerManager::reportDataPathEvents APPLE80211_M_RSSI_CHANGED RSSI 0 noise 0 snr 0. Core0Rssi:0 Core1Rssi:0
+2026-11-07 19:24:04.999 Df kernel[0:1a79] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> BE<0 0 0 0 0 0 0 0 0 0 0> (4999ms)
+2026-11-07 19:24:04.999 Df kernel[0:1a79] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> BK<0 0 0 0 0 0 0 0 0 0 0> (4999ms)
+2026-11-07 19:24:04.999 Df kernel[0:1a79] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> VI<0 0 0 0 0 0 0 0 0 0 0> (4999ms)
+2026-11-07 19:24:04.999 Df kernel[0:1a79] (IO80211Family) LQM-WIFI: TX(02:00:00:00:00:09) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> VO<0 0 0 0 0 0 0 0 0 0 0> (4999ms)

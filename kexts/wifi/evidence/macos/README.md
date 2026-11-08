@@ -17,6 +17,7 @@ Panic reports are reduced to their header line and the plain-text panic string.
 | `shutdown-panic-registrationinfo-zone-1.txt`, `-2.txt` | nub build, shutdown/reboot | "not in the expected zone early.kalloc.288, found in kalloc.type.var5.384" in `IOSkywalkNetworkInterface::deregisterNetworkInterface`: the family typed-frees RegistrationInfo blocks it never allocated. Fixed in ac7d33a. |
 | `run5-join-private-mac-refused.txt` | 5 | Scan and list work; `APPLE80211_IOC_ASSOCIATE` fails 0xe00002c7: WCL's `SET_MAC_ADDRESS` (Private Wi-Fi Address) was refused. Fixed in 36dc4f4/32be721. |
 | `run6-join-extended-bss-info.txt` | 6 | The core associates; WCL's `setCurrentBSS` reads `WCL_EXTENDED_BSS_INFO` right after `JOIN_ASSOC_COMPLETE`, gets 0xe00002d8 (NotReady), leaves with "Update Bss fail" (statusCode 1, extendedCode 3), the password prompt returns; registry snapshot of the core after the leave. Fixed in d39e247. |
+| `run7-join-tx-dead.txt` | 7 | Join and RX work (IPv6 RA), `netstat` Opkts 0, core TX = the 2 EAPOL frames, no DHCP lease; WCL's join candidates are two 2.4 GHz BSSIDs with "bandWidth 2" (20 MHz chanspec), roam scan skipped ("isDualBand:0"); `RSSI_CHANGED RSSI 0` from the P2P peer manager. Fixed in 19272e4 (output thread start, chanspec widths, caches). IPv6 global prefix replaced by `2001:db8:x`. |
 
 Run 1 (OpenCore refused AirportAth10k's vtable) is described in WIFI-NATIVE.md; its OpenCore
 log was not kept. The two hangs of 2026-11-08 (`-wegnoegpu` + PG106 in /L/E, and the first
