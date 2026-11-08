@@ -40,6 +40,7 @@ start = s.index('bool Ath10kPCIDevice::htcRepostRuntimeReceive(')
 end = s.index('bool Ath10kPCIDevice::preparePCIeBringupParity(', start)
 network = Path('src/kext/Ath10kNetwork.cpp').read_text()
 Path(sys.argv[1]).with_name('network_rx_methods.inc').write_text(network[network.index('void Ath10kPCIDevice::deliverNetworkRX('):network.index('// All methods below run under')])
+Path(sys.argv[1]).with_name('network_output_method.inc').write_text(network[network.index('UInt32 Ath10kPCIDevice::outputPacket('):network.index('void Ath10kPCIDevice::deliverNetworkRX(')])
 network = network[network.index('const char *Ath10kPCIDevice::submitNetworkCE('):]
 Path(sys.argv[1]).with_name('htc_methods.inc').write_text(s[start:end] + network)
 start = s.index('bool Ath10kPCIDevice::prepareWMIRuntime(')

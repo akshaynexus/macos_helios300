@@ -756,6 +756,7 @@ inline const char *parseWMIInitResponse(const UInt8 *f, UInt32 bytes, UInt8 endp
     }
     if(pauseEvent && connection){
         ++connection->txPauseEvents;
+        connection->txPauseLastId=pauseId;connection->txPauseLastAction=pauseAction;connection->txPauseLastMap=pauseMap;
         // Same vdev-scoped reasons as Linux ath10k_wmi_tlv_event_tx_pause.
         if((pauseMap&1) && (pauseId==1 || pauseId==4 || pauseId==5 || pauseId==7 || pauseId==8)){
             UInt32 before=connection->txPauseMask;

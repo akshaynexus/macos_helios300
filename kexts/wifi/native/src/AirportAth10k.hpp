@@ -16,6 +16,7 @@
 #include "AirportAth10kEthernetInterface.hpp"
 #include "AirportAth10kInterface.hpp"
 #include "AirportAth10kNub.hpp"
+#include "AirportAth10kTx.hpp"
 #include "Ath10kPCIDevice.hpp"
 
 class AirportAth10k : public IO80211Controller {
@@ -85,6 +86,10 @@ public:
     AirportAth10kEthernetInterface *bsdInterface() const { return bsd; }
     void postInterfaceMessage(unsigned int,void *,unsigned long);
     void nativeLink(bool up);
+    // Output path counters (outputStart runs under the IO80211 work-queue gate,
+    // as the poll that mirrors them): AirportAth10kTx* on the controller.
+    const AirportTx::PullStats &txStats() const {return pullStats;}
+    const AirportTx::OutputThread &txThread() const {return outputThread;}
 private:
     bool bringUp(IOService *);
     static void deferredStart(thread_call_param_t,thread_call_param_t);
@@ -110,5 +115,10 @@ private:
     unsigned long pmState=1;
     uint32_t powerState=1;
     bool coreAttached=false,interfaceAttached=false;
+    // The BSD interface's output thread (stopped until the link is up, see
+    // AirportAth10kTx.hpp) and what outputStart moved.
+    AirportTx::OutputThread outputThread;
+    AirportTx::PullStats pullStats;
+    void setOutputThread(bool up);
     char geoCountry[3]{};
 };

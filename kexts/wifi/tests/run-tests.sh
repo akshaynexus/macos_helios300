@@ -263,6 +263,9 @@ ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/reconnect-090"
 "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -Wno-unused-function -fsanitize=address,undefined \
     -I"$test_tmp_dir" -Isrc/kext -Ibuild/gen/test tests/test_tx_watchdog.cpp -o "$test_tmp_dir/tx-watchdog"
 ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/tx-watchdog"
+"${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -Wno-unused-function -fsanitize=address,undefined \
+    -I"$test_tmp_dir" -Isrc/kext -Ibuild/gen/test tests/test_native_tx.cpp -o "$test_tmp_dir/native-tx"
+ASAN_OPTIONS=detect_leaks=0 "$test_tmp_dir/native-tx"
 
 # Same production connection/DMA lifecycle with the larger transmit window.
 "${CXX:-c++}" -std=c++17 "${ATH10K_HOST_TEST_OPT:--O2}" -Wall -Wextra -Werror -fsanitize=address,undefined \

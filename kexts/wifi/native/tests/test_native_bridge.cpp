@@ -404,5 +404,75 @@ int main(){
         s.pmWake(t+=1000);s.setPower(true,t);core.stateBits=4;s.poll(t+=100);
         assert(core.restarts==1 && !strcmp(s.wakeResult,"restart-requested"));
     }
+    { // Chanspecs with the BSS's width (run 7: WCL saw "bandWidth 2" = 20 MHz for an HT40 BSS).
+        const uint8_t *b5=v_ap;const uint8_t b24[]={2,6,7,8,9,21}; // the WPA2 vectors are bound to v_ap
+        B::Network vht=network(b5,"home",44,true);vht.htOp[1]=1|4;vht.vhtPresent=vht.vhtOpPresent=true;vht.vhtOp[0]=1;vht.vhtOp[1]=42; // VHT80 36-48, primary 44 (HT40+ with 48)
+        B::Network ht40=network(b24,"home",2,true);ht40.htOp[1]=1|4;                                                                   // HT40+, primary 2
+        auto w=B::bssWidth(vht);assert(w.mhz==80 && w.center==42 && w.primary==44);
+        assert(B::widthSpec(w)==(0xc000|0x2000|0x0200|42) && B::controlChannel(B::widthSpec(w))==44);
+        w=B::bssWidth(ht40);assert(w.mhz==40 && w.center==4 && B::widthSpec(w)==(0x1800|4) && B::controlChannel(0x1804)==2);
+        assert(B::bssWidth(vht,40).mhz==40 && B::widthSpec(B::bssWidth(vht,40))==(0xc000|0x1800|46) && B::controlChannel(0xd82e)==44 && B::controlChannel(0xd92e)==48);
+        assert(B::bssWidth(vht,20).mhz==20 && B::widthSpec(B::bssWidth(vht,20))==0xd02c);
+        for(unsigned p:{36u,40u,44u,48u}){B::Network n=vht;n.channel=uint8_t(p);n.htOp[0]=uint8_t(p);n.htOp[1]=uint8_t((p==36||p==44?1:3)|4);
+            auto x=B::bssWidth(n);assert(x.mhz==80 && x.center==42 && B::controlChannel(B::widthSpec(x))==p);}
+        B::Network bad=vht;bad.vhtOp[1]=50;assert(B::bssWidth(bad).mhz==40);         // inconsistent CCFS0: keep 40
+        bad=ht40;bad.htOp[1]=3|4;assert(B::bssWidth(bad).mhz==20);                    // HT40- on channel 2 does not exist
+        bad=ht40;bad.htOp[0]=6;assert(B::bssWidth(bad).mhz==20);                      // HT op primary disagrees with the BSS channel
+        B::Network old160=vht;old160.vhtOp[0]=2;old160.vhtOp[1]=50;assert(B::bssWidth(old160).center==42); // deprecated 160: primary 80 of it
+        uint8_t out[1024];auto *m=reinterpret_cast<W::BeaconMetadata *>(out);
+        assert(B::buildScanResult(vht,out,sizeof(out)) && m->channelSpec==0xe22a && m->channel==44);
+        assert(B::buildScanResult(vht,out,sizeof(out),20) && m->channelSpec==0xd02c); // airportath10k_bw=0
+        // The session: scan results carry the width, the joined BSS what the core negotiated (Info width 80 here).
+        FakeCore core;FakeSink sink;Session s(core,sink);core.bss={vht,ht40};uint64_t t=1000;s.poll(t);
+        W::ScanRequest scan{};scan.type=1;assert(s.startScan(scan,t)==B::kSuccess);s.poll(t+=20);core.advance();s.poll(t+=20);
+        bool saw5=false,saw24=false;
+        for(auto &e:sink.messages)if(e.type==W::ScanResult){auto *r=reinterpret_cast<const W::BeaconMetadata *>(e.data.data());
+            if(r->channel==44){saw5=true;assert(r->channelSpec==0xe22a);}if(r->channel==2){saw24=true;assert(r->channelSpec==0x1804);}}
+        assert(saw5 && saw24);
+        // A join candidate chanspec from WCL (80 MHz form) resolves to the primary channel.
+        W::JoinRequest j=join(vht,true);j.channelSpec=0xe22a;j.candidateCount=1;memcpy(j.candidateBSSID[0],b5,6);j.candidateSpec[0]=0xe22a;
+        assert(s.startJoin(j,t)==B::kSuccess);
+        for(int i=0;i<14 && !s.linkUp();++i){s.poll(t+=20);core.advance();}
+        assert(s.linkUp());
+        uint8_t info[2048];size_t n=0;assert(s.bssInfo(info,sizeof(info),n) && reinterpret_cast<W::BeaconMetadata *>(info)->channelSpec==0xe22a);
+        assert(!strncmp(s.candidateText(),"1: ch44 -55 80MHz*",18));
+        // Candidates: WCL's first choice is the 2.4 GHz BSS; band preference (opt-in) takes the 5 GHz one at -68 dBm or better.
+        FakeCore c2;FakeSink k2;Session s2(c2,k2);B::Network v5=vht;v5.snr=35;B::Network h24=ht40;h24.snr=69;c2.bss={h24,v5};
+        t=5000;s2.poll(t);assert(s2.startScan(scan,t)==B::kSuccess);s2.poll(t+=20);c2.advance();s2.poll(t+=20);
+        W::JoinRequest two=join(h24,true);two.candidateCount=2;memcpy(two.candidateBSSID[0],b24,6);two.candidateSpec[0]=0x1804;
+        memcpy(two.candidateBSSID[1],b5,6);two.candidateSpec[1]=0xe22a;
+        assert(s2.startJoin(two,t)==B::kSuccess && !strcmp(s2.candidateText(),"2: ch2 -26 40MHz*, ch44 -60 80MHz"));
+        s2.leaveNetwork(t);for(int i=0;i<5;++i){s2.poll(t+=20);c2.advance();}
+        s2.bandPreference=true;assert(s2.startJoin(two,t)==B::kSuccess && !strcmp(s2.candidateText(),"2: ch2 -26 40MHz, ch44 -60 80MHz*"));
+        for(int i=0;i<14 && !s2.linkUp();++i){s2.poll(t+=20);c2.advance();}
+        assert(s2.linkUp() && s2.associated() && s2.associated()->channel==44);
+        s2.leaveNetwork(t);for(int i=0;i<5;++i){s2.poll(t+=20);c2.advance();}
+        B::Network weak5=v5;weak5.snr=20;c2.bss={h24,weak5};s2.startScan(scan,t);s2.poll(t+=20);c2.advance();s2.poll(t+=20);
+        assert(s2.startJoin(two,t)==B::kSuccess && !strcmp(s2.candidateText(),"2: ch2 -26 40MHz*, ch44 -75 80MHz")); // below -68: WCL's choice stays
+    }
+    { // decodeJoin: every candidate (count at 0x214, 18-byte entries from 0x218, BSSID +4, chanspec +0x10).
+        std::vector<uint8_t> raw(0x218+3*18);W::JoinRequest j{};
+        raw[0x14]=8;raw[0x1c]=4;memcpy(raw.data()+0x20,"home",4);raw[0x214]=3;
+        const uint8_t a[]={2,1,1,1,1,1},b[]={2,2,2,2,2,2},mc[]={3,3,3,3,3,3};
+        memcpy(raw.data()+0x218+4,a,6);raw[0x218+0x10]=0x04;raw[0x218+0x11]=0x18;
+        memcpy(raw.data()+0x218+18+4,b,6);raw[0x218+18+0x10]=0x2a;raw[0x218+18+0x11]=0xe2;
+        memcpy(raw.data()+0x218+36+4,mc,6); // group address: skipped
+        assert(W::decodeJoin(raw.data(),raw.size(),j) && j.candidateCount==2 && !memcmp(j.bssid,a,6) && j.channelSpec==0x1804);
+        assert(!memcmp(j.candidateBSSID[1],b,6) && j.candidateSpec[1]==0xe22a && B::controlChannel(j.candidateSpec[1])==44);
+    }
+    { // Full scan cache: a strong 5 GHz BSS heard after 64 2.4 GHz ones is kept; weaker ones are dropped.
+        FakeCore core;FakeSink sink;Session s(core,sink);uint64_t t=1000;
+        for(unsigned i=0;i<64;++i){uint8_t b[6]={2,9,9,9,uint8_t(i>>8),uint8_t(i)};B::Network n=network(b,"neighbour",uint8_t(1+i%11),true);n.snr=10+i%20;core.bss.push_back(n);}
+        s.poll(t);W::ScanRequest scan{};scan.type=1;s.startScan(scan,t);s.poll(t+=20);core.advance();s.poll(t+=20);
+        assert(s.networkCount()==64);
+        const uint8_t b5[]={2,6,7,8,9,30};B::Network strong=network(b5,"home",44,true);strong.snr=50;
+        const uint8_t bw[]={2,6,7,8,9,31};B::Network weak=network(bw,"faint",1,false);weak.snr=5;
+        core.bss={strong,weak};s.startScan(scan,t);s.poll(t+=20);core.advance();s.poll(t+=20);
+        bool kept=false,keptWeak=false;for(uint32_t i=0;i<s.networkCount();++i){if(!memcmp(s.network(i).bssid,b5,6))kept=true;if(!memcmp(s.network(i).bssid,bw,6))keptWeak=true;}
+        assert(kept && !keptWeak && s.networkCount()==64 && s.cacheEvicted==1 && s.cacheDropped==1);
+        // Entries older than the fresh window go first.
+        s.startScan(scan,t+=40000);s.poll(t);core.advance();s.poll(t+=20);
+        assert(s.cacheDropped==1);
+    }
     puts("Native bridge tests passed (WCL request mapping, scan-result conversion, cache-first/merged/directed/passive scans, in-kernel WPA2 join with BSS info during the handshake, key install, link events, leave, rescans, rejection, timeout, abort, offline/restart, power).");
 }

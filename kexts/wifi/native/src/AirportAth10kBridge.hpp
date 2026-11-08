@@ -10,6 +10,11 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#ifdef KERNEL
+#include <libkern/libkern.h> // snprintf
+#else
+#include <stdio.h>
+#endif
 #include "AirportWCL.hpp"
 #include "../../src/shared/Ath10kControl.hpp"
 #include "../../src/shared/Ath10kSupplicant.hpp"
@@ -81,6 +86,61 @@ inline bool decodeNetwork(const uint8_t *d,uint32_t length,Network &n){
     return true;
 }
 inline uint16_t channelSpec(unsigned channel){return uint16_t(channel|(channel>14?0xd000:0x1000));}
+// --- Channel width and chanspec --------------------------------------------
+// IO80211/WCL decode Broadcom (d11ac) chanspecs: channel 7:0 (the center
+// channel for 40/80 MHz), control sideband 10:8, bandwidth 13:11 (20 MHz
+// 0x1000, 40 0x1800, 80 0x2000), band 15:14 (2.4 GHz 0, 5 GHz 0xc000).
+// Hardware run 7: WCL's candidate list printed "bandWidth 2" (0x1000>>11) for
+// an HT40 BSS and the family logged "bw 20" for the HT40 link, because every
+// scan result carried a 20 MHz chanspec (as AirportItlwm sends); a VHT80 BSS
+// then looks no better to WCL than a 20 MHz one. The scan results now carry
+// the width the BSS operates with (HT/VHT operation elements, capped at the
+// card's 80 MHz), the associated BSS the width the core negotiated.
+struct ChannelWidth { uint8_t primary=0,center=0; uint16_t mhz=20; };
+inline bool valid40Center(unsigned center,unsigned primary){
+    if(primary<=14)return center>=3 && center<=11 && (center==primary+2 || center+2==primary);
+    static constexpr uint8_t centers[]={38,46,54,62,102,110,118,126,134,142,151,159};
+    for(uint8_t c:centers)if(c==center)return primary==center-2u || primary==center+2u;
+    return false;
+}
+inline bool valid80Center(unsigned center,unsigned primary){
+    static constexpr uint8_t centers[]={42,58,106,122,138,155};
+    for(uint8_t c:centers)if(c==center)return primary+6>=center && primary<=center+6u && (primary+6-center)%4==0;
+    return false;
+}
+// The width of a BSS as its HT/VHT operation elements describe it, at most maxMHz.
+inline ChannelWidth bssWidth(const Network &n,unsigned maxMHz=80){
+    ChannelWidth w;w.primary=w.center=n.channel;w.mhz=20;
+    if(maxMHz<40 || !n.htOpPresent || n.htOp[0]!=n.channel)return w;
+    const uint8_t offset=n.htOp[1]&3;const bool anyWidth=(n.htOp[1]&4)!=0;
+    if(anyWidth && (offset==1 || offset==3)){
+        const unsigned center=offset==1?n.channel+2u:unsigned(n.channel)-2u;
+        if(valid40Center(center,n.channel)){w.center=uint8_t(center);w.mhz=40;}
+    }
+    if(maxMHz>=80 && n.channel>14 && n.vhtOpPresent && n.vhtOp[0]>=1 && w.mhz==40){
+        // 80, 80+80 and 802.11-2016 160 signalling: CCFS0 is the center of the
+        // primary 80 MHz; the deprecated 160 form (width 2) gives the 160 center.
+        const unsigned seg0=n.vhtOp[1];
+        const unsigned center=n.vhtOp[0]==2?(n.channel<seg0?seg0-8u:seg0+8u):seg0;
+        if(valid80Center(center,n.channel)){w.center=uint8_t(center);w.mhz=80;}
+    }
+    return w;
+}
+inline uint16_t widthSpec(const ChannelWidth &w){
+    const uint16_t band=w.primary>14?0xc000:0;
+    if(w.mhz==40)return uint16_t(band|0x1800|(w.primary>w.center?0x0100:0)|w.center);
+    if(w.mhz==80)return uint16_t(band|0x2000|(((w.primary+6u-w.center)/4u)<<8)|w.center);
+    return uint16_t(band|0x1000|w.primary);
+}
+// The control (primary) channel of a chanspec WCL hands back (join candidates).
+inline unsigned controlChannel(uint16_t spec){
+    const unsigned channel=spec&0xff,sideband=(spec>>8)&7;
+    switch(spec&0x3800){
+    case 0x1800:return (sideband&1)?channel+2:channel-2;
+    case 0x2000:return channel-6+4*(sideband&3);
+    default:return channel;
+    }
+}
 // Information elements as a beacon would carry them, in the usual order.
 inline size_t buildIEs(const Network &n,uint8_t *out,size_t capacity){
     size_t at=0;
@@ -102,7 +162,7 @@ inline size_t buildIEs(const Network &n,uint8_t *out,size_t capacity){
     return at;
 }
 // WCL scan-result message: BeaconMetadata followed by the IEs (WCL.hpp layout).
-inline size_t buildScanResult(const Network &n,uint8_t *out,size_t capacity){
+inline size_t buildScanResult(const Network &n,uint8_t *out,size_t capacity,unsigned maxMHz=80){
     if(capacity<sizeof(AirportWCL::BeaconMetadata)+64)return 0;
     auto *m=reinterpret_cast<AirportWCL::BeaconMetadata *>(out);
     *m=AirportWCL::BeaconMetadata{};
@@ -110,7 +170,7 @@ inline size_t buildScanResult(const Network &n,uint8_t *out,size_t capacity){
     size_t length=buildIEs(n,ies,capacity-sizeof(*m));
     if(!length)return 0;
     length=AirportWCL::selectWPA2TransitionMode(ies,length);
-    m->ieLength=uint32_t(length);m->channelSpec=channelSpec(n.channel);m->channel=n.channel;
+    m->ieLength=uint32_t(length);m->channelSpec=widthSpec(bssWidth(n,maxMHz));m->channel=n.channel;
     m->ssidLength=n.hidden?0:n.ssidLength;if(!n.hidden)memcpy(m->ssid,n.ssid,n.ssidLength);
     memcpy(m->bssid,n.bssid,6);m->rssi=n.rssi();m->noise=-95;m->snr=int16_t(n.snr);
     m->interval=n.beaconInterval;m->capability=n.capabilities;
@@ -288,9 +348,13 @@ public:
         if(coreScan && !coreScanForJoin)call(AthControl::Scan,1);
         finishWCLScan(kAborted);
     }
-    int startJoin(const AirportWCL::JoinRequest &j,uint64_t nowMs){
+    int startJoin(const AirportWCL::JoinRequest &request,uint64_t nowMs){
         if(state_==State::Offline || state_==State::Restarting || !power)return kNotReady;
         if(state_==State::Joining)return kBusy;
+        AirportWCL::JoinRequest j=request;
+        const unsigned chosen=chooseCandidate(j);
+        if(chosen){memcpy(j.bssid,j.candidateBSSID[chosen],6);j.channelSpec=j.candidateSpec[chosen];}
+        describeCandidates(j,chosen);
         const Network *n=find(j.bssid);
         JoinPlan plan;
         const char *why=planJoin(j,n,plan);
@@ -311,7 +375,7 @@ public:
            !memcmp(joined.ssid,plan.ssid,plan.ssidLength)){++roams;roamStartedMs=nowMs;}
         pending=plan;AthSecurity::wipe(&plan,sizeof(plan));
         memcpy(joinBSSID,j.bssid,6);
-        joinChannel=uint8_t(j.channelSpec&0xff);
+        joinChannel=uint8_t(controlChannel(j.channelSpec));
         if(!channelKnown(joinChannel))joinChannel=n?n->channel:0;
         state_=State::Joining;joinStartedMs=nowMs;joinPhase=JoinPhase::Prepare;joinRescanned=false;joinCancelMs=joinScanCancelMs=0;
         assocNotified=firstBeaconNotified=false;keysSubmitted=m4Sent=authorized=false;pendingLength=0;clearRekey();
@@ -388,7 +452,7 @@ public:
     // --- Queries for the get* handlers ---------------------------------------
     bool bssInfo(uint8_t *out,size_t capacity,size_t &length) const {
         if(!associated())return false;
-        length=buildScanResult(joined,out,capacity);
+        length=buildScanResult(joined,out,capacity,linkMHz());
         if(length && status.rssi!=INT32_MIN && status.rssi<0 && status.rssi>-120){ // live signal of the associated BSS
             auto *m=reinterpret_cast<AirportWCL::BeaconMetadata *>(out);m->rssi=status.rssi;m->snr=int16_t(status.rssi+95);
         }
@@ -404,11 +468,24 @@ public:
     const char *lastError="none";uint32_t errorSerial=0;
     uint32_t lastDisconnectReason=0; // 802.11 reason of the last link-down/deauth we reported (255 = driver-initiated)
     uint32_t lastScanMs=0,lastJoinMs=0,scanCount=0; // registry mirror: duration of the last core scan and of the last successful join
+    uint32_t cacheEvicted=0,cacheDropped=0; // full scan cache: entries replaced / new BSSes not kept
     uint32_t roams=0,lastRoamMs=0;uint64_t roamStartedMs=0; // same-SSID moves to another BSSID (rejoin) and the last one's duration
     // Last system sleep/wake (uptime ms), wake to driver-available (ms) and how
     // the core came back: reinit (firmware reloaded in place), restart-requested
     // (guarded terminate + rematch), dma-quarantine, pending, sleeping.
     uint64_t lastSleepMs=0,lastWakeMs=0;uint32_t wakeMs=0,wakeSerial=0;const char *wakeResult="none";bool waking=false;
+    // Options the kext sets from boot-args before the first poll:
+    // airportath10k_bw=0 reports every BSS as 20 MHz (AirportItlwm's chanspec);
+    // airportath10k_bandpref=1 joins the strongest 5 GHz candidate of a WCL
+    // request with several candidates when it is at least kBandPreferDbm.
+    bool reportWidth=true,bandPreference=false;
+    static constexpr int32_t kBandPreferDbm=-68;
+    // Width WCL is told for the associated BSS: what the core negotiated.
+    unsigned linkMHz() const {return !reportWidth?20u:(status.width==40 || status.width==80?status.width:(status.width==20?20u:80u));}
+    // The last WCL join's candidates: "N: ch44 -55 80MHz*, ch2 -26 40MHz" (* = joined;
+    // RSSI and width from our cache, "?" = not in it). No addresses.
+    const char *candidateText() const {return candidateLine;}
+    uint32_t candidateSerial=0;
     uint32_t lqmQuality() const { // 100/50/20 like AirportItlwm, -2 when down
         if(!linkUp() || status.rssi==INT32_MIN)return uint32_t(-2);
         return status.rssi>=-70?100:(status.rssi>=-85?50:20);
@@ -420,7 +497,9 @@ private:
     State state_=State::Offline;
     CoreStatus status{};
     // Scan cache: every BSS heard, with the time it was last heard.
-    Network networks[64]{};uint64_t seenMs[64]{};uint32_t count=0;
+    static constexpr uint32_t kCacheSlots=64;
+    Network networks[kCacheSlots]{};uint64_t seenMs[kCacheSlots]{};uint32_t count=0;
+    char candidateLine[160]{'n','o','n','e',0};
     Network joined{};JoinPlan pending{};uint8_t joinBSSID[6]{},joinChannel=0;
     // WCL scan owed (ScanDone not posted yet) and the core scan in progress.
     bool wclScanOwed=false,wclCachePending=false;ScanPlan wclWant{};uint64_t wclScanRequestedMs=0;
@@ -494,17 +573,58 @@ private:
     void requestDisconnect(){if(call(AthControl::Disconnect)!=kSuccess)call(AthControl::Cancel);}
     void requestCancel(){call(AthControl::Cancel);}
 
+    // --- Join candidates -------------------------------------------------------
+    // Which of WCL's candidates to join: the first (WCL's choice) unless band
+    // preference is on, the first is a 2.4 GHz BSS and another candidate of the
+    // request is a 5 GHz BSS of the same SSID heard at kBandPreferDbm or better
+    // (Apple's deployment guidance: 5 GHz preferred from about -68 dBm).
+    unsigned chooseCandidate(const AirportWCL::JoinRequest &j) const {
+        if(!bandPreference || j.candidateCount<2)return 0;
+        const Network *first=find(j.candidateBSSID[0]);
+        if(!first || first->channel>14)return 0;
+        unsigned best=0;int32_t bestRSSI=INT32_MIN;
+        for(unsigned i=1;i<j.candidateCount && i<10;++i){
+            const Network *n=find(j.candidateBSSID[i]);
+            if(!n || n->channel<=14 || n->rssi()<kBandPreferDbm)continue;
+            if(n->ssidLength!=j.ssidLength || memcmp(n->ssid,j.ssid,j.ssidLength))continue;
+            if(n->rssi()>bestRSSI){best=i;bestRSSI=n->rssi();}
+        }
+        return best;
+    }
+    void describeCandidates(const AirportWCL::JoinRequest &j,unsigned chosen){
+        size_t at=size_t(snprintf(candidateLine,sizeof(candidateLine),"%u:",unsigned(j.candidateCount)));
+        for(unsigned i=0;i<j.candidateCount && i<10 && at<sizeof(candidateLine);++i){
+            const Network *n=find(j.candidateBSSID[i]);
+            const int w=n?snprintf(candidateLine+at,sizeof(candidateLine)-at,"%s ch%u %d %uMHz%s",i?",":"",unsigned(n->channel),int(n->rssi()),unsigned(bssWidth(*n).mhz),i==chosen?"*":"")
+                         :snprintf(candidateLine+at,sizeof(candidateLine)-at,"%s ch%u ?%s",i?",":"",controlChannel(j.candidateSpec[i]),i==chosen?"*":"");
+            if(w<0)break;
+            at+=size_t(w);
+        }
+        ++candidateSerial;
+    }
+
     // --- Scan cache ----------------------------------------------------------
     bool readNetwork(uint32_t index,Network &n){
         AthControl::Request q{};q.index=index;AthControl::Response r{};
         return call(AthControl::BSS,r,&q)==kSuccess && decodeNetwork(r.data,r.length,n);
     }
+    // Full cache: a new BSS replaces the stalest entry if that one is no longer
+    // fresh, else the weakest if the new one is stronger, else it is dropped.
+    // Before, the stalest entry always went: in a dense 2.4 GHz neighbourhood the
+    // 5 GHz BSSes (swept last, refreshed by fewer scans) were the ones evicted.
     void merge(const Network &n,uint64_t nowMs){
         uint32_t slot=count;
         for(uint32_t i=0;i<count;++i)if(sameMAC(networks[i].bssid,n.bssid)){slot=i;break;}
         if(slot==count){
-            if(count<64)++count;
-            else {slot=0;for(uint32_t i=1;i<count;++i)if(seenMs[i]<seenMs[slot])slot=i;} // full: replace the stalest
+            if(count<kCacheSlots)++count;
+            else {
+                uint32_t stale=0,weak=0;
+                for(uint32_t i=1;i<count;++i){if(seenMs[i]<seenMs[stale])stale=i;if(networks[i].snr<networks[weak].snr)weak=i;}
+                if(nowMs>seenMs[stale]+kCacheFreshMs)slot=stale;
+                else if(n.snr>networks[weak].snr)slot=weak;
+                else {++cacheDropped;return;}
+                ++cacheEvicted;
+            }
         }
         networks[slot]=n;seenMs[slot]=nowMs;
     }
@@ -515,7 +635,7 @@ private:
     }
     void publish(const Network &n){
         uint8_t buffer[sizeof(AirportWCL::BeaconMetadata)+600];
-        const size_t length=buildScanResult(n,buffer,sizeof(buffer));
+        const size_t length=buildScanResult(n,buffer,sizeof(buffer),reportWidth?80:20);
         if(length)sink.post(AirportWCL::ScanResult,buffer,length);
     }
     bool wanted(const Network &n) const {return wclScanOwed && (channelBit(n.channel)&wclWant.mask)!=0;}
@@ -524,7 +644,7 @@ private:
     }
     // All entries of the core's BSS cache (the last core scan) into ours.
     void loadNetworks(uint64_t nowMs,bool post){
-        for(uint32_t i=0;i<status.count && i<64;++i){Network n;if(readNetwork(i,n)){merge(n,nowMs);if(post && wanted(n))publish(n);}}
+        for(uint32_t i=0;i<status.count && i<kCacheSlots;++i){Network n;if(readNetwork(i,n)){merge(n,nowMs);if(post && wanted(n))publish(n);}}
         pruneCache(nowMs);
     }
 
@@ -543,7 +663,7 @@ private:
         if(!done){
             // Results as they arrive: the core fills its cache entry by entry.
             if(status.scanGeneration==coreScanGeneration && status.count>coreScanPublished){
-                for(uint32_t i=coreScanPublished;i<status.count && i<64;++i){Network n;if(readNetwork(i,n)){merge(n,nowMs);if(wanted(n))publish(n);}}
+                for(uint32_t i=coreScanPublished;i<status.count && i<kCacheSlots;++i){Network n;if(readNetwork(i,n)){merge(n,nowMs);if(wanted(n))publish(n);}}
                 coreScanPublished=status.count;
             }
             if(wclScanOwed && nowMs>coreScanStartedMs+kScanLimitMs)finishWCLScan(kTimeout);

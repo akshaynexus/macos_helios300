@@ -18,6 +18,10 @@ sym com.apple.iokit.IONetworkingFamily __ZN18IONetworkInterface19setInterfaceSub
 # Output pull model SPI (IONetworkingFamily 3.4): configureOutputPullModel, dequeueOutputPackets.
 sym com.apple.iokit.IONetworkingFamily __ZN18IONetworkInterface24configureOutputPullModelEjjjjj
 sym com.apple.iokit.IONetworkingFamily __ZN18IONetworkInterface20dequeueOutputPacketsEjPP6__mbufS2_PjPy
+# Output thread control (the thread is halted from IONetworkInterface::init until startOutputThread; run 7).
+sym com.apple.iokit.IONetworkingFamily __ZN18IONetworkInterface17startOutputThreadEj
+sym com.apple.iokit.IONetworkingFamily __ZN18IONetworkInterface16stopOutputThreadEj
+sym com.apple.iokit.IONetworkingFamily __ZN18IONetworkInterface16flushOutputQueueEj
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211ControllerV2.h
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211SkywalkInterface.h
 hdr com.apple.iokit.IO80211Family @AIRPORT@/macOS26/IO80211InfraInterface.h

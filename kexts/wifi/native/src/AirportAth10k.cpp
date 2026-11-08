@@ -17,6 +17,10 @@ static_assert(AirportBridge::kNotReady==kIOReturnNotReady && AirportBridge::kBus
 // hidden from the SDK headers), bound by mangled name; `this` is the first argument.
 extern "C" IOReturn airportConfigureOutputPullModel(IONetworkInterface *,uint32_t driverQueueSize,uint32_t options,uint32_t outputQueueSize,uint32_t schedulingModel,uint32_t targetQdelay) __asm__("__ZN18IONetworkInterface24configureOutputPullModelEjjjjj");
 extern "C" IOReturn airportDequeueOutputPackets(IONetworkInterface *,uint32_t maxCount,mbuf_t *head,mbuf_t *tail,uint32_t *count,uint64_t *bytes) __asm__("__ZN18IONetworkInterface20dequeueOutputPacketsEjPP6__mbufS2_PjPy");
+// Output thread control (same SPI family; AirportItlwm calls them from setLinkStatus).
+extern "C" IOReturn airportStartOutputThread(IONetworkInterface *,uint32_t options) __asm__("__ZN18IONetworkInterface17startOutputThreadEj");
+extern "C" IOReturn airportStopOutputThread(IONetworkInterface *,uint32_t options) __asm__("__ZN18IONetworkInterface16stopOutputThreadEj");
+extern "C" void airportFlushOutputQueue(IONetworkInterface *,uint32_t options) __asm__("__ZN18IONetworkInterface16flushOutputQueueEj");
 static constexpr uint32_t kAirportWorkLoopSynchronous=1; // kIONetworkWorkLoopSynchronous: outputStart runs on our work loop
 
 // Pre-flight data for tools/kc-audit.py: sizeof() of every Apple class this
@@ -242,6 +246,7 @@ void AirportAth10k::stop(IOService *provider)
     }
     if(!broughtUp){IOService::stop(provider);return;} // deferred bring-up never happened: IO80211Controller::start never ran
     if(netif)netif->stopSession();
+    setOutputThread(false); // no gate held here: the halt waits for the start thread to acknowledge
     if(coreAttached && ath10k){ath10k->nativeDetachInterface();coreAttached=false;}
     super::stop(provider);
     IOEthernetController::setLinkStatus(kIONetworkLinkValid);
@@ -289,22 +294,43 @@ IOOutputQueue *AirportAth10k::createOutputQueue()
     return IOGatedOutputQueue::withTarget(ath10k,coreController()->getWorkLoop(),Ath10k::kOutputQueueCapacity);
 }
 
-// Called by the interface on our work loop when it has packets. They are
-// moved into the gated queue (which runs Ath10kPCIDevice::outputPacket under
-// the core's gate); when it is full we return NoResources and the core calls
-// signalOutputThread after it drains the queue (Ath10kPCIDevice::serviceTxQueue).
+// Called by the interface's output thread on our work loop (kIONetworkWorkLoop-
+// Synchronous: IONetworkInterface::if_start_gated under the IO80211 work-queue
+// gate) once startOutputThread ran. Packets move into the gated queue, which
+// runs Ath10kPCIDevice::outputPacket under the core's gate; when it is full we
+// return NoResources and the core calls signalOutputThread after it drains the
+// queue (Ath10kPCIDevice::serviceTxQueue). Logic: AirportAth10kTx.hpp.
 IOReturn AirportAth10k::outputStart(IONetworkInterface *interface,IOOptionBits)
 {
-    IOOutputQueue *queue=getOutputQueue();
-    if(!queue || !interface)return kIOReturnNoResources;
-    const UInt32 capacity=queue->getCapacity();
-    while(queue->getSize()+1<capacity){
-        mbuf_t head=nullptr;uint32_t count=0;
-        if(airportDequeueOutputPackets(interface,1,&head,nullptr,&count,nullptr)!=kIOReturnSuccess || !head)return kIOReturnSuccess;
-        mbuf_setnextpkt(head,nullptr);
-        queue->enqueue(head,nullptr);
-    }
-    return kIOReturnNoResources;
+    struct Ops {
+        IONetworkInterface *interface;IOOutputQueue *queue;
+        bool ready() const {return interface && queue;}
+        UInt32 size() const {return queue->getSize();}
+        UInt32 capacity() const {return queue->getCapacity();}
+        mbuf_t dequeue() const {
+            mbuf_t head=nullptr;uint32_t count=0;
+            if(airportDequeueOutputPackets(interface,1,&head,nullptr,&count,nullptr)!=kIOReturnSuccess || !head)return nullptr;
+            mbuf_setnextpkt(head,nullptr);return head;
+        }
+        void enqueue(mbuf_t packet) const {queue->enqueue(packet,nullptr);}
+    } ops{interface,getOutputQueue()};
+    return AirportTx::pull(ops,pullStats);
+}
+
+// The BSD interface's output thread is halted from IONetworkInterface::init on
+// (state 0x801, AirportAth10kTx.hpp) and only startOutputThread lets if_start
+// reach outputStart. Started when the data link comes up (authorized port),
+// stopped and flushed when it goes down and before the core detaches.
+void AirportAth10k::setOutputThread(bool up)
+{
+    struct Ops {
+        IONetworkInterface *interface;
+        void start() const {const IOReturn r=airportStartOutputThread(interface,0);if(r!=kIOReturnSuccess)AIRPORT_LOG("startOutputThread 0x%x",r);}
+        void stop() const {airportStopOutputThread(interface,0);}
+        void flush() const {airportFlushOutputQueue(interface,0);}
+    } ops{bsd};
+    if(!bsd)return;
+    outputThread.link(ops,up);
 }
 
 UInt32 AirportAth10k::outputPacket(mbuf_t packet,void *param)
@@ -326,6 +352,7 @@ bool AirportAth10k::setLinkStatus(UInt32 status,const IONetworkMedium *medium,UI
 void AirportAth10k::nativeLink(bool up)
 {
     setLinkStatus(kIONetworkLinkValid|(up?kIONetworkLinkActive:0),up?activeMedium:nullptr,up?54000000:0);
+    setOutputThread(up);
 }
 
 void AirportAth10k::postInterfaceMessage(unsigned int message,void *data,unsigned long length)

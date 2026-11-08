@@ -32,7 +32,18 @@ int main(){
     Ath10k::recordWMIBSS(c,hidden.data(),hidden.size(),1,31,0);
     assert(!c.entries[0].hidden && !memcmp(c.entries[0].ssid,"Name",4));
     for(unsigned n=2;n<=65;++n){auto f=beacon({'X'},n);Ath10k::recordWMIBSS(c,f.data(),f.size(),1,1,0);}
-    assert(c.count==64 && c.overflow==1);
+    assert(c.count==64 && c.overflow==1 && !c.evicted); // equal signal: the new BSS is not kept
+    { // Full cache: a stronger BSS (a 5 GHz AP swept after 64 2.4 GHz ones) replaces the weakest entry.
+        Ath10k::WMIBSSCache full;
+        for(unsigned n=1;n<=64;++n){auto f=beacon({'X'},n);Ath10k::recordWMIBSS(full,f.data(),f.size(),1,n==7?3:20+n%9,0);}
+        assert(full.count==64 && !full.overflow);
+        auto strong=beacon({'S'},200);Ath10k::recordWMIBSS(full,strong.data(),strong.size(),44,45,0);
+        assert(full.count==64 && full.overflow==1 && full.evicted==1);
+        bool found=false,weakGone=true;for(unsigned i=0;i<64;++i){if(full.entries[i].snr==45 && full.entries[i].rxChannel==44 && full.entries[i].seen==1)found=true;if(full.entries[i].snr==3)weakGone=false;}
+        assert(found && weakGone);
+        auto faint=beacon({'F'},201);Ath10k::recordWMIBSS(full,faint.data(),faint.size(),1,2,0);
+        assert(full.overflow==2 && full.evicted==1); // weaker than everything: dropped
+    }
     for(unsigned size=0;size<38;++size){
         auto f=beacon();Ath10k::WMIBSSCache bad;Ath10k::recordWMIBSS(bad,f.data(),size,1,1,0);
         assert(!bad.count && bad.malformed==1);

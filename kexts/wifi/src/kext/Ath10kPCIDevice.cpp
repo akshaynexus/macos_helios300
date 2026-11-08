@@ -1352,7 +1352,7 @@ void Ath10kPCIDevice::publishWMIRuntimeProperties()
     setProperty("Ath10kBSSMalformed",_wmiBSS.malformed,32);
     setProperty("Ath10kBSSRxErrors",_wmiBSS.rxErrors,32);
     setProperty("Ath10kBSSIgnored",_wmiBSS.ignored,32);
-    setProperty("Ath10kBSSOverflow",_wmiBSS.overflow,32);
+    setProperty("Ath10kBSSOverflow",_wmiBSS.overflow,32);setProperty("Ath10kBSSEvicted",_wmiBSS.evicted,32);
     setProperty("Ath10kBSSBeacons",_wmiBSS.beacons,32);
     setProperty("Ath10kBSSProbeResponses",_wmiBSS.probeResponses,32);
     setProperty("Ath10kBSSLastStatus",_wmiBSS.lastStatus,32);

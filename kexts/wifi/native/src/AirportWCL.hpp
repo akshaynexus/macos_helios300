@@ -486,6 +486,11 @@ struct JoinRequest {
     uint16_t channelSpec;
     uint16_t rsnLength;
     uint8_t rsn[257];
+    // Every candidate of the request (count at 0x214, 18-byte entries from
+    // 0x218: BSSID at +4, chanspec at +0x10); bssid/channelSpec above are entry 0.
+    uint32_t candidateCount;
+    uint8_t candidateBSSID[10][6];
+    uint16_t candidateSpec[10];
 };
 
 inline bool validCipherKey(uint32_t cipher, uint32_t length, uint16_t flags,
@@ -558,6 +563,15 @@ inline bool decodeJoin(const void *buffer, size_t length, JoinRequest &out) {
     memcpy(out.key, p + 0x50, keyLength);
     memcpy(out.bssid, p + 0x21c, 6);
     out.channelSpec = read16(p + 0x228);
+    out.candidateCount = 0;
+    for (uint32_t i = 0; i < count; ++i) {
+        const uint8_t *entry = p + 0x218 + size_t(i) * 18;
+        uint8_t bits = 0;
+        for (unsigned b = 0; b < 6; ++b) bits |= entry[4 + b];
+        if (!bits || (entry[4] & 1)) continue;
+        memcpy(out.candidateBSSID[out.candidateCount], entry + 4, 6);
+        out.candidateSpec[out.candidateCount++] = read16(entry + 0x10);
+    }
     out.rsnLength = rsnLength;
     memcpy(out.rsn, p + 0xd6, rsnLength);
     return true;

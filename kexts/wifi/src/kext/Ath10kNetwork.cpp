@@ -421,7 +421,13 @@ void Ath10kPCIDevice::publishConnection()
     setProperty("Ath10kRuntimeMSIWorkers",_runtimeIRQWorkers,32);
     setProperty("Ath10kRuntimeMSIReschedules",_runtimeIRQReschedules,32);
     setProperty("Ath10kDataTxWakeups",_perf.txWakeups,32);
-    setProperty("Ath10kDataTxResumePending",Ath10k::kDataTxSlots*3/4,32);
+    // A constant (kDataTxSlots*3/4), not state: published as ResumePending before
+    // run 7, where it read like 48 frames waiting.
+    setProperty("Ath10kDataTxResumeThreshold",Ath10k::kDataTxSlots*3/4,32);
+    setProperty("Ath10kDataTxLinkDropped",_connection.txLinkDropped,32);
+    setProperty("Ath10kDataTxPauseLastId",_connection.txPauseLastId,32);
+    setProperty("Ath10kDataTxPauseLastAction",_connection.txPauseLastAction,32);
+    setProperty("Ath10kDataTxPauseLastVdevMap",_connection.txPauseLastMap,32);
     setProperty("Ath10kOutputQueueCapacity",Ath10k::kOutputQueueCapacity,32);
     setProperty("Ath10kRxDeliveryFlushes",_perf.rxFlushes,32);
     setProperty("Ath10kRxDeliveryBatchMax",_perf.rxFlushMax,32);
@@ -457,7 +463,7 @@ void Ath10kPCIDevice::publishConnection()
 UInt32 Ath10kPCIDevice::outputPacket(mbuf_t packet,void *)
 {
     if(powerIOBlocked() || !_networkLinkUp || !_networkEnabled || !_wmiLive.active || _connection.stage!=Ath10k::LinkStage::Connected){
-        freePacket(packet);return kIOReturnOutputDropped;
+        ++_connection.txLinkDropped;freePacket(packet);return kIOReturnOutputDropped;
     }
     if(!_connection.portAuthorized || _connection.maintenance.blocked || _connection.eapolPause || _connection.spectrum.pending || _connection.spectrum.inFlight || _connection.probe.active || _connection.csa.blocked || _connection.radio.blocked || _connection.radio.powerBlocked || _connection.txOwned || _connection.txPauseMask || _connection.dataPending>=Ath10k::kDataTxSlots){
         _dataTXStalled=true;

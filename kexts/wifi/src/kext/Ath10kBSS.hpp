@@ -60,7 +60,7 @@ inline const char *bssRejectName(UInt32 reason){
 struct WMIBSSCache {
     UInt32 rejects[BSSRejectCount]{},lastReject=BSSRejectCount;
     WMIBSS entries[kWMIBSSMax]{};
-    UInt32 count=0, accepted=0, malformed=0, rxErrors=0, ignored=0, overflow=0;
+    UInt32 count=0, accepted=0, malformed=0, rxErrors=0, ignored=0, overflow=0, evicted=0;
     UInt32 beacons=0, probeResponses=0, lastStatus=0, lastChannel=0, lastBytes=0;
     // Plan-index bits of the channels on which a BSS was heard on its own
     // channel (beacon hints, wmiScanProbeMask). Kept across scans by the core.
@@ -164,8 +164,16 @@ inline void recordWMIBSS(WMIBSSCache &cache, const UInt8 *f, UInt32 bytes,
     }
     if(onChannel){const UInt32 index=wmiScanPlanIndex(channel);if(index<kWMIScanChannelCount)cache.onChannelMask|=1ull<<index;}
     if(slot==cache.count){
-        if(cache.count==kWMIBSSMax){++cache.overflow;return;}
-        ++cache.count;
+        if(cache.count==kWMIBSSMax){
+            // Full (dense 2.4 GHz neighbourhoods with active probing, hardware
+            // run 7): a new BSS replaces the weakest entry when it is stronger,
+            // instead of being dropped. The plan sweeps 2.4 GHz first, so the
+            // old rule lost the 5 GHz BSSes, typically the strongest choice.
+            ++cache.overflow;
+            UInt32 weak=0;for(UInt32 n=1;n<cache.count;++n)if(cache.entries[n].snr<cache.entries[weak].snr)weak=n;
+            if(candidate.snr<=cache.entries[weak].snr)return;
+            slot=weak;++cache.evicted;cache.entries[slot]=WMIBSS{};
+        } else ++cache.count;
     } else if(candidate.hidden && !cache.entries[slot].hidden){
         candidate.hidden=false;candidate.ssidLength=cache.entries[slot].ssidLength;
         for(UInt32 i=0;i<32;++i)candidate.ssid[i]=cache.entries[slot].ssid[i];

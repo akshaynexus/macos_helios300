@@ -34,6 +34,11 @@ bool AirportAth10kInterface::init(AirportAth10k *provider)
     coreAdapter.owner=sinkAdapter.owner=this;
     session=new AirportAth10kSession(coreAdapter,sinkAdapter);
     if(!session)return false;
+    // airportath10k_bw=0: 20 MHz chanspecs as AirportItlwm; airportath10k_bandpref=1:
+    // prefer a 5 GHz candidate of a multi-candidate join (AirportAth10kBridge.hpp).
+    uint32_t option=0;
+    if(PE_parse_boot_argn("airportath10k_bw",&option,sizeof(option)))session->reportWidth=option!=0;
+    if(PE_parse_boot_argn("airportath10k_bandpref",&option,sizeof(option)))session->bandPreference=option!=0;
     AIRPORT_STEP("interface init: family init done, MAC copied");
     timer=IOTimerEventSource::timerEventSource(this,pollTimer);
     IO80211WorkQueue *queue=controller->getWorkQueue();
@@ -157,6 +162,20 @@ void AirportAth10kInterface::mirrorState()
         controller->setProperty("AirportAth10kRoams",mirroredRoams,32);controller->setProperty("AirportAth10kLastRoamMs",mirroredRoamMs,32);
     }
     if(session->networkCount()!=mirroredNetworks){mirroredNetworks=session->networkCount();controller->setProperty("AirportAth10kCachedNetworks",mirroredNetworks,32);}
+    // Output path (AirportAth10kTx.hpp), at most once a second while traffic flows:
+    // AirportAth10kTxThread (output thread started), AirportAth10kTxStarts/Stops,
+    // AirportAth10kTxPackets (moved by outputStart), AirportAth10kTxCalls, AirportAth10kTxQueueFull.
+    const auto &tx=controller->txStats();const auto &thread=controller->txThread();
+    const uint64_t now=nowMs();
+    if((tx.packets!=mirroredTxPackets || tx.full!=mirroredTxFull || thread.starts+thread.stops!=mirroredTxStarts) && now>=txMirroredMs+1000){
+        txMirroredMs=now;mirroredTxPackets=tx.packets;mirroredTxFull=tx.full;mirroredTxStarts=thread.starts+thread.stops;
+        controller->setProperty("AirportAth10kTxThread",thread.started());
+        controller->setProperty("AirportAth10kTxStarts",thread.starts,32);controller->setProperty("AirportAth10kTxStops",thread.stops,32);
+        controller->setProperty("AirportAth10kTxPackets",tx.packets,32);controller->setProperty("AirportAth10kTxCalls",tx.calls,32);
+        controller->setProperty("AirportAth10kTxQueueFull",tx.full,32);
+    }
+    // The candidates of the last WCL join (channel, RSSI from our cache, the one joined); no addresses.
+    if(session->candidateSerial!=mirroredCandidates){mirroredCandidates=session->candidateSerial;controller->setProperty("AirportAth10kJoinCandidates",session->candidateText());}
 }
 
 IOReturn AirportAth10kInterface::command(OSObject *,void *a0,void *a1,void *a2,void *)
@@ -289,6 +308,7 @@ IOReturn AirportAth10kInterface::getCHANNEL(apple80211_channel_data *cd)
     memset(cd,0,sizeof(*cd));cd->version=APPLE80211_VERSION;cd->channel.version=APPLE80211_VERSION;
     cd->channel.channel=s.channel?s.channel:n->channel;
     cd->channel.flags=bandFlags(cd->channel.channel)|APPLE80211_C_FLAG_ACTIVE|(s.width==80?APPLE80211_C_FLAG_80MHZ:s.width==40?APPLE80211_C_FLAG_40MHZ:APPLE80211_C_FLAG_20MHZ);
+    if(s.width==40 && n->htOpPresent && (n->htOp[1]&3)==1)cd->channel.flags|=APPLE80211_C_FLAG_EXT_ABV; // secondary channel above
     return kIOReturnSuccess;
 }
 IOReturn AirportAth10kInterface::getPOWERSAVE(apple80211_powersave_data *pd)

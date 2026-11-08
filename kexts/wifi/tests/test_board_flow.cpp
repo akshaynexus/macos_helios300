@@ -292,7 +292,10 @@ public:
     void deliverNetworkRX(const UInt8 *d,UInt8 status,UInt16 peer,UInt16 length=0,UInt32 availableBytes=2048){
         Ath10k::appendRXBatch(_connection,_rxBatch,d,availableBytes,status,peer,length);
     }
-    struct Queue {UInt32 wakes=0;void service(unsigned options){assert(options==1);++wakes;}} queue;
+    struct Queue {UInt32 wakes=0;std::function<void()> hook;void service(unsigned options){assert(options==1);++wakes;if(hook)hook();}} queue;
+#ifdef ATH10K_NATIVE_TX_MEMBERS
+    ATH10K_NATIVE_TX_MEMBERS
+#endif
     bool queueEnabled=false;
     Queue *getOutputQueue(){return queueEnabled?&queue:nullptr;}
     Queue *txQueue(){return getOutputQueue();}
