@@ -116,7 +116,15 @@ qca_life_action qca_life_on_result(qca_life *l, qca_err err)
 
     l->last_err = err;
     if (err != QCA_OK && !qca_err_is_transient(err)) {
+        int woke_during_run = l->recheck && l->powered;
         l->recheck = 0;
+        if (woke_during_run) {
+            /* Read while the chip was going down or coming back, so it says
+             * nothing about the chip now. The usual one attempt per wake. */
+            l->state = QCA_LS_PENDING;
+            l->attempts = QCA_LIFE_MAX_ATTEMPTS - 1u;
+            return arm(QCA_LIFE_WAKE_DELAY_MS);
+        }
         l->state = QCA_LS_DEAD;
         return a;
     }
@@ -145,6 +153,25 @@ qca_life_action qca_life_on_result(qca_life *l, qca_err err)
     }
     l->state = QCA_LS_PENDING;
     return arm(QCA_LIFE_RETRY_BASE_MS << (l->attempts - 1u));
+}
+
+qca_life_action qca_life_on_skipped(qca_life *l)
+{
+    qca_life_action a = none();
+
+    if (l->state != QCA_LS_RUNNING)
+        return a;
+    l->last_err = QCA_OK;
+    if (l->recheck && l->powered) {
+        l->recheck = 0;
+        l->attempts = 0;
+        l->state = QCA_LS_PENDING;
+        return arm(QCA_LIFE_WAKE_DELAY_MS);
+    }
+    l->recheck = 0;
+    l->attempts = 0;
+    l->state = l->powered ? QCA_LS_READY : QCA_LS_SLEEPING;
+    return a;
 }
 
 const char *qca_life_state_name(qca_life_state s)

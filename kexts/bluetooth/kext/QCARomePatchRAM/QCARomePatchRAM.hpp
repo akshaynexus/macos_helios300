@@ -71,6 +71,7 @@ private:
     bool                      fIfaceOpen  = false;
     bool                      fPMStarted  = false;
     bool                      fRenamed    = false;
+    bool                      fLastRunSkipped = false; /* runSetup: device in use */
     volatile bool             fTerminating = false;
     qca_life                  fLife;
 };

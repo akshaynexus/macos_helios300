@@ -305,7 +305,7 @@ void QCARomePatchRAM::apply(qca_life_action a)
         if (!a.run_setup)
             return;
         qca_err e = runSetup();
-        a = qca_life_on_result(&fLife, e);
+        a = fLastRunSkipped ? qca_life_on_skipped(&fLife) : qca_life_on_result(&fLife, e);
         if (fLife.state == QCA_LS_FAILED || fLife.state == QCA_LS_DEAD)
             LOG("giving up (%s) after %u attempt(s): %s", qca_life_state_name(fLife.state),
                 fLife.attempts, qca_strerror(e));
@@ -562,6 +562,7 @@ qca_err QCARomePatchRAM::runSetup()
     bzero(&r, sizeof(r));
     qca_err e;
     bool skipped = false;
+    fLastRunSkipped = false;
     if (!openDevice()) {
         if (fLife.successes > 0 && !fTerminating) {
             // Wake check while another client (bluetoothd) holds the device:
@@ -600,6 +601,7 @@ qca_err QCARomePatchRAM::runSetup()
     clock_get_uptime(&t1);
     absolutetime_to_nanoseconds(t1 - t0, &ns);
     if (skipped) {
+        fLastRunSkipped = true;
         LOG("wake check skipped: device in use by another client (run %u)", fLife.runs);
         if (!fTerminating && !fDevice->isInactive())
             fDevice->setProperty("QCARomePatchRAM-LastCheck", "skipped (device in use)");

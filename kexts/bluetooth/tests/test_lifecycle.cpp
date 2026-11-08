@@ -237,6 +237,143 @@ void test_terminate()
         CHECK(std::strcmp(qca_life_state_name(qca_life_state(s)), "unknown") != 0);
 }
 
+void test_failure_paths()
+{
+    std::puts("[policy: wake failure paths]");
+    {
+        // Permanent error read while the machine was going down and back up:
+        // the result predates the wake, so one more attempt follows it.
+        qca_life l;
+        qca_life_init(&l);
+        qca_life_on_event(&l, QCA_EV_START);
+        CHECK(qca_life_on_event(&l, QCA_EV_TIMER).run_setup);
+        qca_life_on_event(&l, QCA_EV_POWER_OFF);
+        qca_life_on_event(&l, QCA_EV_POWER_ON);
+        qca_life_action a = qca_life_on_result(&l, QCA_ERR_UNSUPPORTED_ROM);
+        CHECK_EQ(a.arm_timer_ms, QCA_LIFE_WAKE_DELAY_MS);
+        CHECK_EQ(l.state, QCA_LS_PENDING);
+        CHECK(qca_life_on_event(&l, QCA_EV_TIMER).run_setup);
+        // One attempt only, even if it fails transiently...
+        a = qca_life_on_result(&l, QCA_ERR_CHECK_STATUS_IO);
+        CHECK(!a.arm_timer_ms);
+        CHECK_EQ(l.state, QCA_LS_FAILED);
+        CHECK_EQ(l.runs, 2u);
+    }
+    {
+        // ... and a permanent error while still asleep waits for the wake.
+        qca_life l;
+        qca_life_init(&l);
+        qca_life_on_event(&l, QCA_EV_START);
+        qca_life_on_event(&l, QCA_EV_TIMER);
+        qca_life_on_event(&l, QCA_EV_POWER_OFF);
+        qca_life_action a = qca_life_on_result(&l, QCA_ERR_UNSUPPORTED_ROM);
+        CHECK(!a.arm_timer_ms);
+        CHECK_EQ(l.state, QCA_LS_DEAD);
+        CHECK_EQ(qca_life_on_event(&l, QCA_EV_POWER_ON).arm_timer_ms, QCA_LIFE_WAKE_DELAY_MS);
+    }
+    {
+        // Lid closed during the retry backoff: the pending retry is cancelled
+        // and the wake gets a fresh round.
+        qca_life l;
+        qca_life_init(&l);
+        qca_life_on_event(&l, QCA_EV_START);
+        qca_life_on_event(&l, QCA_EV_TIMER);
+        qca_life_on_result(&l, QCA_ERR_BODY_IO);
+        qca_life_on_event(&l, QCA_EV_TIMER);
+        qca_life_on_result(&l, QCA_ERR_BODY_IO);
+        CHECK_EQ(l.attempts, 2u);
+        qca_life_action a = qca_life_on_event(&l, QCA_EV_POWER_OFF);
+        CHECK(a.cancel_timer);
+        CHECK(!qca_life_on_event(&l, QCA_EV_TIMER).run_setup);
+        CHECK_EQ(qca_life_on_event(&l, QCA_EV_POWER_ON).arm_timer_ms, QCA_LIFE_WAKE_DELAY_MS);
+        CHECK(qca_life_on_event(&l, QCA_EV_TIMER).run_setup);
+        CHECK_EQ(l.attempts, 1u);
+    }
+    {
+        // Every wake fails: bounded per wake, and never a timer once given up.
+        qca_life l;
+        qca_life_init(&l);
+        qca_life_on_event(&l, QCA_EV_START);
+        uint32_t expected = 0;
+        for (int wake = 0; wake < 5; wake++) {
+            for (uint32_t i = 0; i < QCA_LIFE_MAX_ATTEMPTS; i++) {
+                CHECK(qca_life_on_event(&l, QCA_EV_TIMER).run_setup);
+                expected++;
+                qca_life_on_result(&l, QCA_ERR_GET_VERSION_IO);
+            }
+            CHECK_EQ(l.state, QCA_LS_FAILED);
+            CHECK(!qca_life_on_event(&l, QCA_EV_TIMER).run_setup);
+            qca_life_on_event(&l, QCA_EV_POWER_OFF);
+            qca_life_on_event(&l, QCA_EV_POWER_ON);
+        }
+        CHECK_EQ(l.runs, expected);
+    }
+    {
+        // Dark wake / maintenance wake storm: off and on with no run between.
+        qca_life l;
+        qca_life_init(&l);
+        qca_life_on_event(&l, QCA_EV_START);
+        qca_life_on_event(&l, QCA_EV_TIMER);
+        qca_life_on_result(&l, QCA_OK);
+        for (int i = 0; i < 10; i++) {
+            qca_life_on_event(&l, QCA_EV_POWER_OFF);
+            CHECK_EQ(qca_life_on_event(&l, QCA_EV_POWER_ON).arm_timer_ms, QCA_LIFE_WAKE_DELAY_MS);
+        }
+        CHECK_EQ(l.runs, 1u);
+        CHECK(qca_life_on_event(&l, QCA_EV_TIMER).run_setup);
+        CHECK_EQ(l.runs, 2u);
+    }
+}
+
+void test_wake_skipped()
+{
+    std::puts("[policy: wake check while bluetoothd holds the device]");
+    qca_life l;
+    qca_life_init(&l);
+    qca_life_on_event(&l, QCA_EV_START);
+    qca_life_on_event(&l, QCA_EV_TIMER);
+    qca_life_on_result(&l, QCA_OK);
+    CHECK_EQ(l.successes, 1u);
+    qca_life_on_event(&l, QCA_EV_POWER_OFF);
+    qca_life_on_event(&l, QCA_EV_POWER_ON);
+    CHECK(qca_life_on_event(&l, QCA_EV_TIMER).run_setup);
+    qca_life_action a = qca_life_on_skipped(&l);
+    CHECK(!a.arm_timer_ms && !a.run_setup);
+    CHECK_EQ(l.state, QCA_LS_READY);
+    CHECK_EQ(l.successes, 1u);       // nothing was checked, so no success
+    CHECK_EQ(l.last_err, QCA_OK);    // and no failure
+    CHECK_EQ(l.attempts, 0u);
+
+    // Skipped while the machine went back to sleep.
+    qca_life_on_event(&l, QCA_EV_POWER_OFF);
+    qca_life_on_event(&l, QCA_EV_POWER_ON);
+    qca_life_on_event(&l, QCA_EV_TIMER);
+    qca_life_on_event(&l, QCA_EV_POWER_OFF);
+    qca_life_on_skipped(&l);
+    CHECK_EQ(l.state, QCA_LS_SLEEPING);
+
+    // Skipped across a wake: one re-check, not a loop.
+    qca_life_on_event(&l, QCA_EV_POWER_ON);
+    qca_life_on_event(&l, QCA_EV_TIMER);
+    qca_life_on_event(&l, QCA_EV_POWER_OFF);
+    qca_life_on_event(&l, QCA_EV_POWER_ON);
+    a = qca_life_on_skipped(&l);
+    CHECK_EQ(a.arm_timer_ms, QCA_LIFE_WAKE_DELAY_MS);
+    qca_life_on_event(&l, QCA_EV_TIMER);
+    a = qca_life_on_skipped(&l);
+    CHECK(!a.arm_timer_ms);
+    CHECK_EQ(l.state, QCA_LS_READY);
+
+    // Outside a run, and after terminate, it does nothing.
+    a = qca_life_on_skipped(&l);
+    CHECK(!a.arm_timer_ms);
+    CHECK_EQ(l.state, QCA_LS_READY);
+    qca_life_on_event(&l, QCA_EV_TERMINATE);
+    a = qca_life_on_skipped(&l);
+    CHECK(!a.arm_timer_ms && !a.run_setup);
+    CHECK_EQ(l.state, QCA_LS_GONE);
+}
+
 // ---- policy + real setup against a simulated chip --------------------------
 
 // Rome 3.2 as measured on the Helios: ROM patch 0x111, rampatch 0x3e8,
@@ -425,6 +562,40 @@ void test_sim_transient_bulk_errors()
     CHECK_EQ(b.life.state, QCA_LS_READY);
 }
 
+void test_sim_wake_failure_paths()
+{
+    std::puts("[sim: power lost, the re-download fails, retries recover it]");
+    SimKext k;
+    k.event(QCA_EV_START);
+    k.settle();
+    CHECK(k.chip_ready());
+    k.event(QCA_EV_POWER_OFF);
+    k.chip.power_loss();
+    k.chip.fail_next_bulk = 1;
+    k.event(QCA_EV_POWER_ON);
+    k.settle();
+    CHECK(k.chip_ready());
+    CHECK_EQ(k.life.state, QCA_LS_READY);
+
+    std::puts("[sim: chip gone across the wake, back on the next one]");
+    SimKext g;
+    g.event(QCA_EV_START);
+    g.settle();
+    g.event(QCA_EV_POWER_OFF);
+    g.chip.power_loss();
+    g.chip.present = false;
+    g.event(QCA_EV_POWER_ON);
+    g.settle();
+    CHECK_EQ(g.life.state, QCA_LS_FAILED); // bounded: no timer left armed
+    CHECK_EQ(g.timer_ms, 0u);
+    g.chip.present = true;
+    g.event(QCA_EV_POWER_OFF);
+    g.event(QCA_EV_POWER_ON);
+    g.settle();
+    CHECK(g.chip_ready());
+    CHECK_EQ(g.life.state, QCA_LS_READY);
+}
+
 void test_sim_unplug_mid_download()
 {
     std::puts("[sim: hot-unplug during a download: no retry, no timer, no I/O]");
@@ -469,9 +640,12 @@ int main()
     test_sleep_wake();
     test_run_straddles_sleep();
     test_terminate();
+    test_failure_paths();
+    test_wake_skipped();
     test_sim_cold_boot_and_warm_wake();
     test_sim_wake_after_power_loss();
     test_sim_transient_bulk_errors();
+    test_sim_wake_failure_paths();
     test_sim_unplug_mid_download();
     std::printf("%d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;

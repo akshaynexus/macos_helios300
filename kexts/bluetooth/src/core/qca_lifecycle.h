@@ -71,6 +71,9 @@ void qca_life_init(qca_life *l);
 qca_life_action qca_life_on_event(qca_life *l, qca_life_event ev);
 /* Report the outcome of a run the policy asked for (run_setup was set). */
 qca_life_action qca_life_on_result(qca_life *l, qca_err err);
+/* A wake check found the device held by another client (bluetoothd): it is in
+ * use, so there was nothing to check. Neither a success nor a failure. */
+qca_life_action qca_life_on_skipped(qca_life *l);
 
 const char *qca_life_state_name(qca_life_state s);
 
