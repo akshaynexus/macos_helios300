@@ -55,6 +55,7 @@ release is a contract.
 | `licence`, `licence_files`, `contains_firmware`, `status` | what applies to the file, and how far it has been tested |
 | `source`, `built_by`, `signed` | tree (`self` / `driver`) and path; `cross` / `iasl` / `copy`; `ad-hoc (rcodesign)` or `unsigned` |
 | `optional` | may be absent from a release (listed under `release.missing`) |
+| `third_party` | code from elsewhere inside a bundle: `path` in the bundle, `what`, `licence`, `notices` (licence files in the bundle; make_manifest refuses the bundle if any is absent), `source_url`, `source_sha256` |
 | `personality` | values baked into the built kext's `IOKitPersonalities` at release time, e.g. Ath10kMac `{"Ath10kCountryCode": {"string": "IN"}}` (`release.sh --wifi-country`) |
 
 ### Artifacts and OpenCore order (spec.json)
@@ -70,7 +71,7 @@ release is a contract.
 | ACPI 110 | `SSDT-HS07-UPC.aml`, internal Bluetooth port HS07 (`_UPC` type 0xFF) | opencore | | |
 | | `PG106FB.kext`, the HDMI framebuffer (links IOGraphicsFamily, only in the System KC on 26.7.2: OpenCore refuses it, "Dependency com.apple.iokit.IOGraphicsFamily was not found") | library-extensions | | PG106 |
 | | `PG106Accel.kext` (links IOAcceleratorFamily2, only in the System KC, so OpenCore cannot inject it) | library-extensions | | PG106 |
-| | `NVMTLDriver.bundle`, Metal plugin (optional) | gpu-bundles | | PG106Accel, translator, NVK |
+| | `NVMTLDriver.bundle`, Metal plugin (optional), with its AIR reader `Contents/MacOS/air-runtime/libLLVM.dylib` (upstream LLVM 23.1.4, see `third_party`) | gpu-bundles | | PG106Accel, translator, NVK |
 | | `libnvmtl_translate.dylib`, AIR→SPIR-V (optional) | gpu-bundles `nvmtl/` | | |
 | | `NVK-Pascal`: `libvulkan_nouveau.dylib` + `nvk_icd.json` (optional) | gpu-bundles `nvmtl/` | | |
 | | `NVIDIA-firmware-LICENCE.txt`, `Mesa-license.rst` | stick-only | | |
@@ -141,6 +142,26 @@ tools/release.sh --version 0.1.1 --dry-run --real-kc ~/pascal-build/macos-26.7.2
   in NVRAM; the kext OpenCore injects carries the value on every boot. `ath10k_cc=XX` still overrides it; `00` =
   world rules. Someone in another country builds with their own code.
 - **Post-install scripts** (`--skip scripts` key): `tools/macos/*.sh` copied as release files after `bash -n`.
+- **The Metal plugin's AIR reader** (part of the `plugin` step): `NVMTLDriver.bundle/Contents/MacOS/air-runtime/libLLVM.dylib`.
+  The plugin (driver `plugin/NVMTLLibraryLoad.m`) dlopens it and reads every Metal library's AIR bitcode in process
+  through the LLVM **C API only** (56 functions resolved by name), then hands the printed IR to the translator;
+  without it every shader not already in the cache fails to compile. `tools/release/cross-air-llvm.sh` builds it
+  from upstream llvm-project **23.1.4** (the cross toolchain's LLVM; the translator reads LLVM 21+ IR syntax:
+  `captures(none)`, `samesign`, `getelementptr inbounds nuw`). The release tarball is SHA-256 pinned
+  (`819ecf73…434bb2`), and its `.sig` verifies with LLVM release manager Tobias Hieta's key `D574BD5D…45D59042`. The build:
+  x86_64 macOS 15.0 against the 26.5 SDK, clang + ld64.lld, components Core/BitReader/IRReader/Passes/Support, no
+  code generator, no zlib/zstd (it links only libSystem and libc++), install name `@loader_path/libLLVM.dylib`,
+  about 15-25 min once, cached in `$RELEASE_CACHE/air-llvm-<key>`. Licence: Apache-2.0 WITH LLVM-exception, notices
+  in `Contents/Resources/air-runtime/` (LLVM, BLAKE3, regex); recorded in the artifact's `third_party`.
+  Gate `tools/release/check-air-llvm.py`: (1) the Mach-O exports every C function the plugin resolves (read
+  from the plugin source, optional ones included); (2) the 17 AIR modules of the plugin's own Apple-compiled
+  `nvconv.metallib` (`nvconv_lib.h`, `air64_v27-apple-macosx15.7.0`) go through the plugin's exact sequence
+  (`tools/release/air-reader-check.c`: parse with an error-severity diagnostic handler, the simdgroup-matrix
+  unroll pipeline, both pointer-canonicalization pipelines, print) against the host's libLLVM **of the same
+  version** (`llvm-config` must say 23.1.4, or `HELIOS_AIR_HOST_LIBLLVM=<libLLVM.so>`). The Mach-O itself cannot
+  run on Linux; its first load is on the Mac (`log stream` shows `library: in-memory bitcode reader ready`).
+  Upstream LLVM needed no Apple patch for this AIR. AIR from a newer Metal compiler than the sample's
+  (macOS 15.7) is only proven by running real apps on macOS 26.
 
 - Sources: `git archive` of this repo at `--rev` (default `HEAD`), and of nvidia-macos-driver at the commit the
   `kexts/nvidia-macos-driver` submodule records (a real release refuses any other driver commit; bump the submodule
@@ -165,7 +186,11 @@ tools/release.sh --version 0.1.1 --dry-run --real-kc ~/pascal-build/macos-26.7.2
 | NVK-Pascal | `nvk/pascal/scripts/cross-build-nvk-macos.sh` (Mesa + NAK; `build-nvk-linux.sh` makes the build-machine tools) | its own macho check |
 
 Ad-hoc signatures (`rcodesign sign`, what `codesign -s -` does): PG106FB and PG106Accel (kmutil loads them from
-/Library/Extensions), the plugin, the translator, NVK. Kexts injected by OpenCore need none.
+/Library/Extensions), the plugin and its nested `air-runtime/libLLVM.dylib`, the translator, NVK. Kexts injected by
+OpenCore need none. **Signing is a gate:** without rcodesign release.sh stops before building (exit 77) unless all of
+pg106fb, pg106accel, plugin, xlate and nvk are `--skip`ped. A failed signing, or a Mach-O without
+`LC_CODE_SIGNATURE` afterwards, stops it (exit 1), and make_manifest refuses an unsigned artifact that installs
+into /Library. `install-gpu.sh` installs the files exactly as shipped.
 
 **Everything is cross-built; nothing has been built with Xcode on a Mac.** Several artifacts run on the owner's Mac
 ([MACOS-STATUS.md](MACOS-STATUS.md)). Before a release that is not marked pre-release, do one
@@ -214,6 +239,9 @@ publishes.
 2. **Reviewer pass** (not the person who built it): `dist/manifest.json` has `release.dry_run` false,
    `release.kc_audit.status` `pass` with six `pass` rows (Ath10kMac, AirportAth10k, QCARomePatchRAM on Boot;
    PG106 on Boot; PG106FB, PG106Accel on Boot + System), `release.sources.driver.commit` = the submodule commit,
+   NVMTLDriver.bundle present with `Contents/MacOS/air-runtime/libLLVM.dylib` in `contents_sha256` and `third_party`
+   recorded (`dist/logs/plugin.log`: `check-air-llvm: PASS`), every cross-built /Library artifact `signed`
+   `ad-hoc (rcodesign)`,
    no `release.missing` except optional pieces, PG106FB and PG106Accel `install` `library-extensions` and `signed`
    `ad-hoc (rcodesign)`, Ath10kMac `personality.Ath10kCountryCode` = `IN`, `config.device_properties` with
    `applbkl`, and `post_install` with the `gpu` step and the two audio choices. Read `dist/logs/pg106.log` for

@@ -26,7 +26,8 @@ Update this page in the same commit as the evidence.
 | Wi-Fi sleep/wake with the in-place firmware reload | a3da2e8, host-tested (10 cycles); not run on macOS |
 | Wi-Fi country `IN` from the kext (`Ath10kCountryCode`, baked in by `release.sh --wifi-country`) | new in 0.1.1; until then only the boot-arg `ath10k_cc=IN` did it, and boot-args in a new config do not reach an installed Mac |
 | HDMI picture through PG106FB | not reported yet |
-| PG106Accel, the Metal plugin (NVMTLDriver.bundle), NVK-Pascal | cross-built and audited; never loaded on macOS. `tools/macos/install-gpu.sh` (the `gpu` post-install step) is not written yet |
+| PG106Accel, the Metal plugin (NVMTLDriver.bundle), NVK-Pascal | cross-built and audited; never loaded on macOS; installed by `tools/macos/install-gpu.sh` (the `gpu` post-install step) |
+| The plugin's AIR reader, `air-runtime/libLLVM.dylib` (upstream LLVM 23.1.4, new in 0.1.1; without it every uncached shader failed) | Linux: exports checked, and the same LLVM version reads the plugin's own Apple AIR (17 modules) through the plugin's call sequence. Never loaded on macOS: look for `library: in-memory bitcode reader ready` |
 | Audio option 1, `tools/macos/audio-voodoohda.sh` (VoodooHDA 3.6.8 in /Library/Extensions; no HDMI audio) | written and pinned; not reported installed |
 | Audio option 2, `tools/macos/audio-applehda.sh` (AppleHDA on the root volume as OCLP's Modern Audio; FileVault off; run again after every macOS update) | written and pinned; not reported installed |
 | NMHDA (GP106 HDMI audio) | needs AppleHDA, so only after option 2; never run with it |

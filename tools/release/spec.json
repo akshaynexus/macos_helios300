@@ -163,8 +163,16 @@
     {
       "name": "NVMTLDriver.bundle", "kind": "bundle", "bundle_id": "com.nullmoth.NVMTLDriver",
       "source": {"tree": "driver", "path": "plugin"},
-      "built_by": "cross", "licence": "PolyForm-Noncommercial-1.0.0",
-      "status": "pre-release: Metal plugin (MTLDevice for the GP106 through NVK)",
+      "built_by": "cross", "licence": "PolyForm-Noncommercial-1.0.0 (plugin); Apache-2.0 WITH LLVM-exception (Contents/MacOS/air-runtime/libLLVM.dylib)",
+      "status": "pre-release: Metal plugin (MTLDevice for the GP106 through NVK) with its in-process AIR reader; never loaded on macOS",
+      "third_party": [
+        {"path": "Contents/MacOS/air-runtime/libLLVM.dylib",
+         "what": "upstream LLVM 23.1.4 (llvmorg-23.1.4), cross-built by tools/release/cross-air-llvm.sh: components Core, BitReader, IRReader, Passes, Support, no code generator, no zlib/zstd; the plugin reads Metal AIR bitcode with it through the LLVM C API (NVMTLLibraryLoad.m). Release gate: tools/release/check-air-llvm.py (every C function the plugin resolves is exported; Apple AIR from nvconv.metallib parsed and run through the plugin's pipelines by LLVM 23.1.4)",
+         "licence": "Apache-2.0 WITH LLVM-exception; includes BLAKE3 (CC0-1.0 OR Apache-2.0) and Henry Spencer's regex (BSD-style)",
+         "notices": ["Contents/Resources/air-runtime/LLVM-LICENSE.txt", "Contents/Resources/air-runtime/BLAKE3-LICENSE.txt", "Contents/Resources/air-runtime/regex-COPYRIGHT.txt"],
+         "source_url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.4/llvm-project-23.1.4.src.tar.xz",
+         "source_sha256": "819ecf7351f1a66f76b2d701d8942faaf5faeb324cb90c9d5b090de142434bb2"}
+      ],
       "install": "gpu-bundles", "install_path": "/Library/GPUBundles/NVMTLDriver.bundle",
       "requires": ["PG106Accel.kext", "libnvmtl_translate.dylib", "NVK-Pascal"],
       "optional": true,

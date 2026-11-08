@@ -19,7 +19,9 @@
 #      manifest (release.kc_audit). A failed audit stops a real release. A real release needs --real-kc (or
 #      $HELIOS_KC_DIR); --no-kc-audit builds one without it and the manifest says kc_audit "skipped".
 #   4. Ad-hoc signs bundles, apps and dylibs with rcodesign (apple-codesign), as `codesign -s -` does on a Mac
-#      (PG106FB and PG106Accel load from /Library/Extensions; the plugin and dylibs through dyld).
+#      (PG106FB and PG106Accel load from /Library/Extensions; the plugin, its air-runtime/libLLVM.dylib and the
+#      dylibs through dyld). Signing is not optional: without rcodesign the run stops before building (exit 77),
+#      and a failed or unverifiable signature stops it (exit 1); nothing that installs into /Library ships unsigned.
 #   5. tools/release/make_manifest.py zips each bundle deterministically, hashes everything, checks the result
 #      against tools/release/manifest.schema.json and writes dist/manifest.json + dist/SHA256SUMS.txt.
 #
@@ -84,6 +86,13 @@ fi
 [ -x "$LD64" ] || { echo "release.sh: SKIP — no Apple ld64 at $LD64"; exit 77; }
 [ -d "$XNU_CONFIG" ] || { echo "release.sh: SKIP — no xnu config at $XNU_CONFIG"; exit 77; }
 for t in clang llvm-nm llvm-objdump ld64.lld iasl git python3; do command -v "$t" >/dev/null || { echo "release.sh: SKIP — $t missing"; exit 77; }; done
+# What installs into /Library (kmutil, dyld in WindowServer and apps) must be signed; install-gpu.sh copies it as is.
+SIGN_KEYS=(pg106fb pg106accel plugin xlate nvk)
+for k in "${SIGN_KEYS[@]}"; do
+	[[ "$SKIP" == *",$k,"* ]] && continue
+	[ -x "$RCODESIGN" ] || { echo "release.sh: SKIP — rcodesign (apple-codesign) missing: PG106FB, PG106Accel and the userspace bundles may not ship unsigned (cargo install apple-codesign, or set RCODESIGN)"; exit 77; }
+	break
+done
 
 SELF_COMMIT="$(git -C "$ROOT" rev-parse --verify "$REV^{commit}")" || die "no commit $REV"
 SUB_COMMIT="$(git -C "$ROOT" ls-tree "$SELF_COMMIT" kexts/nvidia-macos-driver | awk '{print $3}')"
@@ -190,7 +199,21 @@ b_pg106accel() {
 	local k; k="$(sed -n 's/^cross-build: OK — \(.*\)$/\1/p' "$WORK/accel.out" | tail -1)"
 	put "$k" PG106Accel.kext
 }
-b_plugin() { MACHO_CHECK="$DRV/nvk/pascal/scripts/macho-check.py" bash "$HERE/release/cross-plugin.sh" "$DRV/plugin" "$WORK/b/plugin" "$VERSION" && put "$WORK/b/plugin/NVMTLDriver.bundle" NVMTLDriver.bundle; }
+AIR_LLVM_VERSION=23.1.4   # tools/release/cross-air-llvm.sh
+b_plugin() {
+	MACHO_CHECK="$DRV/nvk/pascal/scripts/macho-check.py" bash "$HERE/release/cross-plugin.sh" "$DRV/plugin" "$WORK/b/plugin" "$VERSION"
+	# The plugin's in-process AIR reader (plugin/NVMTLLibraryLoad.m dlopens Contents/MacOS/air-runtime/libLLVM.dylib):
+	# without it every shader not already in the cache fails to compile. Upstream LLVM, cross-built (cached).
+	bash "$HERE/release/cross-air-llvm.sh" "$WORK/b/air-llvm"
+	python3 -I "$HERE/release/check-air-llvm.py" --dylib "$WORK/b/air-llvm/libLLVM.dylib" --plugin "$DRV/plugin" \
+		--llvm-version "$AIR_LLVM_VERSION" ${HELIOS_AIR_HOST_LIBLLVM:+--host-libllvm "$HELIOS_AIR_HOST_LIBLLVM"}
+	local b="$WORK/b/plugin/NVMTLDriver.bundle"
+	mkdir -p "$b/Contents/MacOS/air-runtime" "$b/Contents/Resources/air-runtime"
+	cp "$WORK/b/air-llvm/libLLVM.dylib" "$b/Contents/MacOS/air-runtime/libLLVM.dylib"
+	cp "$WORK/b/air-llvm/licenses/"* "$b/Contents/Resources/air-runtime/"
+	put "$b" NVMTLDriver.bundle
+	echo "plugin: NVMTLDriver.bundle with air-runtime/libLLVM.dylib (LLVM $AIR_LLVM_VERSION, $(sha256sum "$b/Contents/MacOS/air-runtime/libLLVM.dylib" | cut -c1-16))"
+}
 b_xlate() { MACHO_CHECK="$DRV/nvk/pascal/scripts/macho-check.py" bash "$HERE/release/cross-xlate.sh" "$DRV/translator" "$WORK/b/xlate" && put "$WORK/b/xlate/libnvmtl_translate.dylib" libnvmtl_translate.dylib; }
 b_nvk() {
 	# The Mesa tree is prepared per driver commit (prepare-mesa.sh applies that commit's patches).
@@ -233,13 +256,10 @@ b_nvk() {
 	echo "NVK-Pascal: $(sha256sum "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" | cut -c1-16)"
 }
 b_scripts() {
-	# Post-install scripts (run on the Mac; docs/MANIFEST.md post_install). install-gpu.sh is optional until it exists.
+	# Post-install scripts (run on the Mac; docs/MANIFEST.md post_install).
 	local f n=0
 	for f in audio-voodoohda.sh audio-applehda.sh install-gpu.sh; do
-		if [ ! -f "$SELF/tools/macos/$f" ]; then
-			[ "$f" = install-gpu.sh ] || { echo "tools/macos/$f missing"; return 1; }
-			echo "note: tools/macos/$f not in ${SELF_COMMIT:0:12} (optional artifact, left out)"; continue
-		fi
+		[ -f "$SELF/tools/macos/$f" ] || { echo "tools/macos/$f missing in ${SELF_COMMIT:0:12}"; return 1; }
 		bash -n "$SELF/tools/macos/$f"
 		put "$SELF/tools/macos/$f" "$f"; chmod 0755 "$STAGE/$f"; n=$((n + 1))
 	done
@@ -285,19 +305,31 @@ else
 fi
 
 # Ad-hoc signatures (codesign -s - on a Mac). OpenCore injection needs none; kmutil (PG106FB, PG106Accel in
-# /Library/Extensions), dyld (plugin, dylibs) accept ad-hoc ones.
-if [ -x "$RCODESIGN" ]; then
-	for n in PG106FB.kext PG106Accel.kext NVMTLDriver.bundle libnvmtl_translate.dylib; do
-		[ -e "$STAGE/$n" ] || continue
-		if "$RCODESIGN" sign "$STAGE/$n" >"$LOGS/sign-${n// /-}.log" 2>&1; then SIGNED+=(--signed "$n"); echo "  signed $n (ad-hoc, rcodesign)"
-		else echo "  UNSIGNED $n (rcodesign failed: $(tail -1 "$LOGS/sign-${n// /-}.log"))"; fi
-	done
-	if [ -f "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" ] &&
-		"$RCODESIGN" sign --binary-identifier libvulkan_nouveau "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" >"$LOGS/sign-nvk.log" 2>&1; then
-		SIGNED+=(--signed NVK-Pascal); echo "  signed NVK-Pascal (ad-hoc, rcodesign)"
-	fi
-else
-	echo "  rcodesign not found: bundles stay unsigned (cargo install apple-codesign)"
+# /Library/Extensions) and dyld (the plugin, its libLLVM, the dylibs) accept ad-hoc ones. Every one is required:
+# a failed signing, or a Mach-O without LC_CODE_SIGNATURE afterwards, stops the release.
+signed_ok() { llvm-objdump --macho --private-headers "$1" 2>/dev/null | grep -q LC_CODE_SIGNATURE; }
+sign_one() {   # <artifact name> <path to sign> <Mach-O files that must carry a signature afterwards...>
+	local n="$1" p="$2" log="$LOGS/sign-${1// /-}.log" f; shift 2
+	"$RCODESIGN" sign "$p" >>"$log" 2>&1 || die "rcodesign could not sign $n ($(tail -1 "$log"); $log); nothing ships unsigned"
+	for f in "$@"; do signed_ok "$f" || die "$n: ${f#"$STAGE"/} has no code signature after rcodesign ($log)"; done
+	SIGNED+=(--signed "$n"); echo "  signed $n (ad-hoc, rcodesign)"
+}
+for n in PG106FB PG106Accel; do
+	[ -e "$STAGE/$n.kext" ] && sign_one "$n.kext" "$STAGE/$n.kext" "$STAGE/$n.kext/Contents/MacOS/$n"
+done
+if [ -e "$STAGE/NVMTLDriver.bundle" ]; then
+	# The nested libLLVM first (its own identifier), then the bundle, whose CodeResources seals it.
+	"$RCODESIGN" sign --binary-identifier org.llvm.libLLVM "$STAGE/NVMTLDriver.bundle/Contents/MacOS/air-runtime/libLLVM.dylib" \
+		>"$LOGS/sign-NVMTLDriver.bundle.log" 2>&1 || die "rcodesign could not sign air-runtime/libLLVM.dylib ($LOGS/sign-NVMTLDriver.bundle.log)"
+	sign_one NVMTLDriver.bundle "$STAGE/NVMTLDriver.bundle" "$STAGE/NVMTLDriver.bundle/Contents/MacOS/NVMTLDriver" \
+		"$STAGE/NVMTLDriver.bundle/Contents/MacOS/air-runtime/libLLVM.dylib"
+fi
+[ -e "$STAGE/libnvmtl_translate.dylib" ] && sign_one libnvmtl_translate.dylib "$STAGE/libnvmtl_translate.dylib" "$STAGE/libnvmtl_translate.dylib"
+if [ -f "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" ]; then
+	"$RCODESIGN" sign --binary-identifier libvulkan_nouveau "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" >"$LOGS/sign-nvk.log" 2>&1 ||
+		die "rcodesign could not sign NVK-Pascal/libvulkan_nouveau.dylib ($LOGS/sign-nvk.log)"
+	signed_ok "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" || die "NVK-Pascal: libvulkan_nouveau.dylib has no code signature after rcodesign"
+	SIGNED+=(--signed NVK-Pascal); echo "  signed NVK-Pascal (ad-hoc, rcodesign)"
 fi
 
 DRY_ARG=(); [ "$DRY" = 1 ] && DRY_ARG=(--dry-run)

@@ -199,6 +199,10 @@ def main(argv=None):
             if bid:
                 out["bundle_id"] = bid
             out["version"] = ver or a.version
+            for tp in art.get("third_party") or []:   # what the spec says is inside, with its licence notices
+                absent = [x for x in [tp["path"], *tp["notices"]] if x not in out["contents_sha256"]]
+                if absent:
+                    raise SystemExit(f"make_manifest: {name} lacks {absent} (third_party {tp['path']})")
         else:
             fname = file_name(name)
             shutil.copyfile(src, os.path.join(a.dist, fname))
@@ -210,6 +214,10 @@ def main(argv=None):
         out["url"] = spec["url_template"].format(version=a.version, file=fname)
         if art["kind"] in ("kext", "bundle", "app", "dylib") and art["built_by"] == "cross":
             out["signed"] = "ad-hoc (rcodesign)" if name in a.signed else "unsigned"
+            # kmutil and dyld load these from /Library; install-gpu.sh installs them as shipped.
+            if out["signed"] == "unsigned" and art.get("install") in ("library-extensions", "gpu-bundles", "applications"):
+                raise SystemExit(f"make_manifest: {name} installs into /Library ({art['install']}) and is not signed; "
+                                 "no manifest written (release.sh signs it with rcodesign)")
         artifacts.append(out)
         print(f"make_manifest: {fname:<34} {out['sha256'][:16]}  {out['size']:>10} B  {out.get('version')}")
 
