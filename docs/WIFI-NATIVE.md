@@ -219,6 +219,20 @@ Registry: `AirportAth10kLastSleep`, `AirportAth10kLastWake`, `AirportAth10kWakeM
 `WakeReinits`/`WakeReinitFailures` on the core. `-airportath10k_off` now disables the core
 too (whole stack), so a sleep problem can be attributed with one boot-arg.
 
+Info getters (audit item W4): of AirportItlwm's getter list (getSSID, getBSSID, getSTATE,
+getPHY_MODE, getNOISE, getRATE_SET, getMCS_INDEX_SET, getVHT_MCS_INDEX_SET, getAUTH_TYPE,
+getRSN_IE, getAP_IE_LIST, getLOCALE, getASSOCIATION_STATUS, getCURRENT_NETWORK,
+getLINK_CHANGED_EVENT_DATA, getDEAUTH, setSCANCACHE_CLEAR) none is an
+`IO80211InfraProtocol` slot on macOS 26: the 26.x header (whose 668-slot layout kc-audit
+matches against 25G332) no longer declares them, and AirportItlwm's WCL build compiles them
+without `override` (`AIRPORT_SKYWALK_OVERRIDE` is empty there), i.e. as methods nothing calls.
+WCL answers SSID, BSSID, state, auth type, RSN IE and the association status from its own
+join state, which is fed by the events and by the getters that are slots: CHANNEL, RSSI,
+RATE, MCS, NSS, TXPOWER, POWERSAVE, OP_MODE, BSS_INFO, EXTENDED_BSS_INFO (rate set, HT/VHT
+MCS sets, negotiated RSN IE), BEACON_INFO, CHANNELS_INFO, HW_ADDR, TRAFFIC_COUNTERS. The one
+slot AirportItlwm implements and this driver refused was `getMCS_VHT` (option-click PHY
+details); it now reports MCS 9, NSS, width and the guard interval of the VHT link.
+
 Only macOS can verify (not done): that WCL accepts the capability bits and event sequence,
 DHCP over the Skywalk interface, sleep/wake, Settings details. The reconstructed headers are
 now proven against 26.7.2; another point release can still move slots, so rerun the build

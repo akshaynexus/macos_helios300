@@ -328,6 +328,24 @@ IOReturn AirportAth10kInterface::getMCS(apple80211_mcs_data *md)
     md->index=n->vhtPresent?9:(7+8*(nss-1));
     return kIOReturnSuccess;
 }
+// VHT link details for the menu's option-click / wdutil (AirportItlwm getMCS_VHT,
+// the one getter of its list that is still an IO80211InfraProtocol slot on
+// macOS 26; SSID/BSSID/STATE/NOISE/... are answered by WCL from its own state).
+// MCS as getMCS (top index of the negotiated PHY), NSS/width from the core,
+// short GI when the AP advertises it for the width in use.
+IOReturn AirportAth10kInterface::getMCS_VHT(apple80211_mcs_vht_data *data)
+{
+    if(!data)return kIOReturnBadArgument;
+    const auto *n=session?session->associated():nullptr;
+    if(!n || !n->vhtPresent || n->channel<=14)return kIOReturnNotReady;
+    const auto &s=session->core_();
+    const uint32_t width=s.width==80 || s.width==40?s.width:20;
+    const uint32_t vhtInfo=AirportBridge::le32(n->vht),htInfo=n->htPresent?AirportBridge::le16(n->ht):0u;
+    const bool sgi=width==80?(vhtInfo&0x20)!=0:(width==40?(htInfo&0x40)!=0:(htInfo&0x20)!=0);
+    memset(data,0,sizeof(*data));data->version=APPLE80211_VERSION;
+    data->index=9;data->nss=s.nss?s.nss:1;data->bw=width;data->guard_interval=sgi?APPLE80211_GI_SHORT:APPLE80211_GI_LONG;
+    return kIOReturnSuccess;
+}
 IOReturn AirportAth10kInterface::getOP_MODE(apple80211_opmode_data *od)
 {
     if(!od)return kIOReturnBadArgument;

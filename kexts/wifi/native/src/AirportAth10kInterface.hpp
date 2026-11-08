@@ -72,7 +72,7 @@ public:
     IOReturn getMCS(apple80211_mcs_data*) override;
     IOReturn getPOWER_DEBUG_INFO(apple80211_power_debug_info*) override { return kIOReturnUnsupported; }
     IOReturn getHT_CAPABILITY(apple80211_ht_capability*) override { return kIOReturnUnsupported; }
-    IOReturn getMCS_VHT(apple80211_mcs_vht_data*) override { return kIOReturnUnsupported; }
+    IOReturn getMCS_VHT(apple80211_mcs_vht_data*) override;
     IOReturn getVHT_CAPABILITY(apple80211_vht_capability*) override { return kIOReturnUnsupported; }
     IOReturn getROAM_PROFILE(apple80211_roam_profile_all_bands*) override { return kIOReturnUnsupported; }
     IOReturn getCHIP_COUNTER_STATS(apple80211_chip_stats*) override { return kIOReturnUnsupported; }
