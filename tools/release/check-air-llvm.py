@@ -5,7 +5,8 @@
     python3 -I tools/release/check-air-llvm.py --dylib <libLLVM.dylib> --plugin <driver>/plugin --llvm-version 23.1.4 \
         [--host-libllvm /usr/lib/libLLVM.so.23.1]
 
-1. Exports: every LLVM C function the plugin resolves with dlsym (read from plugin/NVMTLLibraryLoad.m:
+1. Exports: every LLVM C function the plugin resolves with dlsym (read from plugin/NVMTLLibraryLoad.m and
+   plugin/nvmtl_air_reader.h:
    NV_LLVM_LOAD(...), dlsym(library, "...") and NVMTL_LLVM_WALK_NAMES) must be exported by the Mach-O. A missing
    required one disables the reader (every uncached shader fails); a missing optional one silently disables the
    simdgroup-matrix unroll or the pointer canonicalization, so all of them are required here.
@@ -81,6 +82,12 @@ def main(argv=None):
     a = ap.parse_args(argv)
     with open(os.path.join(a.plugin, "NVMTLLibraryLoad.m"), encoding="utf-8") as fh:
         src = fh.read()
+    # the IR walks, their dlsym names and the pipelines moved to a plain-C header the Linux harness shares
+    # (driver plugin/nvmtl_air_reader.h, plugin/tests/air_xlate_check.py); older plugin trees have none
+    reader_h = os.path.join(a.plugin, "nvmtl_air_reader.h")
+    if os.path.isfile(reader_h):
+        with open(reader_h, encoding="utf-8") as fh:
+            src += "\n" + fh.read()
     want = plugin_symbols(src)
     if len(want) < 20:
         print(f"check-air-llvm: FAIL only {len(want)} LLVM symbols found in NVMTLLibraryLoad.m; the plugin's loader changed shape")
