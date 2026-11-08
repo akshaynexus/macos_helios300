@@ -233,6 +233,17 @@ MCS sets, negotiated RSN IE), BEACON_INFO, CHANNELS_INFO, HW_ADDR, TRAFFIC_COUNT
 slot AirportItlwm implements and this driver refused was `getMCS_VHT` (option-click PHY
 details); it now reports MCS 9, NSS, width and the guard interval of the VHT link.
 
+Unsupported networks (audit item W3): a join the card cannot make (WPA3-SAE only, PMF required,
+TKIP pairwise or WPA1 only, WEP, 802.1X) is accepted and then answered on the next poll with
+an association result carrying the IEEE 802.11 status (43 invalid AKMP, 31 MFP policy, 42
+invalid pairwise cipher, 13 unsupported authentication algorithm) and driver status
+Unsupported, as a card that cannot associate would, instead of a synchronous driver error or
+an auth-style failure that made airportd ask for the password again (unverified on macOS; the
+reason is in `AirportAth10kLastError`). Scan results now carry the AP's WPA1 element (the core
+exports it after the BSS record), so WPA-only networks show as WPA, not WEP. Hidden SSIDs join
+by name (Connect index 1, directed probe when the BSSID was not heard), and a join while
+connected leaves the old network first.
+
 Only macOS can verify (not done): that WCL accepts the capability bits and event sequence,
 DHCP over the Skywalk interface, sleep/wake, Settings details. The reconstructed headers are
 now proven against 26.7.2; another point release can still move slots, so rerun the build

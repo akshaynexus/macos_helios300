@@ -138,6 +138,9 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
 #if AIRPORT_ATH10K_WPASEC
   o.data[o.length]=b.rsnxeLength;bcopy(b.rsnxe,o.data+o.length+1,18);o.length+=19;
 #endif
+  // WPA1 vendor element (length u8 + element): WCL needs it to recognise
+  // WPA-only networks instead of taking them for WEP (privacy bit, no RSN).
+  o.data[o.length]=b.wpaLength;bcopy(b.wpa,o.data+o.length+1,b.wpaLength);o.length+=1u+b.wpaLength;
   return kIOReturnSuccess;
  }
  if(r.operation==Info){self->fillControlInfo(o);return kIOReturnSuccess;}

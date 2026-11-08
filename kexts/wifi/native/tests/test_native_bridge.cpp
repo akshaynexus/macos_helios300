@@ -141,6 +141,23 @@ int main(){
         j=join(wpa,true);j.upperAuth=1u<<12;assert(!strcmp(B::planJoin(j,&wpa,plan),"auth-not-supported"));
         j=join(wpa,true);j.ssid[0]='x';assert(!strcmp(B::planJoin(j,&wpa,plan),"ssid-mismatch"));
         assert(!B::planJoin(join(wpa,true),nullptr,plan)); // unknown BSS: decided after a scan
+        // Unsupported security names its reason; refusalStatus maps it to the 802.11 status WCL gets.
+        {B::Network wpa1=open;wpa1.privacy=true;const uint8_t ie[]={221,22,0,0x50,0xf2,1,1,0,0,0x50,0xf2,2,1,0,0,0x50,0xf2,2,1,0,0,0x50,0xf2,2};
+         memcpy(wpa1.wpa,ie,sizeof(ie));wpa1.wpaLength=sizeof(ie);
+         assert(!strcmp(B::planJoin(join(wpa1,true),&wpa1,plan),"wpa1-only-not-supported") && B::refusalStatus("wpa1-only-not-supported")==42);
+         uint8_t out[1024];const size_t n=B::buildScanResult(wpa1,out,sizeof(out));const uint8_t *ie0=out+sizeof(W::BeaconMetadata);
+         bool found=false;for(size_t at=0;at+2<=n-sizeof(W::BeaconMetadata);at+=2+ie0[at+1])if(ie0[at]==221 && !memcmp(ie0+at,ie,sizeof(ie)))found=true;
+         assert(found);} // WCL sees "WPA Personal", not WEP
+        {B::Network sae2=wpa;const uint8_t r[]={48,20,1,0,0,15,172,4,1,0,0,15,172,4,1,0,0,15,172,8,0xc0,0};
+         sae2.rsnLength=sizeof(r);memcpy(sae2.rsn,r,sizeof(r));sae2.wpa2=false;
+         assert(!strcmp(B::planJoin(join(sae2,true),&sae2,plan),"wpa3-sae-only-not-supported") && B::refusalStatus("wpa3-sae-only-not-supported")==43);
+         const uint8_t tk[]={48,20,1,0,0,15,172,2,1,0,0,15,172,2,1,0,0,15,172,2,0,0};
+         sae2.rsnLength=sizeof(tk);memcpy(sae2.rsn,tk,sizeof(tk));
+         assert(!strcmp(B::planJoin(join(sae2,true),&sae2,plan),"tkip-pairwise-not-supported") && B::refusalStatus("tkip-pairwise-not-supported")==42);
+         const uint8_t pmf[]={48,20,1,0,0,15,172,4,1,0,0,15,172,4,1,0,0,15,172,2,0xc0,0};
+         sae2.rsnLength=sizeof(pmf);memcpy(sae2.rsn,pmf,sizeof(pmf));
+         assert(!strcmp(B::planJoin(join(sae2,true),&sae2,plan),"pmf-required-not-supported") && B::refusalStatus("pmf-required-not-supported")==31);}
+        assert(B::refusalStatus("wep-not-supported")==13 && B::refusalStatus("enterprise-not-supported")==43);
     }
     { // Full WPA2 join: ready, scan (cache first), join, in-kernel handshake, keys, link, LQM; then AP deauth.
         FakeCore core;FakeSink sink;Session s(core,sink);core.bss={wpa,open};
@@ -248,8 +265,11 @@ int main(){
         core.stage=0;
         // Abort (accepted while the timed-out connection is still being torn down).
         assert(s.startJoin(join(open,false),t)==B::kSuccess);assert(s.abortJoin(t)==B::kSuccess && sink.count(W::JoinAbortComplete)==1 && !s.joining());
-        // Unsupported requests are refused synchronously.
-        W::JoinRequest j=join(wpa,true);j.upperAuth=1u<<12;assert(s.startJoin(j,t)==B::kUnsupported && !strcmp(s.lastError,"auth-not-supported"));
+        // An auth type the card cannot do: accepted, then refused with an 802.11 status (no driver error).
+        W::JoinRequest j=join(wpa,true);j.upperAuth=1u<<12;assert(s.startJoin(j,t)==B::kSuccess && !strcmp(s.lastError,"auth-not-supported"));
+        s.poll(t+=20);c=reinterpret_cast<const W::ConnectionEvent *>(sink.last(W::ConnectComplete)->data.data());
+        assert(!s.joining() && c->status==1 && c->reason==43 && c->peers[0].driverStatus==B::kUnsupported);
+        assert(reinterpret_cast<const W::AssociationEvent *>(sink.last(W::AssocComplete)->data.data())->status==43);
     }
     { // Scans: channel subsets and directed SSIDs reach the core, overlapping requests merge,
       // passive requests stay passive, a busy core is retried, abort, the boot scan is adopted,
@@ -321,6 +341,27 @@ int main(){
         assert(*reinterpret_cast<const int *>(k2.last(W::ScanDone)->data.data())==B::kOffline && k2.links.back()==false);
         assert(p.startScan(scan,t)==B::kNotReady);c2.advance();p.poll(t+=100);
         assert(p.setPower(true,t)==B::kSuccess && p.startScan(scan,t)==B::kSuccess);
+    }
+    { // Hidden SSID, switching networks without a leave, refusing a network while connected.
+        FakeCore core;FakeSink sink;Session s(core,sink);B::Network hidden=open;hidden.hidden=true;hidden.ssidLength=0;memset(hidden.ssid,0,32);
+        hidden.bssid[5]=0x44;core.bss={hidden,wpa};uint64_t t=70000;s.poll(t);
+        W::JoinRequest hj=join(open,false);memcpy(hj.bssid,hidden.bssid,6); // WCL names the SSID of the hidden BSSID
+        assert(s.startJoin(hj,t)==B::kSuccess);
+        for(int i=0;i<12 && !s.linkUp();++i){s.poll(t+=20);core.advance();}
+        assert(s.linkUp() && core.connectIndex==1); // Connect index 1: the SSID names the hidden BSSID
+        // Switch to the WPA2 network straight away: disconnect, connect, handshake.
+        assert(s.startJoin(join(wpa,true),t)==B::kSuccess);core.eapolOut.clear();core.authorized=false;core.phase=0;
+        for(int i=0;i<40 && !(s.linkUp() && core.secure);++i){s.poll(t+=20);core.advance();}
+        assert(s.linkUp() && core.secure && core.disconnects==1 && sink.count(W::ConnectComplete)==2);
+        // A WPA3-only network while connected: the old link goes down, the join is refused with status 43.
+        B::Network sae=wpa;sae.bssid[5]=0x55;const uint8_t r[]={48,20,1,0,0,15,172,4,1,0,0,15,172,4,1,0,0,15,172,8,0xc0,0};
+        sae.rsnLength=sizeof(r);memcpy(sae.rsn,r,sizeof(r));sae.wpa2=false;core.bss.push_back(sae);
+        W::ScanRequest scan{};scan.type=1;s.startScan(scan,t);s.poll(t+=20);core.advance();s.poll(t+=20);
+        assert(s.startJoin(join(sae,true),t)==B::kSuccess && core.disconnects==2 && sink.links.back()==false);
+        s.poll(t+=20);
+        auto *c=reinterpret_cast<const W::ConnectionEvent *>(sink.last(W::ConnectComplete)->data.data());
+        assert(c->status==1 && c->reason==43 && !strcmp(s.lastError,"wpa3-sae-only-not-supported") && s.state()==Session::State::Leaving);
+        core.advance();s.poll(t+=20);assert(s.state()==Session::State::Ready);
     }
     { // System sleep/wake with the core's in-place firmware reload: no Restart while state bit 8
       // is set, driver-available again when the runtime returns, the registry mirror's result.

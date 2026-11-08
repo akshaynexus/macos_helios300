@@ -53,6 +53,7 @@ struct Network {
     bool privacy=false,wpa2=false,hidden=false,htPresent=false,htOpPresent=false,vhtPresent=false,vhtOpPresent=false,powerConstraintPresent=false;
     uint16_t rsnLength=0,capabilities=0,beaconInterval=100;
     uint8_t rsn[257]{},rateCount=0,rates[32]{},ht[26]{},htOp[22]{},vht[12]{},vhtOp[5]{},powerConstraintDb=0;
+    uint8_t wpa[34]{},wpaLength=0; // WPA1 vendor element
     uint32_t snr=0;
     int32_t rssi() const {return int32_t(snr>95?95:snr)-95;} // Linux ath10k convention (Ath10kControl.hpp): signal = SNR + noise floor (-95 dBm)
 };
@@ -72,6 +73,9 @@ inline bool decodeNetwork(const uint8_t *d,uint32_t length,Network &n){
         n.htPresent=present&1;n.htOpPresent=present&2;n.vhtPresent=present&4;n.vhtOpPresent=present&8;
         memcpy(n.ht,d+at+38,26);memcpy(n.htOp,d+at+64,22);memcpy(n.vht,d+at+86,12);memcpy(n.vhtOp,d+at+98,5);
         n.powerConstraintPresent=d[at+103]!=0;n.powerConstraintDb=d[at+104];
+        at+=105+(AIRPORT_ATH10K_WPASEC?19u:0u);
+        if(length>=at+1 && d[at]>=6 && d[at]<=sizeof(n.wpa) && length>=at+1u+d[at] && d[at+1]==221 && d[at+2]+2u==d[at]){
+            n.wpaLength=d[at];memcpy(n.wpa,d+at+1,n.wpaLength);}
     }
     if(!n.beaconInterval)n.beaconInterval=100;
     return true;
@@ -92,6 +96,7 @@ inline size_t buildIEs(const Network &n,uint8_t *out,size_t capacity){
     if(n.htPresent && !put(45,n.ht,26))return 0;
     if(n.htOpPresent && !put(61,n.htOp,22))return 0;
     if(n.rsnLength>=2){if(at+n.rsnLength>capacity)return 0;memcpy(out+at,n.rsn,n.rsnLength);at+=n.rsnLength;}
+    if(n.wpaLength>=6){if(at+n.wpaLength>capacity)return 0;memcpy(out+at,n.wpa,n.wpaLength);at+=n.wpaLength;}
     if(n.vhtPresent && !put(191,n.vht,12))return 0;
     if(n.vhtOpPresent && !put(192,n.vhtOp,5))return 0;
     return at;
@@ -145,12 +150,37 @@ inline const char *planJoin(const AirportWCL::JoinRequest &j,const Network *n,Jo
     memcpy(plan.bssid,j.bssid,6);
     plan.ssidLength=uint8_t(j.ssidLength);memcpy(plan.ssid,j.ssid,j.ssidLength);
     if(!n)return nullptr; // not in the last scan: the session scans first and re-checks
-    if(plan.secure){if(!n->wpa2)return "wpa2-psk-ccmp-pairwise-required";}
-    else if(n->privacy)return "protected-network-not-supported";
+    if(plan.secure && !n->wpa2){
+        // Name the reason (the refusal's 802.11 status follows from it, refusalStatus).
+        AthSecurity::RSNInfo rsn;
+        if(!n->rsnLength)return n->wpaLength?"wpa1-only-not-supported":"wpa2-psk-ccmp-pairwise-required";
+        if(!AthSecurity::parseRSN(n->rsn,n->rsnLength,rsn))return "rsn-not-understood";
+        if(!rsn.akm(2) && (rsn.akm(8) || rsn.akm(24)))return "wpa3-sae-only-not-supported";
+        if(!rsn.akm(2) && (rsn.akm(1) || rsn.akm(5)))return "enterprise-not-supported";
+        if(rsn.mfpr)return "pmf-required-not-supported";
+        if(!rsn.pairwiseCCMP)return "tkip-pairwise-not-supported";
+        return "wpa2-psk-ccmp-pairwise-required";
+    }
+    if(!plan.secure && n->privacy)return "protected-network-not-supported";
     if(!channelKnown(n->channel))return "bss-channel-unsupported";
     plan.hidden=n->hidden;
     if(!n->hidden && (n->ssidLength!=j.ssidLength || memcmp(n->ssid,j.ssid,j.ssidLength)))return "ssid-mismatch";
     return nullptr;
+}
+// IEEE 802.11 status for a join this card cannot make: reported to WCL in
+// AssocComplete/ConnectComplete as the association result, like a real
+// refusal, so macOS records an incompatible network instead of a wrong
+// password (a synchronous error or an auth-style failure made airportd ask for
+// the password again). 0 = not a capability refusal.
+inline uint16_t refusalStatus(const char *why){
+    if(!why)return 0;
+    if(!strcmp(why,"wpa3-sae-only-not-supported") || !strcmp(why,"enterprise-not-supported") || !strcmp(why,"auth-not-supported"))return 43; // invalid AKMP
+    if(!strcmp(why,"tkip-pairwise-not-supported") || !strcmp(why,"wpa1-only-not-supported") || !strcmp(why,"wpa2-psk-ccmp-pairwise-required"))return 42; // invalid pairwise cipher
+    if(!strcmp(why,"pmf-required-not-supported"))return 31; // robust management frame policy violation
+    if(!strcmp(why,"wep-not-supported"))return 13;           // authentication algorithm not supported
+    if(!strcmp(why,"protected-network-not-supported") || !strcmp(why,"rsn-not-understood"))return 40; // invalid element
+    if(!strcmp(why,"bss-channel-unsupported"))return 24;     // channels not supported
+    return 1;
 }
 inline void buildConnectRequest(const JoinPlan &p,AthControl::Request &r){
     r=AthControl::Request{};r.operation=AthControl::Connect;r.index=p.hidden?1:0;
@@ -264,7 +294,16 @@ public:
         const Network *n=find(j.bssid);
         JoinPlan plan;
         const char *why=planJoin(j,n,plan);
-        if(why){setError(why);AthSecurity::wipe(&plan,sizeof(plan));return kUnsupported;}
+        if(why){
+            setError(why);AthSecurity::wipe(&plan,sizeof(plan));
+            if(!strcmp(why,"ssid-mismatch"))return kBadArgument;
+            // A network this card cannot join: accepted, then refused with an
+            // 802.11 status on the next poll (refusalStatus), not as a driver error.
+            if(state_==State::Connected){if(linkIndicated)postLink(false,3);requestDisconnect();} // a card leaves the old network for a new join
+            memcpy(joinBSSID,j.bssid,6);refusal=refusalStatus(why);
+            state_=State::Joining;joinStartedMs=nowMs;joinPhase=JoinPhase::Refuse;assocNotified=false;
+            return kSuccess;
+        }
         pending=plan;AthSecurity::wipe(&plan,sizeof(plan));
         memcpy(joinBSSID,j.bssid,6);
         joinChannel=uint8_t(j.channelSpec&0xff);
@@ -369,7 +408,8 @@ public:
         return status.rssi>=-70?100:(status.rssi>=-85?50:20);
     }
 private:
-    enum class JoinPhase : uint8_t { Prepare, ScanFirst, WaitScan, Connect, Associate, Handshake };
+    enum class JoinPhase : uint8_t { Refuse, Prepare, ScanFirst, WaitScan, Connect, Associate, Handshake };
+    uint16_t refusal=0;
     Core &core;Sink &sink;
     State state_=State::Offline;
     CoreStatus status{};
@@ -568,6 +608,7 @@ private:
     void pollJoin(uint64_t nowMs){
         if(nowMs>joinStartedMs+kJoinLimitMs){setError("join-timeout");finishJoin(1,1004,kTimeout);return;}
         switch(joinPhase){
+        case JoinPhase::Refuse:refuse(refusal);return;
         case JoinPhase::Prepare:
             // The core must be idle: no connection, no teardown, no scan.
             if(status.disconnecting)return;
@@ -620,6 +661,13 @@ private:
             return;
         }
     }
+    // The association result WCL gets for a network the card cannot join.
+    void refuse(uint16_t code){
+        AirportWCL::AssociationEvent a{};a.status=code?code:1;memcpy(a.bssid,joinBSSID,6);a.driverStatus=kUnsupported;
+        sink.post(AirportWCL::AssocComplete,&a,sizeof(a));
+        finishJoin(1,a.status,kUnsupported);
+        if(status.stage || status.disconnecting){state_=State::Leaving;leaveCancelMs=pollMs;}
+    }
     void connect(){
         const Network *n=find(joinBSSID);
         if(!n){
@@ -630,7 +678,7 @@ private:
         JoinPlan plan=pending;
         memcpy(j.key,plan.pmk,32);j.keyLength=plan.secure?32:0;j.keyCipher=6;j.lowerAuth=1;j.upperAuth=plan.secure?(1u<<3):0;
         const char *why=planJoin(j,n,plan);AthSecurity::wipe(&j,sizeof(j));
-        if(why){setError(why);AthSecurity::wipe(&plan,sizeof(plan));finishJoin(1,1,kUnsupported);return;}
+        if(why){setError(why);AthSecurity::wipe(&plan,sizeof(plan));refuse(refusalStatus(why));return;}
         if(stationMACSet && memcmp(stationMAC,status.local,6)){plan.macSet=true;memcpy(plan.mac,stationMAC,6);}
         uint8_t station[6];memcpy(station,plan.macSet?plan.mac:status.local,6);
         AthControl::Request r;buildConnectRequest(plan,r);AthControl::Response o{};

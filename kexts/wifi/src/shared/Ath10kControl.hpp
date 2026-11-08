@@ -77,7 +77,8 @@ struct Response {
 // 8 station MAC differs from the hardware MAC, 16 SA Query in progress; [120..125]
 // the station MAC in use. Capabilities (Info [0]) bit 1024: this extension exists.
 // Status local = the station MAC of the connection (the vdev MAC when idle).
-// BSS extension after the 105 native bytes: RSNXE length u8 + up to 18 bytes.
+// BSS extension after the 105 native bytes: RSNXE length u8 + up to 18 bytes
+// (security gate on only), then the WPA1 vendor element: length u8 + element.
 // index 0 releases it after the serial EAPOL transaction.
 // Cancel stops a connection at an ownership-safe boundary; Restart asynchronously
 // terminates and rematches the PCI driver only after verified quiescence.
