@@ -11,13 +11,14 @@ leaves the controller to macOS's own stack (`bluetoothd`).
   1. Lilu
   2. BlueToolFixup (BrcmPatchRAM ≥ 2.7.2, for Tahoe's `bluetoothd`)
   3. QCARomePatchRAM
+  4. QCARomeHCIFix (optional; `MinKernel` `25.0.0`)
 
-  Set `MinKernel` `21.0.0` for the last two.
+  Set `MinKernel` `21.0.0` for BlueToolFixup and QCARomePatchRAM.
 - NVRAM `7C436110-AB2A-4BBB-A880-FE41995C9F82`: set
   `bluetoothExternalDongleFailed` = `00` and
   `bluetoothInternalControllerInfo` = 14 zero bytes. List both keys in Add
   and in Delete.
-- USB map: HS07, connector type 255.
+- USB map: HS07, connector type 255 ([USB-MAP.md](USB-MAP.md)).
 - No BrcmBluetoothInjector, BrcmPatchRAM3 or IntelBluetooth* kexts.
 - No boot args required.
 
@@ -28,8 +29,12 @@ leaves the controller to macOS's own stack (`bluetoothd`).
 - Sleep/wake works.
 
 Not available: Handoff, AirDrop and other Continuity features (they need
-Apple Broadcom firmware). HFP microphone audio is a known risk (see the
-Enhanced-SCO quirk in the kext README).
+Apple Broadcom firmware).
 
-Details, rollback, the owner test steps for macOS and the Linux cross-check
-evidence are in [`kexts/bluetooth/README.md`](../kexts/bluetooth/README.md).
+Not yet measured on macOS: HFP microphone audio and sleep/wake. QCARomeHCIFix
+translates the Enhanced SCO command Linux marks broken on this chip and resets a
+controller whose firmware died; it has not been loaded on macOS yet. Boot args:
+`-qcahcioff`, `-qcahcinosco`, `-qcahcinowd`.
+
+Details, the sleep/wake review, coexistence test plan, rollback, the owner test
+steps for macOS and the Linux cross-check evidence are in [`kexts/bluetooth/README.md`](../kexts/bluetooth/README.md).

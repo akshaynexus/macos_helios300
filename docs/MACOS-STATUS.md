@@ -36,7 +36,10 @@ Update this page in the same commit as the evidence.
 | NMHDA (GP106 HDMI audio) | needs AppleHDA, so only after option 2; its hook targets are present in that AppleHDA 600.2 (checked on Linux); never run with it |
 | PG106 sleep/wake (IOPM suspend/resume; `pg106_pm=0` removes it) | simulated only (driver repo `test_suspend`, wake cycles in `test_acr_boot`); never through a sleep on the Helios |
 | GPU idle power-off (`pg106_d3cold=1`, opt-in) | never run under macOS |
-| USB: every port at USB 3 | only `UTBDefault` + `SSDT-HS07-UPC`; a USBToolBox map is still to be made |
+| USB: every port at USB 3 | still `UTBDefault` + `SSDT-HS07-UPC` in the release. A 14-port `UTBMap.kext` can now be generated from the laptop's DSDT and `lsusb` (`tools/usb-map`, tests pass); never booted, not in the release. Which SS port serves a second USB 3 socket needs a plug test ([USB-MAP.md](USB-MAP.md)) |
+| QCARomeHCIFix (Lilu plugin): 0x043D to 0x0428 SCO translation, USB reset after 5 HCI timeouts, 3 per 10 min | host-tested (filter and watchdog, mutation-checked); cross-built, kc-audit and virtual-slot check against 26.7.2; never loaded on macOS, not in the release yet. Whether macOS sends 0x043D is unknown: iOS 26's `bluetoothd` has no enhanced-setup command name ([kexts/bluetooth/README.md](../kexts/bluetooth/README.md)) |
+| Bluetooth sleep/wake (re-patch after wake) | reviewed; two failure-path fixes in 0.2.1; host-tested with the simulated chip; never run on macOS |
+| A2DP + 2.4 GHz Wi-Fi coexistence | firmware-level, nothing to code; test plan in the kext README; not measured, and step 2 waits for Wi-Fi TX |
 
 ## Paused or not possible
 

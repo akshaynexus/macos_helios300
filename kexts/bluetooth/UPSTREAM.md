@@ -20,3 +20,12 @@ SHA-256 (licence and notices in `firmware/`).
 
 Protocol reference: Linux `drivers/bluetooth/btusb_main.c`
 (`btusb_setup_qca*`, GPL-2.0).
+
+Not from that snapshot:
+
+- `kext/QCARomeHCIFix/` is new code in this repo. Its choice of hook points follows IntelBTPatcher's Tahoe
+  port (OpenIntelWireless/IntelBluetoothFirmware); no code is taken from it. It builds against the Lilu 1.7.2
+  SDK and links its `plugin_start.cpp`, as NMHDA does; that SDK is fetched and sha256-checked at build time.
+- `src/core/qca_hci_filter.c` follows Linux's behaviour (`btusb_qca_reset()`,
+  `HCI_QUIRK_BROKEN_ENHANCED_SETUP_SYNC_CONN`, `hci_setup_sync_conn`) and the Bluetooth Core specification's
+  command layouts; it is not derived from Linux source.
