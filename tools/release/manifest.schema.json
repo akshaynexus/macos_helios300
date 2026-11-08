@@ -30,7 +30,25 @@
                                    "properties": {"repo": {"type": "string"}, "commit": {"$ref": "#/$defs/commit"}, "ref": {"type": "string"}}}
         },
         "missing": {"type": "array", "items": {"type": "object", "required": ["name", "why"], "additionalProperties": false,
-                                                 "properties": {"name": {"type": "string"}, "why": {"type": "string"}}}}
+                                                 "properties": {"name": {"type": "string"}, "why": {"type": "string"}}}},
+        "kc_audit": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"enum": ["pass", "fail", "skipped"]},
+            "kc_dir": {"type": "string"},
+            "collections": {"type": "array", "items": {"type": "object", "required": ["file", "sha256"], "additionalProperties": false,
+                                                         "properties": {"file": {"type": "string"}, "sha256": {"$ref": "#/$defs/sha256"}}}},
+            "results": {"type": "array", "items": {"type": "object", "required": ["name", "collections", "result"], "additionalProperties": false,
+                                                     "properties": {"name": {"type": "string"},
+                                                                    "collections": {"type": "array", "items": {"enum": ["Boot", "System"]}},
+                                                                    "result": {"enum": ["pass", "fail", "not-built"]},
+                                                                    "summary": {"type": "string"}}}},
+            "log": {"type": "string"},
+            "why": {"type": "string"}
+          }
+        }
       }
     },
     "machine": {
@@ -102,7 +120,19 @@
       "type": "array",
       "items": {"type": "object", "required": ["step", "what", "artifacts"], "additionalProperties": false,
                 "properties": {"step": {"type": "string", "pattern": "^[a-z0-9-]+$"}, "what": {"type": "string"},
-                               "artifacts": {"type": "array", "items": {"type": "string"}}}}
+                               "artifacts": {"type": "array", "items": {"type": "string"}},
+                               "order": {"type": "integer", "minimum": 0},
+                               "group": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+                               "choice": {"type": "integer", "minimum": 1},
+                               "script": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+\\.sh$"},
+                               "run": {"type": "object", "additionalProperties": false, "minProperties": 1,
+                                       "properties": {"check": {"type": "string"}, "install": {"type": "string"},
+                                                      "revert": {"type": "string"}, "status": {"type": "string"}}},
+                               "cwd": {"type": "string"},
+                               "reboot": {"type": "boolean"},
+                               "needs": {"type": "array", "items": {"type": "string"}},
+                               "rerun_after_macos_update": {"type": "boolean"},
+                               "notes": {"type": "array", "items": {"type": "string"}}}}
     }
   },
   "$defs": {
@@ -169,7 +199,7 @@
       "additionalProperties": false,
       "properties": {
         "name": {"type": "string"},
-        "kind": {"enum": ["kext", "ssdt", "dylib", "bundle", "app", "firmware-licence"]},
+        "kind": {"enum": ["kext", "ssdt", "dylib", "bundle", "app", "firmware-licence", "script"]},
         "version": {"type": "string"},
         "bundle_id": {"type": "string"},
         "file": {"type": "string", "pattern": "^[A-Za-z0-9_.+-]+$"},
@@ -188,6 +218,7 @@
         "requires": {"type": "array", "items": {"type": "string"}},
         "conflicts": {"type": "array", "items": {"$ref": "#/$defs/bundle_name"}},
         "optional": {"type": "boolean"},
+        "personality": {"type": "object", "additionalProperties": {"$ref": "#/$defs/plist_value"}},
         "hardware": {"type": "array", "items": {"$ref": "#/$defs/device_match"}},
         "boot_args_optional": {"type": "array", "items": {"type": "object", "required": ["arg", "what"], "additionalProperties": false,
                                                           "properties": {"arg": {"$ref": "#/$defs/boot_arg"}, "what": {"type": "string"}}}},

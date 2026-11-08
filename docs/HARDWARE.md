@@ -1,16 +1,17 @@
 # Acer Predator Helios 300 G3-571 — hardware inventory
 
-Read from the owner's machine under Linux (CachyOS, 2026-11-07).
+Read from the owner's machine under Linux (CachyOS, 2026-11-07); since 2026-11-08 the machine runs macOS 26.7.2
+(25G332). What works there: [MACOS-STATUS.md](MACOS-STATUS.md).
 
 | Component | ID | macOS driver |
 |---|---|---|
 | CPU i7-7700HQ (Kaby Lake) | — | native XCPM; CPUFriend + data from MacBookPro14,3 when spoofing a newer SMBIOS |
 | iGPU HD 630 | 8086:591b | native on macOS 26.7.2 (Kaby Lake drivers, Metal 3) with WhateverGreen — owns the internal eDP panel; brightness needs `applbkl=1`, see "Brightness" below |
-| dGPU GTX 1060 Mobile | 10de:1c20, sub 1025:118b, VBIOS 86.06.4F.00.08 | `PG106.kext` + `PG106Accel.kext` (submodule): render offload only, like Linux PRIME — see below |
+| dGPU GTX 1060 Mobile | 10de:1c20, sub 1025:118b, VBIOS 86.06.4F.00.08 | `PG106.kext` (OpenCore, firmware embedded) + `PG106FB.kext` (HDMI) and `PG106Accel.kext` (both /Library/Extensions), submodule: render offload like Linux PRIME, plus the HDMI port — see below |
 | Audio | Realtek ALC255 (10ec:0255, sub 1025:118a) | macOS 26 has no AppleHDA: VoodooHDA 3.6.8 in /Library/Extensions (option 1) or AppleHDA put back + AppleALC layout-id 29, "dhinakg - Realtek ALC255 for Acer Predator G3-571" (option 2); see "Audio on macOS 26" below |
 | Ethernet | RTL8111 10ec:8168 | RealtekRTL8111 |
-| Wi-Fi | Qualcomm Atheros QCA6174 168c:003e | `kexts/wifi/` (this repo) |
-| Bluetooth | Lite-On 04ca:3016 (QCA Rome), on xHCI USB 2 port 7 (HS07) | `kexts/bluetooth/` (this repo) + BlueToolFixup; `kexts/bluetooth/acpi/SSDT-HS07-UPC` marks HS07 internal (the DSDT has `_UPC` only on HS09) |
+| Wi-Fi | Qualcomm Atheros QCA6174 168c:003e | `kexts/wifi/` (this repo): `Ath10kMac` + `AirportAth10k`, OpenCore-injected; country `IN` baked in at release (`Ath10kCountryCode`) |
+| Bluetooth | Lite-On 04ca:3016 (QCA Rome), on xHCI USB 2 port 7 (HS07) | `kexts/bluetooth/` (this repo) + BlueToolFixup; `kexts/bluetooth/acpi/SSDT-HS07-UPC` marks HS07 internal (the DSDT has `_UPC` only on HS09). Works on macOS 26.7.2 (owner report); pairing, A2DP/HFP, sleep/wake to be tested |
 | Card reader | RTL8411B 10ec:5287 | RealtekCardReader |
 | Touchpad | Synaptics SYNA7DB5 06CB:7DB7 (I2C HID) | VoodooI2C + VoodooI2CHID |
 | Keyboard | PS/2 | VoodooPS2Controller |
@@ -30,7 +31,10 @@ for it, and its frames are composited on the Intel side (IOSurfaces).
 Differences from Linux with NVIDIA's driver on this laptop:
 - **HDMI port:** physically wired to the GTX 1060 (its only output — no MUX,
   the panel can never be on the dGPU). On Linux NVIDIA drives it; on macOS
-  PG106 has **no display driver yet**, so the HDMI port does not work.
+  `PG106FB.kext` is its framebuffer. It must live in /Library/Extensions
+  (IOGraphicsFamily is only in the System KC on 26.7.2, so OpenCore refuses
+  it); it attaches under PG106 on 26.7.2, and a picture on an HDMI display
+  has **not been reported yet**.
 - **Clocks:** no Pascal PMU firmware exists outside NVIDIA's driver, so the GPU
   stays at VBIOS boot clocks (like nouveau): much slower than on Linux.
 - **App selection:** apps choosing the NVIDIA Metal device, the plugin's

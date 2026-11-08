@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # release.sh — build every macos_helios300 release artifact from source on Linux and write dist/ + manifest.json.
 #
-#   tools/release.sh --version 0.1.0 [--dry-run] [--rev REV] [--driver-rev REV] [--driver-repo DIR]
-#                    [--skip a,b] [--dist DIR] [--iaf2 FILE]
+#   tools/release.sh --version 0.1.1 --real-kc DIR [--dry-run] [--rev REV] [--driver-rev REV] [--driver-repo DIR]
+#                    [--skip a,b] [--dist DIR] [--iaf2 FILE] [--wifi-country CC] [--no-kc-audit]
 #
 # What it does (docs/MANIFEST.md is the contract):
 #   1. Exports this repo at REV (default HEAD) and nvidia-macos-driver at the submodule commit REV records
@@ -12,16 +12,29 @@
 #   2. Cross-builds each artifact in tools/release/spec.json with the Linux toolchain the repos already use
 #      (clang + macOS 26.5 SDK + Apple ld64 from cctools-port or ld64.lld + xnu-12377 exports + rustup's
 #      x86_64-apple-darwin target), each with its own checks (KPI audit, Mach-O checks, macho-check.py).
-#   3. Ad-hoc signs bundles, apps and dylibs with rcodesign (apple-codesign), as `codesign -s -` does on a Mac.
-#   4. tools/release/make_manifest.py zips each bundle deterministically, hashes everything, checks the result
+#   3. Release gates: PG106's 17 firmware files must be IN its binary (tools/release/check-pg106-firmware.py), and
+#      with --real-kc DIR every OpenCore and /Library/Extensions kext is audited against that Mac's real kernel
+#      collections (tools/release/kc_gate.py: tools/kc-audit.py for Wi-Fi/Bluetooth, the driver's
+#      pascal/scripts/kc-preflight.sh for PG106/PG106FB/PG106Accel); result in dist/logs/kc-audit.log and in the
+#      manifest (release.kc_audit). A failed audit stops a real release. A real release needs --real-kc (or
+#      $HELIOS_KC_DIR); --no-kc-audit builds one without it and the manifest says kc_audit "skipped".
+#   4. Ad-hoc signs bundles, apps and dylibs with rcodesign (apple-codesign), as `codesign -s -` does on a Mac
+#      (PG106FB and PG106Accel load from /Library/Extensions; the plugin and dylibs through dyld).
+#   5. tools/release/make_manifest.py zips each bundle deterministically, hashes everything, checks the result
 #      against tools/release/manifest.schema.json and writes dist/manifest.json + dist/SHA256SUMS.txt.
 #
 # It publishes nothing. A GitHub Actions runner has no macOS SDK, so this runs on the owner's Linux machine.
 # --dry-run: a required artifact that fails to build is listed in the manifest (release.missing, dry_run=true)
 # instead of stopping; 1401 refuses such a manifest unless it was pointed at it explicitly.
 #
-# Build keys for --skip: pg106 pg106fb nmhda bluetooth wifi ssdt pg106accel plugin xlate nvk licences
-# Environment: MACOS_SDK, LD64, XNU_CONFIG, HELIOS_CROSS (tools/cross-build-kext.sh defaults), HELIOS_IAF2 (= --iaf2), RELEASE_CACHE
+# --wifi-country CC (default IN, the owner's country; $HELIOS_WIFI_COUNTRY): written as Ath10kCountryCode into the
+# built Ath10kMac.kext (tools/release/set-wifi-country.py) and recorded in the manifest. Not a boot-arg: 1401 keeps
+# boot-args out of NVRAM -> Delete, so a boot-arg in a new config never reaches an installed Mac. "00" = world rules.
+#
+# Build keys for --skip: pg106 pg106fb nmhda bluetooth wifi ssdt pg106accel plugin xlate nvk licences scripts
+# Environment: HELIOS_KC_DIR (= --real-kc), HELIOS_KC_AUDIT=skip (= --no-kc-audit; 1401 --build-from-source sets it
+#   when HELIOS_KC_DIR is unset), HELIOS_WIFI_COUNTRY (= --wifi-country), MACOS_SDK, LD64, XNU_CONFIG,
+#   HELIOS_CROSS (tools/cross-build-kext.sh defaults), HELIOS_IAF2 (= --iaf2), RELEASE_CACHE
 #   (downloads + the NVK Mesa tree, default ~/.cache/helios300-release), PG106_NATIVE_BIN (NVK's build-machine
 #   mesa_clc/vtn_bindgen2; built by build-nvk-linux.sh into the cache when unset).
 # Exit: 0 dist/ written, 1 failure, 77 toolchain missing.
@@ -35,6 +48,8 @@ export RELEASE_CACHE="${RELEASE_CACHE:-$HOME/.cache/helios300-release}"
 RCODESIGN="${RCODESIGN:-$(command -v rcodesign || echo "$HOME/.cargo/bin/rcodesign")}"
 
 VERSION="" DRY=0 REV=HEAD DRIVER_REV="" DRIVER_REPO="" SKIP="," DIST="$ROOT/dist" IAF2="${HELIOS_IAF2:-}"
+KC_DIR="${HELIOS_KC_DIR:-}" NO_KC=0 WIFI_CC="${HELIOS_WIFI_COUNTRY:-IN}"
+[ "${HELIOS_KC_AUDIT:-}" != skip ] || NO_KC=1
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--version) VERSION="$2"; shift 2 ;;
@@ -45,12 +60,26 @@ while [ $# -gt 0 ]; do
 	--skip) SKIP=",$2,"; shift 2 ;;
 	--dist) DIST="$2"; shift 2 ;;
 	--iaf2) IAF2="$2"; shift 2 ;;
-	-h|--help) sed -n '2,28p' "$0"; exit 0 ;;
+	--real-kc) KC_DIR="$2"; shift 2 ;;
+	--no-kc-audit) NO_KC=1; shift ;;
+	--wifi-country) WIFI_CC="$2"; shift 2 ;;
+	-h|--help) sed -n '2,/^# Exit:/p' "$0"; exit 0 ;;
 	*) echo "release.sh: unknown argument $1" >&2; exit 1 ;;
 	esac
 done
 die() { echo "release.sh: FAIL — $*" >&2; exit 1; }
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || die "--version X.Y.Z is required"
+[[ "$WIFI_CC" =~ ^[A-Za-z0-9]{2}$ ]] || die "--wifi-country takes a two-letter wireless-regdb code (or 00)"
+WIFI_CC="${WIFI_CC^^}"
+if [ -n "$KC_DIR" ]; then
+	[ "$NO_KC" = 0 ] || die "--real-kc and --no-kc-audit exclude each other"
+	[ -d "$KC_DIR" ] || die "--real-kc: no directory $KC_DIR"
+	KC_DIR="$(cd "$KC_DIR" && pwd)"
+	[ -f "$KC_DIR/BootKernelExtensions.kc" ] && [ -f "$KC_DIR/SystemKernelExtensions.kc" ] ||
+		die "--real-kc $KC_DIR must hold BootKernelExtensions.kc and SystemKernelExtensions.kc from the target Mac"
+elif [ "$NO_KC" = 0 ] && [ "$DRY" = 0 ]; then
+	die "a real release is audited against the target Mac's kernel collections: pass --real-kc DIR (or set HELIOS_KC_DIR), or --no-kc-audit to build one without that gate (recorded in the manifest)"
+fi
 [ -f "$MACOS_SDK/usr/lib/libkmod.a" ] || { echo "release.sh: SKIP — no macOS SDK at $MACOS_SDK"; exit 77; }
 [ -x "$LD64" ] || { echo "release.sh: SKIP — no Apple ld64 at $LD64"; exit 77; }
 [ -d "$XNU_CONFIG" ] || { echo "release.sh: SKIP — no xnu config at $XNU_CONFIG"; exit 77; }
@@ -114,9 +143,10 @@ put() { [ -e "$1" ] || { echo "release.sh: expected $1" >&2; return 1; }; rm -rf
 
 b_pg106() {
 	BUILD_DIR="$WORK/b/pg106" PG106_MACOS_SDK="$MACOS_SDK" PG106_LD64="$LD64" PG106_XNU_CONFIG="$XNU_CONFIG" \
-		bash "$DRV/pascal/kext/scripts/cross-build-macos.sh" | tee "$WORK/pg106.out"
-	# every firmware file devboot.c names must be in the bundle (17 at bbdbca6: ACR, SEC2, GR + sw_ctx/bundle/method)
-	grep -qE "stage-firmware: [1-9][0-9]* staged, 0 missing" "$WORK/pg106.out" || { echo "PG106 firmware not fully staged"; return 1; }
+		bash "$DRV/pascal/kext/scripts/cross-build-macos.sh"
+	# PG106 is OpenCore-injected: no bundle on disk, so OSKextRequestResource cannot serve Contents/Resources. Every
+	# pinned firmware file (17: ACR, SEC2, GR + sw_*) must be in the binary itself, byte for byte.
+	python3 -I "$HERE/release/check-pg106-firmware.py" --kext "$WORK/b/pg106/PG106.kext" --driver "$DRV"
 	put "$WORK/b/pg106/PG106.kext" PG106.kext
 }
 b_pg106fb() {
@@ -138,7 +168,10 @@ b_wifi() {
 	local out="$SELF/kexts/wifi/build/native"
 	put "$out/Ath10kMac.kext" Ath10kMac.kext
 	put "$out/AirportAth10k.kext" AirportAth10k.kext
-	echo "wifi: Ath10kMac.kext + AirportAth10k.kext (native)"
+	# The regulatory country travels in the injected kext's personality (Ath10kCountryCode), not as a boot-arg.
+	python3 -I "$HERE/release/set-wifi-country.py" --plist "$STAGE/Ath10kMac.kext/Contents/Info.plist" \
+		--regdb "$SELF/kexts/wifi/src/kext/Ath10kRegulatoryData.hpp" --country "$WIFI_CC"
+	echo "wifi: Ath10kMac.kext + AirportAth10k.kext (native), country $WIFI_CC"
 }
 b_ssdt() {
 	mkdir -p "$WORK/b/ssdt"; cp "$DRV/pascal/fb/acpi/SSDT-PG106-HDAU.dsl" "$WORK/b/ssdt/"
@@ -199,6 +232,19 @@ b_nvk() {
 	cp "$w/out/libvulkan_nouveau.dylib" "$w/out/nvk_icd.json" "$STAGE/NVK-Pascal/"
 	echo "NVK-Pascal: $(sha256sum "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" | cut -c1-16)"
 }
+b_scripts() {
+	# Post-install scripts (run on the Mac; docs/MANIFEST.md post_install). install-gpu.sh is optional until it exists.
+	local f n=0
+	for f in audio-voodoohda.sh audio-applehda.sh install-gpu.sh; do
+		if [ ! -f "$SELF/tools/macos/$f" ]; then
+			[ "$f" = install-gpu.sh ] || { echo "tools/macos/$f missing"; return 1; }
+			echo "note: tools/macos/$f not in ${SELF_COMMIT:0:12} (optional artifact, left out)"; continue
+		fi
+		bash -n "$SELF/tools/macos/$f"
+		put "$SELF/tools/macos/$f" "$f"; chmod 0755 "$STAGE/$f"; n=$((n + 1))
+	done
+	echo "scripts: $n post-install scripts"
+}
 b_licences() {
 	cp "$DRV/licenses/NVIDIA-firmware-LICENCE.txt" "$STAGE/NVIDIA-firmware-LICENCE.txt"
 	cp "$DRV/licenses/Mesa-license.rst" "$STAGE/Mesa-license.rst"
@@ -217,12 +263,31 @@ step plugin NVMTLDriver.bundle -- b_plugin
 step xlate libnvmtl_translate.dylib -- b_xlate
 step nvk NVK-Pascal -- b_nvk
 step licences NVIDIA-firmware-LICENCE.txt Mesa-license.rst -- b_licences
+step scripts audio-voodoohda.sh audio-applehda.sh install-gpu.sh -- b_scripts
 collect_steps
 
-# Ad-hoc signatures (codesign -s - on a Mac). OpenCore injection needs none; kmutil (PG106Accel), dyld
-# (plugin, dylibs) accept ad-hoc ones.
+# Real-collection gate (before signing: the audit reads what was linked). A real release stops on any finding.
+KC_ARG=()
+if [ -n "$KC_DIR" ]; then
+	if python3 -I "$HERE/release/kc_gate.py" --kc-dir "$KC_DIR" --stage "$STAGE" --driver "$DRV" \
+		--kc-audit "$HERE/kc-audit.py" --log "$LOGS/kc-audit.log" --out "$WORK/kc-audit.json"; then
+		echo "  ok     kc-audit  (against $KC_DIR)"
+	else
+		rc=$?
+		[ -f "$WORK/kc-audit.json" ] || die "kc-audit could not run (rc $rc)"
+		[ "$DRY" = 1 ] || die "kc-audit found problems (rc $rc; $LOGS/kc-audit.log): OpenCore/kmutil would refuse or misload a kext; nothing written"
+		echo "  FAIL   kc-audit  rc=$rc ($LOGS/kc-audit.log); DRY RUN goes on, the manifest records it"
+		FAILED=1
+	fi
+	KC_ARG=(--kc-audit "$WORK/kc-audit.json")
+else
+	echo "  skip   kc-audit  (no --real-kc$([ "$NO_KC" = 1 ] && echo ', --no-kc-audit'); the manifest says skipped)"
+fi
+
+# Ad-hoc signatures (codesign -s - on a Mac). OpenCore injection needs none; kmutil (PG106FB, PG106Accel in
+# /Library/Extensions), dyld (plugin, dylibs) accept ad-hoc ones.
 if [ -x "$RCODESIGN" ]; then
-	for n in PG106Accel.kext NVMTLDriver.bundle libnvmtl_translate.dylib; do
+	for n in PG106FB.kext PG106Accel.kext NVMTLDriver.bundle libnvmtl_translate.dylib; do
 		[ -e "$STAGE/$n" ] || continue
 		if "$RCODESIGN" sign "$STAGE/$n" >"$LOGS/sign-${n// /-}.log" 2>&1; then SIGNED+=(--signed "$n"); echo "  signed $n (ad-hoc, rcodesign)"
 		else echo "  UNSIGNED $n (rcodesign failed: $(tail -1 "$LOGS/sign-${n// /-}.log"))"; fi
@@ -238,6 +303,6 @@ fi
 DRY_ARG=(); [ "$DRY" = 1 ] && DRY_ARG=(--dry-run)
 python3 -I "$HERE/release/make_manifest.py" --spec "$SELF/tools/release/spec.json" --schema "$SELF/tools/release/manifest.schema.json" \
 	--stage "$STAGE" --dist "$DIST" --version "$VERSION" --self-commit "$SELF_COMMIT" --driver-commit "$DRIVER_COMMIT" \
-	"${DRY_ARG[@]}" "${SIGNED[@]}" "${MISSING[@]}" || exit 1
+	--wifi-country "$WIFI_CC" "${KC_ARG[@]}" "${DRY_ARG[@]}" "${SIGNED[@]}" "${MISSING[@]}" || exit 1
 [ "$FAILED" = 0 ] || echo "release.sh: some builds failed (see $LOGS); the manifest lists them under release.missing"
 echo "release.sh: dist/ ready: $DIST (nothing was published)"

@@ -4,7 +4,7 @@
 
     python3 -I tools/release/make_manifest.py --spec tools/release/spec.json --stage <dir> --dist dist \
         --version 0.1.0 --self-commit <sha> --driver-commit <sha> [--driver-repo akshaynexus/nvidia-macos-driver] \
-        [--dirty] [--dry-run] [--signed NAME]...
+        [--dirty] [--dry-run] [--signed NAME]... [--kc-audit kc-audit.json] [--wifi-country CC]
 
 <stage>/<artifact name> is what release.sh built for each spec entry (a bundle directory, a directory of files for
 NVK-Pascal, or a single file). Each becomes one release file:
@@ -16,6 +16,12 @@ consumer re-checks the extracted bundle), the bundle's CFBundleIdentifier/CFBund
 Info.plist, and the release URL. A required artifact that was not built stops the release; with --dry-run it is
 listed under release.missing instead and the manifest is marked dry_run (a consumer refuses such a manifest unless
 it was pointed at it explicitly). The result is checked against manifest.schema.json before it is written.
+
+A spec artifact's personality_keys (spec only) become `personality`: those keys' values from the built bundle's
+IOKitPersonalities, which must agree across personalities (Ath10kMac's Ath10kCountryCode, set by release.sh
+--wifi-country; --wifi-country here cross-checks it). --kc-audit is tools/release/kc_gate.py's result and becomes
+release.kc_audit; without it the manifest says kc_audit "skipped". Every post_install step may only name spec
+artifacts, and its script must be one of them.
 """
 import argparse
 import datetime
@@ -36,6 +42,7 @@ import schema_check  # noqa: E402
 
 ZIP_DATE = (1980, 1, 1, 0, 0, 0)
 SPEC_ONLY = {"about"}   # spec keys that never reach the manifest
+ART_SPEC_ONLY = {"personality_keys"}   # per-artifact spec keys that never reach the manifest
 
 
 def sha256_file(path):
@@ -100,6 +107,41 @@ def bundle_info(path):
     return d.get("CFBundleIdentifier"), d.get("CFBundleShortVersionString") or d.get("CFBundleVersion")
 
 
+def plist_value(v):
+    if isinstance(v, bool):
+        return {"boolean": v}
+    if isinstance(v, int):
+        return {"integer": v}
+    if isinstance(v, str):
+        return {"string": v}
+    if isinstance(v, bytes):
+        return {"data": v.hex()}
+    raise SystemExit(f"make_manifest: personality value {v!r} has no manifest encoding")
+
+
+def personality(path, keys, name):
+    """{key: plist_value} from every IOKitPersonalities entry of the built bundle; they must agree."""
+    with open(os.path.join(path, "Contents", "Info.plist"), "rb") as fh:
+        pers = (plistlib.load(fh).get("IOKitPersonalities") or {}).values()
+    out = {}
+    for k in keys:
+        vals = {repr(p.get(k)) for p in pers}
+        if not pers or len(vals) != 1 or next(iter(pers)).get(k) is None:
+            raise SystemExit(f"make_manifest: {name}: personality key {k} is missing or differs between personalities ({sorted(vals)})")
+        out[k] = plist_value(next(iter(pers))[k])
+    return out
+
+
+def check_post_install(spec):
+    names = {a["name"] for a in spec["artifacts"]}
+    for st in spec.get("post_install") or []:
+        bad = [x for x in st["artifacts"] if x not in names]
+        if bad:
+            raise SystemExit(f"make_manifest: post_install step {st['step']} names {bad}, which are not spec artifacts")
+        if st.get("script") and st["script"] not in st["artifacts"]:
+            raise SystemExit(f"make_manifest: post_install step {st['step']}: its script {st['script']} is not in its artifacts")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--spec", required=True)
@@ -115,10 +157,13 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--signed", action="append", default=[], help="artifact names release.sh ad-hoc signed")
     ap.add_argument("--missing-why", action="append", default=[], help="NAME=reason for an artifact release.sh could not build")
+    ap.add_argument("--kc-audit", help="tools/release/kc_gate.py result JSON (release.sh --real-kc)")
+    ap.add_argument("--wifi-country", help="the country release.sh baked into Ath10kMac (cross-checked)")
     a = ap.parse_args(argv)
 
     with open(a.spec) as fh:
         spec = json.load(fh)
+    check_post_install(spec)
     why_missing = dict(x.split("=", 1) for x in a.missing_why)
     os.makedirs(a.dist, exist_ok=True)
     tag = "v" + a.version
@@ -137,7 +182,14 @@ def main(argv=None):
             print(f"make_manifest: DRY RUN - required {name} missing: {reason}")
             missing.append({"name": name, "why": reason})
             continue
-        out = dict(art)
+        out = {k: v for k, v in art.items() if k not in ART_SPEC_ONLY}
+        if art.get("personality_keys"):
+            if not os.path.isdir(src):
+                raise SystemExit(f"make_manifest: {name} has personality_keys but is not a bundle")
+            out["personality"] = personality(src, art["personality_keys"], name)
+            if name == "Ath10kMac.kext" and a.wifi_country and out["personality"].get("Ath10kCountryCode") != {"string": a.wifi_country}:
+                raise SystemExit(f"make_manifest: Ath10kMac's Ath10kCountryCode is {out['personality'].get('Ath10kCountryCode')}, "
+                                 f"release.sh asked for {a.wifi_country}")
         if os.path.isdir(src):
             fname = file_name(name) + ".zip"
             out["contents_sha256"] = deterministic_zip(src, name, os.path.join(a.dist, fname))
@@ -173,6 +225,12 @@ def main(argv=None):
     }
     if missing:
         manifest["release"]["missing"] = missing
+    if a.kc_audit:
+        with open(a.kc_audit) as fh:
+            manifest["release"]["kc_audit"] = json.load(fh)
+    else:
+        manifest["release"]["kc_audit"] = {"status": "skipped", "why": "release.sh ran without --real-kc: no kext was "
+                                           "checked against the target Mac's kernel collections"}
     manifest["artifacts"] = artifacts
     with open(a.schema) as fh:
         errors = schema_check.check(json.load(fh), manifest)

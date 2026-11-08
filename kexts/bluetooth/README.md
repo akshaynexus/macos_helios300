@@ -13,6 +13,11 @@ resident, to survive sleep and unplug, and to be tested against the real chip.
 
 ## Status (2026-11-08)
 
+**On macOS 26.7.2 (25G332) the owner reports that Bluetooth works** with this kext
+OpenCore-injected (macos_helios300 v0.1.0 EFI). That is an owner report, not a
+logged test: pairing, A2DP and HFP audio, and sleep/wake have not been tested
+one by one yet ([Owner test steps](#owner-test-steps-macos-26)).
+
 | What | Where verified | Result |
 |---|---|---|
 | Our core uploads rampatch + NVM to the real chip | Helios, Linux userspace, chip unpatched after a cold boot (`tools/linux/qca_rome_usb.c` = same core as the kext) | **works**: patch `0x111`→`0x3e8`, status `0x20`→`0xe0`, 18 bulk packets, 384 ms. Linux btusb then saw a patched controller (no re-download), hci0 powered, a scan found devices (`evidence/cold1-core-upload.txt`) |
@@ -21,7 +26,8 @@ resident, to survive sleep and unplug, and to be tested against the real chip.
 | Firmware = what Linux loads | Helios `/usr/lib/firmware/qca/` | byte-identical (`evidence/firmware-hashes.txt`) |
 | Lifecycle (start, retries, sleep/wake, unplug) | host tests with a simulated chip | pass (ASan/UBSan, gcc + clang) |
 | Kext builds for macOS 26 x86_64 | Linux cross-build: MacOSX26.5 SDK, Apple ld64, KPI audit against xnu-12377 | MH_KEXT_BUNDLE; all 314 imports resolve |
-| **Loads on macOS; controller in System Settings; pairing, audio, sleep/wake** | **macOS only** | **not tested yet**; see [Owner test steps](#owner-test-steps-macos-26) |
+| Loads on macOS, Bluetooth usable | Helios, macOS 26.7.2 | **works (owner report, 2026-11-08)**; no log of the run is kept here |
+| **Pairing, A2DP/HFP audio, sleep/wake** | **macOS only** | **not tested yet**; see [Owner test steps](#owner-test-steps-macos-26) |
 
 ## How it works
 
