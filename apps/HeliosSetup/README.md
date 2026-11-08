@@ -118,7 +118,7 @@ the schema enum.
 
 ```
 cd apps/HeliosSetup
-swift test -j $(nproc)                                     # the core, on Linux (86 tests)
+swift test -j $(nproc)                                     # the core, on Linux (94 tests)
 swift format lint --strict -r Sources Tests                # the committed .swift-format
 SIGN=1 bash ../../tools/release/cross-setup-app.sh ../.. ../../kexts/nvidia-macos-driver /tmp/app 0.1.1
 ```
