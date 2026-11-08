@@ -58,7 +58,8 @@ as Wi-Fi in Network settings.
 kexts/wifi/
   src/kext/            the core (Ath10kPCIDevice : IOEthernetController)
   src/shared/          control ABI (Ath10kControl.hpp) and the WPA2 supplicant (header-only)
-  native/src/          AirportAth10k (IO80211Controller), AirportAth10kInterface (IO80211InfraProtocol),
+  native/src/          AirportAth10kNub (provider nub owning the IO80211 work queue, after AirportItlwm's
+                       IOPCIEDeviceWrapper), AirportAth10k (IO80211Controller), AirportAth10kInterface (IO80211InfraProtocol),
                        AirportAth10kEthernetInterface (BSD shim), AirportAth10kBridge.hpp (pure logic:
                        WCL request mapping, scan-result conversion, join state machine, supplicant driver),
                        AirportAth10kCrypto.hpp (SHA-1/HMAC/AES for the kernel), AirportWCL.hpp (imported)
@@ -94,9 +95,11 @@ IO80211Family (218 symbols), IOSkywalkFamily (79) and corecapture (4) declaratio
 core's own exports (`native/scripts/native-families.allow`). That audit proves the symbols
 exist in the headers. With `HELIOS_REAL_KC=/path/to/BootKernelExtensions.kc` (copied from
 the target Mac: `/System/Library/KernelCollections/BootKernelExtensions.kc`) the build also
-runs `tools/kc-audit.py`, which checks every import against the collection's exports and
-every inherited vtable slot against the real parent layout, i.e. what OpenCore's vtable
-patching will do at boot. Run it for the exact macOS build you will boot.
+runs `tools/kc-audit.py`, which checks every import against the collection's exports, the
+size of every Apple class the kext subclasses against the real `classSize`, and every
+inherited vtable slot against the real parent layout, i.e. what OpenCore's vtable patching
+will do at boot. Give it both collections, colon-separated
+(`BootKernelExtensions.kc:SystemKernelExtensions.kc`), for the exact macOS build you will boot.
 
 `cross-build.sh --ethernet-debug` builds the developer variant (core as an Ethernet-style
 interface + the "Ath10k Connectivity" app, `build/release/`). It is a debugging aid for the

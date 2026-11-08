@@ -14,6 +14,27 @@ static_assert(AirportBridge::kNotReady==kIOReturnNotReady && AirportBridge::kBus
 
 volatile SInt32 gAirportAth10kStep=0;
 
+// Pre-flight data for tools/kc-audit.py: sizeof() of every Apple class this
+// kext subclasses, as compiled from the reconstructed headers. The audit
+// compares each with the classSize the real collection's MetaClass
+// constructor passes; a mismatch means our object overlaps the parent's ivars.
+struct KcAuditParentSize { const char *name; uint64_t size; };
+extern "C" __attribute__((used)) const KcAuditParentSize kKcAuditParentSizes[]={
+    {"IO80211Controller",sizeof(IO80211Controller)},
+    {"IO80211InfraProtocol",sizeof(IO80211InfraProtocol)},
+    {"IO80211InfraInterface",sizeof(IO80211InfraInterface)},
+    {"IO80211SkywalkInterface",sizeof(IO80211SkywalkInterface)},
+    {"IOSkywalkEthernetInterface",sizeof(IOSkywalkEthernetInterface)},
+    {"IOSkywalkNetworkInterface",sizeof(IOSkywalkNetworkInterface)},
+    {"IOSkywalkInterface",sizeof(IOSkywalkInterface)},
+    {"IOEthernetController",sizeof(IOEthernetController)},
+    {"IONetworkController",sizeof(IONetworkController)},
+    {"IOEthernetInterface",sizeof(IOEthernetInterface)},
+    {"IONetworkInterface",sizeof(IONetworkInterface)},
+    {"IO80211WorkQueue",sizeof(IO80211WorkQueue)},
+    {"IOService",sizeof(IOService)},
+    {nullptr,0}};
+
 bool airportAth10kRandom(uint8_t *p,size_t n){if(!p || !n)return false;read_random(p,static_cast<u_int>(n));return true;}
 
 bool AirportAth10k::init(OSDictionary *properties)
@@ -24,14 +45,9 @@ bool AirportAth10k::init(OSDictionary *properties)
 
 IOService *AirportAth10k::probe(IOService *provider,SInt32 *score)
 {
-    // Kill switch: -airportath10k_off leaves the core up (Ath10kNativeReady,
-    // no interface) and never starts the front end.
-    if(PE_parse_boot_argn("-airportath10k_off",nullptr,0)){AIRPORT_LOG("disabled by -airportath10k_off");return nullptr;}
     AIRPORT_STEP("probe");
-    auto *device=OSDynamicCast(Ath10kPCIDevice,provider);
-    if(!device || !device->nativeFrontEnd()){AIRPORT_LOG("provider is not an Ath10kPCIDevice in native mode");return nullptr;}
-    IOEthernetAddress address;
-    if(static_cast<IOEthernetController *>(device)->getHardwareAddress(&address)!=kIOReturnSuccess){AIRPORT_LOG("core has no MAC address yet");return nullptr;}
+    auto *n=OSDynamicCast(AirportAth10kNub,provider);
+    if(!n || !n->core() || !n->queue()){AIRPORT_LOG("provider is not a started AirportAth10kNub");return nullptr;}
     return super::probe(provider,score);
 }
 
@@ -112,10 +128,13 @@ void AirportAth10k::releaseAll()
 bool AirportAth10k::start(IOService *provider)
 {
     AIRPORT_STEP("start");
-    ath10k=OSDynamicCast(Ath10kPCIDevice,provider);
+    nub=OSDynamicCast(AirportAth10kNub,provider);
+    ath10k=nub?nub->core():nullptr;
     if(!ath10k)return false;
     UInt32 delay=0;
-    if(PE_parse_boot_argn("ath10k_native_delay",&delay,sizeof(delay)) && delay){
+    const bool parsed=PE_parse_boot_argn("ath10k_native_delay",&delay,sizeof(delay));
+    AIRPORT_LOG("boot-arg ath10k_native_delay: %s (%u)",parsed?"present":"absent",delay);
+    if(parsed && delay){
         if(delay>600)delay=600;
         deferredCall=thread_call_allocate(deferredStart,this);
         if(!deferredCall)return false;
@@ -145,10 +164,13 @@ bool AirportAth10k::bringUp(IOService *provider)
     setProperty("built-in",OSData::withBytes(&builtIn,sizeof(builtIn)));
     setProperty("DriverKitDriver",kOSBooleanFalse);
     setProperty("AirportAth10kVersion",ATH10K_VERSION);
-    // IO80211Controller::start consults createWorkQueue/getWorkQueue.
-    AIRPORT_STEP("work queue");
-    workQueue=IO80211WorkQueue::workQueue();
+    // IO80211Controller::start consults createWorkQueue/getWorkQueue. The
+    // queue is the nub's, so provider->getWorkLoop() == getWorkLoop() in
+    // IONetworkController::start (see AirportAth10kNub.hpp).
+    AIRPORT_STEP("work queue (from the nub)");
+    workQueue=nub->queue();
     if(!workQueue){AIRPORT_LOG("no IO80211WorkQueue");return false;}
+    workQueue->retain();
     AIRPORT_STEP("corecapture pipes");
     if(!initCCLogs()){AIRPORT_LOG("corecapture pipes failed");releaseAll();return false;}
     AIRPORT_STEP("IO80211Controller::start");
@@ -199,7 +221,7 @@ bool AirportAth10k::bringUp(IOService *provider)
     broughtUp=true;
     AIRPORT_STEP("started; arming the core poll");
     netif->startPolling();
-    AIRPORT_LOG("started over %s (version %s)",ath10k->getName(),ATH10K_VERSION);
+    AIRPORT_LOG("started over %s via %s (version %s)",ath10k->getName(),nub->getName(),ATH10K_VERSION);
     return true;
 }
 

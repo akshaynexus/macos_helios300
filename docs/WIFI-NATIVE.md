@@ -100,6 +100,20 @@ IO80211Controller slot was shifted by two and `attachVirtualInterface` landed on
 `_RESERVEDIO80211Controller0`. And `IONetworkInterface::setInterfaceSubType` (private SPI
 AirportItlwm calls) is not exported by 26.7.2's IONetworkingFamily.
 
+Second and third real boots (26.7.2, front end injected): kernel panic in
+`IONetworkController::start`, page fault on `thread->mutex` (CR2 0x658) from
+`ml_thread_policy`. `IONetworkController::start` compares `getWorkLoop()` with the
+provider's and, when they differ, calls `ml_thread_policy(getWorkLoop()->getThread(), …)`;
+`IO80211WorkQueue::getThread()` in 1200.13.1 returns NULL. AirportItlwm never takes that
+path because its provider (`IOPCIEDeviceWrapper`) returns the same work queue; our
+provider was the core with its own loop. Fixed by `AirportAth10kNub`, a provider nub
+between the core and the controller that owns the IO80211 work queue and returns it from
+`getWorkLoop()`, exactly the AirportItlwm topology. The real class sizes were read from the
+collection's `MetaClass` constructors while chasing this; every subclassed Apple class
+matches (`IO80211Controller` 0x128, `IO80211InfraProtocol` 0x130, `IOEthernetInterface` 0x148,
+`IONetworkController` 0x110, `IOEthernetController` 0x118) and the build now checks them
+(`kKcAuditParentSizes`), against both the Boot and the System collection.
+
 Only macOS can verify (not done): that WCL accepts the capability bits and event sequence,
 DHCP over the Skywalk interface, sleep/wake, Settings details. The reconstructed headers are
 now proven against 26.7.2; another point release can still move slots, so rerun the build

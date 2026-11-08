@@ -24,6 +24,22 @@
 	<string>Network-Root</string>
 	<key>IOKitPersonalities</key>
 	<dict>
+		<key>AirportAth10kNub</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>com.helios300.AirportAth10k</string>
+			<key>IOClass</key>
+			<string>AirportAth10kNub</string>
+			<key>IOProbeScore</key>
+			<integer>70000</integer>
+			<key>IOProviderClass</key>
+			<string>Ath10kPCIDevice</string>
+			<key>IOPropertyMatch</key>
+			<dict>
+				<key>Ath10kNativeReady</key>
+				<true/>
+			</dict>
+		</dict>
 		<key>AirportAth10k</key>
 		<dict>
 			<key>CFBundleIdentifier</key>
@@ -37,12 +53,7 @@
 			<key>IOProbeScore</key>
 			<integer>70000</integer>
 			<key>IOProviderClass</key>
-			<string>Ath10kPCIDevice</string>
-			<key>IOPropertyMatch</key>
-			<dict>
-				<key>Ath10kNativeReady</key>
-				<true/>
-			</dict>
+			<string>AirportAth10kNub</string>
 			<key>IOResourceMatch</key>
 			<string>IOBSD</string>
 		</dict>

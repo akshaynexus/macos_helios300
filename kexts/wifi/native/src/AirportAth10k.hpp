@@ -15,6 +15,7 @@
 #include <kern/thread_call.h>
 #include "AirportAth10kEthernetInterface.hpp"
 #include "AirportAth10kInterface.hpp"
+#include "AirportAth10kNub.hpp"
 #include "Ath10kPCIDevice.hpp"
 
 class AirportAth10k : public IO80211Controller {
@@ -82,6 +83,7 @@ private:
     bool broughtUp=false;
     bool initCCLogs();
     void releaseAll();
+    AirportAth10kNub *nub=nullptr;
     Ath10kPCIDevice *ath10k=nullptr;
     IO80211WorkQueue *workQueue=nullptr;
     IOCommandGate *gate=nullptr;

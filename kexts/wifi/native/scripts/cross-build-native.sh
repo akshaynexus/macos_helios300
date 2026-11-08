@@ -57,7 +57,7 @@ cp native/NOTICE "$OUT/AirportAth10k-resources/NOTICE" 2>/dev/null || true
 	--cflags "$CFLAGS -Wno-unused-private-field -Wno-overloaded-virtual -Wno-invalid-offsetof" \
 	--allow "$ROOT/build/gen/native/families.allow" --resources "$OUT/AirportAth10k-resources" \
 	--kc-sibling "$OUT/Ath10kMac.kext/Contents/MacOS/Ath10kMac" \
-	native/src/AirportAth10k.cpp native/src/AirportAth10kInterface.cpp native/src/AirportAth10kEthernetInterface.cpp
+	native/src/AirportAth10kNub.cpp native/src/AirportAth10k.cpp native/src/AirportAth10kInterface.cpp native/src/AirportAth10kEthernetInterface.cpp
 rm -rf "$OUT/AirportAth10k-resources"
 "$NM" -m "$OUT/AirportAth10k.kext/Contents/MacOS/AirportAth10k" > "$OUT/AirportAth10k.nm.txt"
 python3 -I scripts/check-kext-symbols.py --listing "$OUT/AirportAth10k.nm.txt"
