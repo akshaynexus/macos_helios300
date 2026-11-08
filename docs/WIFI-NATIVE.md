@@ -244,6 +244,18 @@ exports it after the BSS record), so WPA-only networks show as WPA, not WEP. Hid
 by name (Connect index 1, directed probe when the BSSID was not heard), and a join while
 connected leaves the old network first.
 
+Roaming (audit item W8): not implemented as a reassociation. `setWCL_REASSOC` and the roam
+IOCs (`SET_ROAM_LOCK`, `ROAM_PROFILE_CONFIG`, `ROAM_USER_CACHE`, `SET_MULTI_AP_ENV`) take
+structures that are only forward-declared in the reconstructed headers (no layout), and
+AirportItlwm refuses them too; guessing a layout would mean reading arbitrary kernel memory.
+The core has no reassociation request either (every join is auth + assoc on a fresh peer).
+What a mesh move looks like instead: WCL sends a new ASSOCIATE for the other BSSID of the same
+SSID while connected; the session disconnects (peer delete, vdev stop) and connects to the
+target with the same PMK and the full 4-way handshake: a short link-down (about one join,
+`AirportAth10kLastRoamMs`, counted in `AirportAth10kRoams`), not a drop to the password prompt.
+Reassociation (802.11 reassoc request, PMKSA reuse) needs the REASSOC layout from a real Mac
+trace and a core reassoc frame; recorded as future work.
+
 Only macOS can verify (not done): that WCL accepts the capability bits and event sequence,
 DHCP over the Skywalk interface, sleep/wake, Settings details. The reconstructed headers are
 now proven against 26.7.2; another point release can still move slots, so rerun the build
@@ -255,5 +267,5 @@ WPA3-SAE/PMF, Enterprise and the Private Wi-Fi Address are in progress behind th
 `AIRPORT_ATH10K_WPASEC` (off in releases; paused by the owner): [`WIFI-SECURITY.md`](WIFI-SECURITY.md).
 
 WPA3-SAE / PMF, Enterprise, WEP, Private Wi-Fi Address (random MAC), AWDL/AirDrop/Continuity,
-P2P/hotspot, 6 GHz, 160 MHz, roaming between BSSIDs of one SSID (WCL
+P2P/hotspot, 6 GHz, 160 MHz, reassociation-based roaming between BSSIDs of one SSID (WCL
 asks for a new join; the core disconnects and reconnects).

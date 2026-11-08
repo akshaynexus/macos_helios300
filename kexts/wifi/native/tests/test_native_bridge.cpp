@@ -363,6 +363,21 @@ int main(){
         assert(c->status==1 && c->reason==43 && !strcmp(s.lastError,"wpa3-sae-only-not-supported") && s.state()==Session::State::Leaving);
         core.advance();s.poll(t+=20);assert(s.state()==Session::State::Ready);
     }
+    { // Roaming to another BSSID of the same SSID (mesh): a new ASSOCIATE while connected,
+      // served as disconnect + connect with the same PMK; counted and timed for the registry.
+        FakeCore core;FakeSink sink;Session s(core,sink);B::Network second=wpa;second.bssid[5]^=0x40;second.channel=36;second.htOp[0]=36;
+        core.bss={wpa,second};uint64_t t=80000;s.poll(t);
+        assert(s.startJoin(join(wpa,true),t)==B::kSuccess);
+        for(int i=0;i<30 && !s.linkUp();++i){s.poll(t+=20);core.advance();}
+        assert(s.linkUp() && !s.roams);
+        // The handshake vectors are for v_ap; the roam target only has to reach stage 10 and the M1.
+        assert(s.startJoin(join(second,true),t)==B::kSuccess && s.roams==1);
+        for(int i=0;i<40 && !(core.connects==2 && core.stage==10);++i){s.poll(t+=20);core.advance();}
+        assert(core.disconnects==1 && core.connects==2 && core.stage==10);
+        s.poll(t+=20);assert(sink.count(W::AssocComplete)==2);
+        auto *a=reinterpret_cast<const W::AssociationEvent *>(sink.last(W::AssocComplete)->data.data());
+        assert(!memcmp(a->bssid,second.bssid,6));
+    }
     { // System sleep/wake with the core's in-place firmware reload: no Restart while state bit 8
       // is set, driver-available again when the runtime returns, the registry mirror's result.
         FakeCore core;FakeSink sink;Session s(core,sink);core.bss={open};uint64_t t=60000;s.poll(t);

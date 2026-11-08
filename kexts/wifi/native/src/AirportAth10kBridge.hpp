@@ -304,6 +304,11 @@ public:
             state_=State::Joining;joinStartedMs=nowMs;joinPhase=JoinPhase::Refuse;assocNotified=false;
             return kSuccess;
         }
+        // Roaming: WCL has no REASSOC path here (setWCL_REASSOC's layout is opaque),
+        // so a move to another BSS of the same SSID arrives as a new ASSOCIATE while
+        // connected; it is served as a disconnect + connect with the same PMK.
+        if(state_==State::Connected && !sameMAC(joinBSSID,j.bssid) && joined.ssidLength==plan.ssidLength &&
+           !memcmp(joined.ssid,plan.ssid,plan.ssidLength)){++roams;roamStartedMs=nowMs;}
         pending=plan;AthSecurity::wipe(&plan,sizeof(plan));
         memcpy(joinBSSID,j.bssid,6);
         joinChannel=uint8_t(j.channelSpec&0xff);
@@ -399,6 +404,7 @@ public:
     const char *lastError="none";uint32_t errorSerial=0;
     uint32_t lastDisconnectReason=0; // 802.11 reason of the last link-down/deauth we reported (255 = driver-initiated)
     uint32_t lastScanMs=0,lastJoinMs=0,scanCount=0; // registry mirror: duration of the last core scan and of the last successful join
+    uint32_t roams=0,lastRoamMs=0;uint64_t roamStartedMs=0; // same-SSID moves to another BSSID (rejoin) and the last one's duration
     // Last system sleep/wake (uptime ms), wake to driver-available (ms) and how
     // the core came back: reinit (firmware reloaded in place), restart-requested
     // (guarded terminate + rematch), dma-quarantine, pending, sleeping.
@@ -655,6 +661,7 @@ private:
             if(status.link){
                 setDataLink(true);
                 lastJoinMs=uint32_t(nowMs-joinStartedMs);
+                if(roamStartedMs){lastRoamMs=lastJoinMs;roamStartedMs=0;}
                 finishJoin(0,0,kSuccess);lqmReportedMs=nowMs;powerSaveSynced=false;
                 if(state_==State::Connected)syncPowerSave();
             }

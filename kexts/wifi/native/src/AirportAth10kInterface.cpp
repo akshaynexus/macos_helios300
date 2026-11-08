@@ -152,6 +152,10 @@ void AirportAth10kInterface::mirrorState()
         controller->setProperty("AirportAth10kWakeMs",session->wakeMs,32);
         controller->setProperty("AirportAth10kWakeResult",session->wakeResult);
     }
+    if(session->roams!=mirroredRoams || session->lastRoamMs!=mirroredRoamMs){
+        mirroredRoams=session->roams;mirroredRoamMs=session->lastRoamMs;
+        controller->setProperty("AirportAth10kRoams",mirroredRoams,32);controller->setProperty("AirportAth10kLastRoamMs",mirroredRoamMs,32);
+    }
     if(session->networkCount()!=mirroredNetworks){mirroredNetworks=session->networkCount();controller->setProperty("AirportAth10kCachedNetworks",mirroredNetworks,32);}
 }
 

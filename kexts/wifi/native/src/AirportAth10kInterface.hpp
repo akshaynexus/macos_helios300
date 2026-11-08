@@ -265,7 +265,7 @@ private:
     bool stopping=false,started=false;
     AirportRegistration::Blocks registration{};
     uint32_t mirroredState=~0u,mirroredReason=~0u,mirroredErrorSerial=~0u;
-    uint32_t mirroredScanMs=~0u,mirroredJoinMs=~0u,mirroredScans=~0u,mirroredNetworks=~0u,mirroredWake=~0u;
+    uint32_t mirroredScanMs=~0u,mirroredJoinMs=~0u,mirroredScans=~0u,mirroredNetworks=~0u,mirroredWake=~0u,mirroredRoams=~0u,mirroredRoamMs=~0u;
     int reportedQuality=-3;
     uint16_t scanHomeAwayMs=0;
 };
