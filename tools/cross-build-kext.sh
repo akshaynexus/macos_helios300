@@ -183,8 +183,11 @@ rm -rf "$WORK"
 filetype="$(od -An -tu4 -j12 -N4 "$BIN" | tr -d ' ')"
 [ "$filetype" = 11 ] || die "Mach-O filetype $filetype, want 11 (MH_KEXT_BUNDLE)"
 echo "PASS link MH_KEXT_BUNDLE x86_64, macOS $MIN, SDK $SDK_VER"
-"$NM" "$BIN" | grep -q " _kmod_info$" || die "no _kmod_info (kmutil would skip the kext)"
-echo "PASS _kmod_info present; $("$NM" "$BIN" | grep -c 'gMetaClass' || true) metaclass symbols"
+# Capture first: under pipefail, `nm | grep -q` fails whenever grep exits at the first match and nm takes SIGPIPE
+# (timing-dependent; seen as a spurious "no _kmod_info" in a parallel release build).
+SYMS="$("$NM" "$BIN")"
+grep -q " _kmod_info$" <<<"$SYMS" || die "no _kmod_info (kmutil would skip the kext)"
+echo "PASS _kmod_info present; $(grep -c 'gMetaClass' <<<"$SYMS" || true) metaclass symbols"
 
 if [ "$AUDIT" = 1 ]; then
 	[ -d "$XNU_CONFIG" ] || skip "built, but KPI audit needs xnu config at $XNU_CONFIG (set XNU_CONFIG)"
