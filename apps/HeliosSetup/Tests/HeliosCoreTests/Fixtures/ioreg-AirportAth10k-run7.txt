@@ -1,0 +1,5 @@
+"AirportAth10kJoinState" = "connected"
+"AirportAth10kLastJoinMs" = 1262
+"AirportAth10kLastError" = "none"
+"AirportAth10kLastDisconnectReason" = 0
+"AirportAth10kRoams" = 0

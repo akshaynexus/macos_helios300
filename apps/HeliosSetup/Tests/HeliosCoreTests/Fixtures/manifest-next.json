@@ -1,0 +1,1838 @@
+{
+  "schema": 1,
+  "repo": "akshaynexus/macos_helios300",
+  "machine": {
+    "name": "Acer Predator Helios 300 G3-571",
+    "match": {
+      "dmi_product": [
+        "Predator G3-571"
+      ],
+      "dmi_board": [
+        "Sienta_KLS"
+      ],
+      "pci": [
+        {
+          "vendor": "10de",
+          "device": "1c20",
+          "subsystem_vendor": "1025",
+          "subsystem_device": "118b",
+          "what": "GeForce GTX 1060 Mobile (GP106M)",
+          "required": true
+        },
+        {
+          "vendor": "8086",
+          "device": "591b",
+          "subsystem_vendor": "1025",
+          "subsystem_device": "118a",
+          "what": "HD Graphics 630",
+          "required": true
+        },
+        {
+          "vendor": "168c",
+          "device": "003e",
+          "subsystem_vendor": "11ad",
+          "subsystem_device": "0807",
+          "what": "Qualcomm Atheros QCA6174 (Lite-On, Acer board data)",
+          "required": false
+        }
+      ],
+      "usb": [
+        {
+          "vendor": "04ca",
+          "device": "3016",
+          "what": "QCA Rome Bluetooth (Lite-On)",
+          "required": false
+        }
+      ],
+      "hda_codecs": [
+        {
+          "vendor": "10ec",
+          "device": "0255",
+          "subsystem_vendor": "1025",
+          "subsystem_device": "118a",
+          "what": "Realtek ALC255",
+          "required": false
+        }
+      ]
+    }
+  },
+  "macos": {
+    "min_kernel": "25.0.0",
+    "max_kernel": "25.99.99",
+    "names": [
+      "macOS 26 Tahoe"
+    ]
+  },
+  "artifacts": [
+    {
+      "name": "PG106.kext",
+      "kind": "kext",
+      "bundle_id": "org.helios300.pg106",
+      "source": {
+        "tree": "driver",
+        "path": "pascal/kext"
+      },
+      "built_by": "cross",
+      "licence": "GPL-2.0-only",
+      "licence_files": [
+        "NVIDIA-firmware-LICENCE.txt"
+      ],
+      "contains_firmware": "17 NVIDIA GP106 firmware files from linux-firmware (NVIDIA licence), unmodified and sha256-pinned, built into the binary (pascal/kext/firmware.sha256); the same files also in Contents/Resources",
+      "status": "pre-release: works on macOS 26.7.2 (25G332): OpenCore-injected, firmware built into the binary (an injected kext has no bundle for OSKextRequestResource), GTX 1060 bring-up reaches PG106Ready Yes (2026-11-08); render path proven under Linux (pascal/core)",
+      "install": "opencore",
+      "opencore": {
+        "order": 100,
+        "BundlePath": "PG106.kext",
+        "ExecutablePath": "Contents/MacOS/PG106",
+        "PlistPath": "Contents/Info.plist",
+        "Arch": "x86_64",
+        "MinKernel": "25.0.0",
+        "MaxKernel": "",
+        "Enabled": true,
+        "Comment": "GTX 1060 Mobile (GP106) - macos_helios300"
+      },
+      "requires": [],
+      "hardware": [
+        {
+          "bus": "pci",
+          "vendor": "10de",
+          "device": "1c20",
+          "subsystem_vendor": "1025",
+          "subsystem_device": "118b"
+        }
+      ],
+      "boot_args_optional": [
+        {
+          "arg": "-pg106off",
+          "what": "kill switch: PG106 does not attach and touches no GPU register"
+        },
+        {
+          "arg": "pg106_stop_after=1",
+          "what": "identify and read the VBIOS only; no GPU register is written (runbook step 1 safe mode)"
+        },
+        {
+          "arg": "pg106_d3cold=1",
+          "what": "power the dGPU off through ACPI PG00._OFF when idle (never run under macOS)"
+        },
+        {
+          "arg": "pg106_render_users=0",
+          "what": "render connections for administrators only"
+        },
+        {
+          "arg": "pg106_hda=0",
+          "what": "do not enable the GPU's HDMI audio function"
+        },
+        {
+          "arg": "pg106_printf=1",
+          "what": "diagnostic: also print log lines to the kernel message buffer (sudo dmesg), drawn on the console under -v; off by default because the builds that printed hung at boot"
+        },
+        {
+          "arg": "pg106_selftest=2",
+          "what": "diagnostic: after bring-up run the copy-engine and GR self-tests (results in the PG106SelfTest registry property)"
+        },
+        {
+          "arg": "-x",
+          "what": "macOS safe mode (OpenCore picker: Shift+Enter): this kext logs one line and does not attach; the way back from a bad build without Recovery or the stick"
+        }
+      ],
+      "requires_restart": true,
+      "contents_sha256": {
+        "Contents/Info.plist": "e5959201b652053b2911db82290f5d4f555d98fdf85eb2d75aad1885101cd51e",
+        "Contents/MacOS/PG106": "0f9f407c09651fca8d2b97e3f7fe9ddaba9f017c56a755913aea3cac3575c5a3",
+        "Contents/Resources/gp106-acr-bl.bin": "01326cc997716bebb0eab9fe1f463fffa0ee586079e4ca0e5bb096ab6fcfedab",
+        "Contents/Resources/gp106-acr-ucode_load.bin": "5d2ce92a781c6c42a781a50badfbfc7db9267945996ee46aaa15429facdf2920",
+        "Contents/Resources/gp106-gr-fecs_bl.bin": "58a14906a9ad69a141ea417481a9464928aa0e56cff98a35753d712a91029ac7",
+        "Contents/Resources/gp106-gr-fecs_data.bin": "49288ac6c6e48f2e329d7c92a99cfcb259ab479f45744feb21b55e78c75a54a9",
+        "Contents/Resources/gp106-gr-fecs_inst.bin": "5112f12dbfdc5eb9fb5b00b443039e0d40c2be4d2a9fba2ccb2706c0000f947f",
+        "Contents/Resources/gp106-gr-fecs_sig.bin": "1bcf5680d39eac6f0b641867836729c39f560de6d209c260583e6b080a75d996",
+        "Contents/Resources/gp106-gr-gpccs_bl.bin": "af1d42219e8184c10ab89fcd93607b36b2240c9c56e239ec797946890c8064c2",
+        "Contents/Resources/gp106-gr-gpccs_data.bin": "4f468ae62a5abbb158ce6303962755ca3f77df4ea697b7aadc6a970a5920ee27",
+        "Contents/Resources/gp106-gr-gpccs_inst.bin": "36ad0ee74de6b79a4101cc6c4d4aa7618c49a967571c044b37f51d0f536cd52c",
+        "Contents/Resources/gp106-gr-gpccs_sig.bin": "b9681338ccbc9d367fcc76c0e2dfae935dc9c8b932c2a2b218e6a81450438b1f",
+        "Contents/Resources/gp106-gr-sw_bundle_init.bin": "5f543872e72731f164e9e9f1fc19fc30e73a508629d2c6d0724fe6247c976c50",
+        "Contents/Resources/gp106-gr-sw_ctx.bin": "eec97c35ccf2c66125c490c12a33f73d8a44fd6826d083100c6ef7f11f0ed0e6",
+        "Contents/Resources/gp106-gr-sw_method_init.bin": "1123176ec93df9046b3fb5071141235424c101e405294f505494e00ba925a719",
+        "Contents/Resources/gp106-gr-sw_nonctx.bin": "29b22445ed536a852908ec6f1600fe757951de7dd7eff73c627f614639543172",
+        "Contents/Resources/gp106-sec2-desc-1.bin": "0d0ce7988281fc9115d3c6320e7b904d530719ddeacdd85ea29f744ba7b039ee",
+        "Contents/Resources/gp106-sec2-image-1.bin": "90404a9c365eb9b2d3f692c255bc3b50af9313ccae73306df369ec712c4b511e",
+        "Contents/Resources/gp106-sec2-sig-1.bin": "14c3524427b08a6dca1fc846f3830387ee835c3257792860783e5e4148833ebb"
+      },
+      "version": "0.1.0",
+      "file": "PG106.kext.zip",
+      "sha256": "227ad547bebb4fe2a5ef709789fb5cae2b47a44a274f367413d6e6f1a8eef942",
+      "size": 165040,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/PG106.kext.zip",
+      "signed": "ad-hoc (rcodesign)",
+      "update_group": "pg106"
+    },
+    {
+      "name": "PG106FB.kext",
+      "kind": "kext",
+      "bundle_id": "org.helios300.pg106fb",
+      "source": {
+        "tree": "driver",
+        "path": "pascal/fb"
+      },
+      "built_by": "cross",
+      "licence": "GPL-2.0-only",
+      "status": "pre-release: HDMI framebuffer for the GP106's HDMI port; installed into /Library/Extensions after macOS is installed (it links IOGraphicsFamily, which macOS 26.7.2 keeps only in SystemKernelExtensions.kc, so OpenCore refuses it); attaches under PG106 on macOS 26.7.2 (2026-11-08); a picture on an HDMI display not yet reported",
+      "install": "library-extensions",
+      "requires": [
+        "PG106.kext"
+      ],
+      "hardware": [
+        {
+          "bus": "pci",
+          "vendor": "10de",
+          "device": "1c20",
+          "subsystem_vendor": "1025",
+          "subsystem_device": "118b"
+        }
+      ],
+      "boot_args_optional": [
+        {
+          "arg": "pg106fb=0",
+          "what": "PG106FB does not attach"
+        },
+        {
+          "arg": "pg106fb_accel=0",
+          "what": "unaccelerated framebuffer, PG106Accel never pairs"
+        },
+        {
+          "arg": "pg106fb_tmds_khz=340000",
+          "what": "no HDMI 2.0 (scrambled) modes"
+        },
+        {
+          "arg": "-x",
+          "what": "macOS safe mode (OpenCore picker: Shift+Enter): this kext logs one line and does not attach; the way back from a bad build without Recovery or the stick"
+        }
+      ],
+      "requires_restart": true,
+      "contents_sha256": {
+        "Contents/Info.plist": "3c767d5094415b4119207e31558ab59c7b3c2e25c9910f2bb70238b957c7b6c3",
+        "Contents/MacOS/PG106FB": "bc4aa5258b8dcc64c400bc60e715040d8235018d117bae94c70fc77630f9a548"
+      },
+      "version": "0.1.0",
+      "file": "PG106FB.kext.zip",
+      "sha256": "15025610e657f285ecfc35b754caa0faaaad249e2bbc873d0beedd13f8df075b",
+      "size": 69687,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/PG106FB.kext.zip",
+      "signed": "ad-hoc (rcodesign)",
+      "update_group": "pg106"
+    },
+    {
+      "name": "NMHDA.kext",
+      "kind": "kext",
+      "bundle_id": "com.nullmoth.NMHDA",
+      "source": {
+        "tree": "driver",
+        "path": "kexts/NMHDA"
+      },
+      "built_by": "cross",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "status": "pre-release: HDMI audio for the GP106 HDA function (10de:10f1); needs AppleHDA, which macOS 26 removed, so it only works after audio option 2 (audio-applehda.sh); the HDA function is visible from boot on 26.7.2; its hook targets (AppleHDAController probe/start, IOHDACodecDevice::executeVerb, the Kepler table entries) are present in the AppleHDA 600.2 that option 2 installs (checked on Linux); NMHDA not yet run with AppleHDA on this machine",
+      "install": "opencore",
+      "opencore": {
+        "order": 120,
+        "BundlePath": "NMHDA.kext",
+        "ExecutablePath": "Contents/MacOS/NMHDA",
+        "PlistPath": "Contents/Info.plist",
+        "Arch": "x86_64",
+        "MinKernel": "24.0.0",
+        "MaxKernel": "",
+        "Enabled": true,
+        "Comment": "GP106 HDMI audio (Lilu plugin) - macos_helios300"
+      },
+      "requires": [
+        "Lilu.kext",
+        "AppleALC.kext"
+      ],
+      "hardware": [
+        {
+          "bus": "pci",
+          "vendor": "10de",
+          "device": "10f1"
+        }
+      ],
+      "requires_restart": true,
+      "contents_sha256": {
+        "Contents/Info.plist": "ecf438eefc9cb142391daf615154c5fc3c512cb4f7aabb59bde5c0dd791d7292",
+        "Contents/MacOS/NMHDA": "18ef3827fe030bd9c1052410483648860261b3d7fa5268909f1aad8d96159a16"
+      },
+      "version": "1.0.0",
+      "file": "NMHDA.kext.zip",
+      "sha256": "aca252b58395b47840bf8a85d68f34765857cce95fe036a33c90af2859f78097",
+      "size": 14654,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/NMHDA.kext.zip",
+      "signed": "ad-hoc (rcodesign)"
+    },
+    {
+      "name": "QCARomePatchRAM.kext",
+      "kind": "kext",
+      "bundle_id": "io.github.akshaynexus.helios300.QCARomePatchRAM",
+      "source": {
+        "tree": "self",
+        "path": "kexts/bluetooth"
+      },
+      "built_by": "cross",
+      "licence": "GPL-2.0-or-later",
+      "contains_firmware": "QCA6174 Rome rampatch + NVM from linux-firmware (Qualcomm licence)",
+      "status": "pre-release: Bluetooth works on macOS 26.7.2 (owner report, 2026-11-08); pairing, A2DP/HFP audio and sleep/wake not yet tested; the firmware download matches Linux btusb's transfer for transfer",
+      "install": "opencore",
+      "opencore": {
+        "order": 130,
+        "BundlePath": "QCARomePatchRAM.kext",
+        "ExecutablePath": "Contents/MacOS/QCARomePatchRAM",
+        "PlistPath": "Contents/Info.plist",
+        "Arch": "x86_64",
+        "MinKernel": "21.0.0",
+        "MaxKernel": "",
+        "Enabled": true,
+        "Comment": "QCA Rome Bluetooth firmware - macos_helios300"
+      },
+      "requires": [
+        "Lilu.kext",
+        "BlueToolFixup.kext"
+      ],
+      "hardware": [
+        {
+          "bus": "usb",
+          "vendor": "04ca",
+          "device": "3016"
+        }
+      ],
+      "boot_args_optional": [
+        {
+          "arg": "-qcarpprobe",
+          "what": "read-only probe, no firmware download"
+        },
+        {
+          "arg": "-qcarpoff",
+          "what": "the kext does not attach"
+        },
+        {
+          "arg": "-x",
+          "what": "macOS safe mode (OpenCore picker: Shift+Enter): this kext logs one line and does not attach; the way back from a bad build without Recovery or the stick"
+        }
+      ],
+      "requires_restart": true,
+      "contents_sha256": {
+        "Contents/Info.plist": "d94897927809014f8afd2aeeb6f8aac0c4c5583d16c0ed5bf89eda0c5afd4961",
+        "Contents/MacOS/QCARomePatchRAM": "79b5eeb452393778107b0689cd95512a4ab3a30f85324067996c1edd03beb450",
+        "Contents/Resources/LICENSE": "a45d0bb572ed792ed34627a72621834b3ba92aab6e2cc4e04301dee7a728d753",
+        "Contents/Resources/LICENSE.QualcommAtheros_ath10k": "337a55102138d7baa143ee4a4c6c91693e0113fece35d380b2a12109e8c23b3f",
+        "Contents/Resources/NOTICE.qca": "600276e0992c8e5a85300d605fb2db6132ffcf2a21ddcfd0e8566a19e0f491c3"
+      },
+      "version": "0.2.0",
+      "file": "QCARomePatchRAM.kext.zip",
+      "sha256": "b3d40db05ffa817a260ca683db31c9d7931bf2ba120e74457c231eb7b3655aed",
+      "size": 80039,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/QCARomePatchRAM.kext.zip",
+      "signed": "ad-hoc (rcodesign)"
+    },
+    {
+      "name": "Ath10kMac.kext",
+      "kind": "kext",
+      "bundle_id": "br.com.jonasw8.driver.ath10kmac",
+      "source": {
+        "tree": "self",
+        "path": "kexts/wifi"
+      },
+      "built_by": "cross",
+      "licence": "GPL-3.0-only",
+      "contains_firmware": "QCA6174 firmware, OTP and the Acer 11ad:0807 board data from linux-firmware (Qualcomm licence)",
+      "status": "pre-release: the ath10k core (firmware, board data, DMA) under AirportAth10k; runs on macOS 26.7.2 (hardware runs 4-6: radio on, scans, network list, association reached); completed joins and sleep/wake reload not yet confirmed on hardware (docs/WIFI-NATIVE.md); host-tested and cross-checked against Linux ath10k",
+      "install": "opencore",
+      "opencore": {
+        "order": 140,
+        "BundlePath": "Ath10kMac.kext",
+        "ExecutablePath": "Contents/MacOS/Ath10kMac",
+        "PlistPath": "Contents/Info.plist",
+        "Arch": "x86_64",
+        "MinKernel": "25.0.0",
+        "MaxKernel": "25.99.99",
+        "Enabled": true,
+        "Comment": "QCA6174 Wi-Fi - macos_helios300"
+      },
+      "requires": [],
+      "conflicts": [
+        "AirportItlwm.kext",
+        "itlwm.kext",
+        "AirPortAtheros40-Tahoe.kext"
+      ],
+      "hardware": [
+        {
+          "bus": "pci",
+          "vendor": "168c",
+          "device": "003e",
+          "subsystem_vendor": "11ad",
+          "subsystem_device": "0807"
+        }
+      ],
+      "boot_args_optional": [
+        {
+          "arg": "ath10k_cc=IN",
+          "what": "overrides the country release.sh baked into the kext (Ath10kCountryCode, see personality in the manifest; release.sh --wifi-country, default IN). 1401 does not delete boot-args from NVRAM, so on an installed Mac set it with sudo nvram boot-args=..., not only in config.plist"
+        },
+        {
+          "arg": "ath10k_txpower=20",
+          "what": "TX power cap in dBm (default: the regdb limit per channel)"
+        },
+        {
+          "arg": "-airportath10k_off",
+          "what": "kill switch: the whole Wi-Fi stack stays off (Ath10kMac declines in probe: no firmware, no front end); tells whether a boot or sleep problem is Wi-Fi"
+        },
+        {
+          "arg": "ath10k_wake_reinit=0",
+          "what": "after wake, the guarded restart instead of the in-place firmware reload"
+        },
+        {
+          "arg": "-x",
+          "what": "macOS safe mode (OpenCore picker: Shift+Enter): this kext logs one line and does not attach; the way back from a bad build without Recovery or the stick"
+        }
+      ],
+      "requires_restart": true,
+      "personality": {
+        "Ath10kCountryCode": {
+          "string": "IN"
+        }
+      },
+      "contents_sha256": {
+        "Contents/Info.plist": "04ab7784f50169bb5eed22a19feccb1dba895fa515d76d1a0816fa38a733ca6c",
+        "Contents/MacOS/Ath10kMac": "7f1345df98f465633fef9628d3eecdb10c92bfd8ffeb380b465abecb39f98f7b",
+        "Contents/Resources/LICENSE": "605e9047a563c5c8396ffb18232aa4304ec56586aee537c45064c6fb425e44ad",
+        "Contents/Resources/LICENSE.QualcommAtheros_ath10k": "337a55102138d7baa143ee4a4c6c91693e0113fece35d380b2a12109e8c23b3f",
+        "Contents/Resources/firmware-manifest.json": "33bf302175c465a2ba3302d3a83207d8793355acb966b163787e2c8d20e0d661",
+        "Contents/Resources/notice_ath10k_firmware-6.txt": "8ce5c6ea0542bf4aac31fc3ae16a39792ad22d0eae4543063fac56fb3380f021"
+      },
+      "version": "0.1.0",
+      "file": "Ath10kMac.kext.zip",
+      "sha256": "adc8fc7b32f0ff02d81038ad6840ed136b562565ca6555b58a862ca6c487c503",
+      "size": 744393,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/Ath10kMac.kext.zip",
+      "signed": "ad-hoc (rcodesign)",
+      "update_group": "wifi"
+    },
+    {
+      "name": "AirportAth10k.kext",
+      "kind": "kext",
+      "bundle_id": "com.helios300.AirportAth10k",
+      "source": {
+        "tree": "self",
+        "path": "kexts/wifi/native"
+      },
+      "built_by": "cross",
+      "licence": "GPL-3.0-only",
+      "status": "pre-release: native macOS 26 Wi-Fi front end (IO80211/Skywalk) over the Ath10kMac core, links the core by bundle id so it loads after it; on macOS 26.7.2 the card is Wi-Fi en1 with power, scans and the network list; the join fix after hardware run 6 awaits its hardware run (docs/WIFI-NATIVE.md)",
+      "install": "opencore",
+      "opencore": {
+        "order": 145,
+        "BundlePath": "AirportAth10k.kext",
+        "ExecutablePath": "Contents/MacOS/AirportAth10k",
+        "PlistPath": "Contents/Info.plist",
+        "Arch": "x86_64",
+        "MinKernel": "25.0.0",
+        "MaxKernel": "25.99.99",
+        "Enabled": true,
+        "Comment": "QCA6174 native Wi-Fi front end - macos_helios300"
+      },
+      "requires": [
+        "Ath10kMac.kext"
+      ],
+      "hardware": [
+        {
+          "bus": "pci",
+          "vendor": "168c",
+          "device": "003e",
+          "subsystem_vendor": "11ad",
+          "subsystem_device": "0807"
+        }
+      ],
+      "boot_args_optional": [
+        {
+          "arg": "-airportath10k_frontoff",
+          "what": "keep the Ath10kMac core, skip only AirportAth10k"
+        },
+        {
+          "arg": "ath10k_native_delay=90",
+          "what": "diagnostic only: start() returns at once and the bring-up runs N seconds later (max 600), so login and SSH come first; not for normal use"
+        },
+        {
+          "arg": "-x",
+          "what": "macOS safe mode (OpenCore picker: Shift+Enter): this kext logs one line and does not attach; the way back from a bad build without Recovery or the stick"
+        }
+      ],
+      "requires_restart": true,
+      "contents_sha256": {
+        "Contents/Info.plist": "7a3ec85f9e0a922023a3192906dba5801734d6d48c8cbb7743c689f529ecc34c",
+        "Contents/MacOS/AirportAth10k": "a126b24d9638111debab2a79ead5f93071bef3720929c7bb3192f9ac0d8f4f9e",
+        "Contents/Resources/LICENSE": "605e9047a563c5c8396ffb18232aa4304ec56586aee537c45064c6fb425e44ad",
+        "Contents/Resources/NOTICE": "c8397cc1dc5bf9f66ddea0eafcc6a00633b12d30a410cb9c425903b6c23b15e0"
+      },
+      "version": "0.1.0",
+      "file": "AirportAth10k.kext.zip",
+      "sha256": "4f2474ec83b1776e5169e3c6c0ce6c6d843c7c14bc9515d95e113268f4e9f1cd",
+      "size": 75877,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/AirportAth10k.kext.zip",
+      "signed": "ad-hoc (rcodesign)",
+      "update_group": "wifi"
+    },
+    {
+      "name": "SSDT-PG106-HDAU.aml",
+      "kind": "ssdt",
+      "source": {
+        "tree": "driver",
+        "path": "pascal/fb/acpi/SSDT-PG106-HDAU.dsl"
+      },
+      "built_by": "iasl",
+      "licence": "GPL-2.0-only",
+      "status": "pre-release: makes the GP106 HDA function 01:00.1 visible from boot (SSDT11 MLTF)",
+      "install": "opencore",
+      "acpi": {
+        "order": 100,
+        "Path": "SSDT-PG106-HDAU.aml",
+        "Enabled": true,
+        "Comment": "GP106 HDA function 01:00.1 visible from boot"
+      },
+      "requires": [],
+      "hardware": [
+        {
+          "bus": "pci",
+          "vendor": "10de",
+          "device": "1c20",
+          "subsystem_vendor": "1025",
+          "subsystem_device": "118b"
+        }
+      ],
+      "requires_restart": true,
+      "version": "0.1.1",
+      "file": "SSDT-PG106-HDAU.aml",
+      "sha256": "77454d1ec33439267239638aaa3fb790acfe7a2f3fa16c9b2f0be3263548ffa5",
+      "size": 240,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/SSDT-PG106-HDAU.aml"
+    },
+    {
+      "name": "SSDT-HS07-UPC.aml",
+      "kind": "ssdt",
+      "source": {
+        "tree": "self",
+        "path": "kexts/bluetooth/acpi/SSDT-HS07-UPC.dsl"
+      },
+      "built_by": "iasl",
+      "licence": "GPL-2.0-only",
+      "status": "pre-release: marks USB 2 port 7 (internal Bluetooth 04ca:3016) connectable + internal (_UPC type 0xFF); the DSDT has no _UPC there",
+      "install": "opencore",
+      "acpi": {
+        "order": 110,
+        "Path": "SSDT-HS07-UPC.aml",
+        "Enabled": true,
+        "Comment": "HS07 internal Bluetooth port (_UPC 0xFF)"
+      },
+      "requires": [],
+      "hardware": [
+        {
+          "bus": "usb",
+          "vendor": "04ca",
+          "device": "3016"
+        }
+      ],
+      "requires_restart": true,
+      "version": "0.1.1",
+      "file": "SSDT-HS07-UPC.aml",
+      "sha256": "627c6c79195a9f6e87a22af84c278c848d5f43d7a6b7ab4485b8bb9ff1ce62f0",
+      "size": 105,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/SSDT-HS07-UPC.aml"
+    },
+    {
+      "name": "PG106Accel.kext",
+      "kind": "kext",
+      "bundle_id": "com.nullmoth.PG106Accel",
+      "source": {
+        "tree": "driver",
+        "path": "kexts/PG106Accel"
+      },
+      "built_by": "cross",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "status": "pre-release: Metal accelerator; links IOAcceleratorFamily2, which macOS 26.7.2 keeps only in SystemKernelExtensions.kc, so it is installed into /Library/Extensions after macOS is installed; not yet loaded on macOS",
+      "install": "library-extensions",
+      "requires": [
+        "PG106.kext"
+      ],
+      "hardware": [
+        {
+          "bus": "pci",
+          "vendor": "10de",
+          "device": "1c20",
+          "subsystem_vendor": "1025",
+          "subsystem_device": "118b"
+        }
+      ],
+      "boot_args_optional": [
+        {
+          "arg": "-pg106acceloff",
+          "what": "PG106Accel does not attach"
+        },
+        {
+          "arg": "pg106accel_display=0",
+          "what": "render offload only, no HDMI display pipe"
+        },
+        {
+          "arg": "-x",
+          "what": "macOS safe mode (OpenCore picker: Shift+Enter): this kext logs one line and does not attach; the way back from a bad build without Recovery or the stick"
+        }
+      ],
+      "requires_restart": true,
+      "contents_sha256": {
+        "Contents/Info.plist": "2227c84275efa290da4af6fa238b97444eabf19ce32df8b6156f5bc719faae8c",
+        "Contents/MacOS/PG106Accel": "dba0fdd1869566bddb775f9e083442ef6bc86ed70d5098c2fbffa1da2766d11a",
+        "Contents/_CodeSignature/CodeResources": "6686de10a28a2fe11b36cbb86dcbacc827cfc4ea116b4dabf1845e5aee629e9b"
+      },
+      "version": "0.2",
+      "file": "PG106Accel.kext.zip",
+      "sha256": "36e569e8902f514b6894f805256fd2f68556b9ac50084ae07a19c27020cceeae",
+      "size": 54295,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/PG106Accel.kext.zip",
+      "signed": "ad-hoc (rcodesign)",
+      "update_group": "pg106"
+    },
+    {
+      "name": "NVMTLDriver.bundle",
+      "kind": "bundle",
+      "bundle_id": "com.nullmoth.NVMTLDriver",
+      "source": {
+        "tree": "driver",
+        "path": "plugin"
+      },
+      "built_by": "cross",
+      "licence": "PolyForm-Noncommercial-1.0.0 (plugin); Apache-2.0 WITH LLVM-exception (Contents/MacOS/air-runtime/libLLVM.dylib)",
+      "status": "pre-release: Metal plugin (MTLDevice for the GP106 through NVK) with its in-process AIR reader; never loaded on macOS",
+      "third_party": [
+        {
+          "path": "Contents/MacOS/air-runtime/libLLVM.dylib",
+          "what": "upstream LLVM 23.1.4 (llvmorg-23.1.4), cross-built by tools/release/cross-air-llvm.sh: components Core, BitReader, IRReader, Passes, Support, no code generator, no zlib/zstd; the plugin reads Metal AIR bitcode with it through the LLVM C API (NVMTLLibraryLoad.m). Release gate: tools/release/check-air-llvm.py (every C function the plugin resolves is exported; Apple AIR from nvconv.metallib parsed and run through the plugin's pipelines by LLVM 23.1.4)",
+          "licence": "Apache-2.0 WITH LLVM-exception; includes BLAKE3 (CC0-1.0 OR Apache-2.0) and Henry Spencer's regex (BSD-style)",
+          "notices": [
+            "Contents/Resources/air-runtime/LLVM-LICENSE.txt",
+            "Contents/Resources/air-runtime/BLAKE3-LICENSE.txt",
+            "Contents/Resources/air-runtime/regex-COPYRIGHT.txt"
+          ],
+          "source_url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.4/llvm-project-23.1.4.src.tar.xz",
+          "source_sha256": "819ecf7351f1a66f76b2d701d8942faaf5faeb324cb90c9d5b090de142434bb2"
+        }
+      ],
+      "install": "gpu-bundles",
+      "install_path": "/Library/GPUBundles/NVMTLDriver.bundle",
+      "requires": [
+        "PG106Accel.kext",
+        "libnvmtl_translate.dylib",
+        "NVK-Pascal"
+      ],
+      "optional": true,
+      "hardware": [
+        {
+          "bus": "pci",
+          "vendor": "10de",
+          "device": "1c20"
+        }
+      ],
+      "requires_restart": false,
+      "contents_sha256": {
+        "Contents/Info.plist": "267bca40db985545d268bc3c911d7d5cc0ffb368133892699decf01ea544011c",
+        "Contents/MacOS/NVMTLDriver": "ff8a695b4da7f9ec816f1d6450ac1086c5d03eaeebb54e28df51408bd30bafe7",
+        "Contents/MacOS/air-runtime/libLLVM.dylib": "13233861830ed7ad857ab8b84a295f169d096437fc61659898934f9d66f5b656",
+        "Contents/Resources/air-runtime/BLAKE3-LICENSE.txt": "13233861830ed7ad857ab8b84a295f169d096437fc61659898934f9d66f5b656",
+        "Contents/Resources/air-runtime/LLVM-LICENSE.txt": "13233861830ed7ad857ab8b84a295f169d096437fc61659898934f9d66f5b656",
+        "Contents/Resources/air-runtime/regex-COPYRIGHT.txt": "13233861830ed7ad857ab8b84a295f169d096437fc61659898934f9d66f5b656",
+        "Contents/_CodeSignature/CodeResources": "6686de10a28a2fe11b36cbb86dcbacc827cfc4ea116b4dabf1845e5aee629e9b"
+      },
+      "version": "0.1.0",
+      "file": "NVMTLDriver.bundle.zip",
+      "sha256": "1c47617740c6f944324ba1c6970ed8f66e39745cf17b4e7050afa6f07ef76b45",
+      "size": 822273,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/NVMTLDriver.bundle.zip",
+      "signed": "ad-hoc (rcodesign)"
+    },
+    {
+      "name": "libnvmtl_translate.dylib",
+      "kind": "dylib",
+      "source": {
+        "tree": "driver",
+        "path": "translator"
+      },
+      "built_by": "cross",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "status": "pre-release: AIR to SPIR-V shader translator the Metal plugin loads",
+      "install": "gpu-bundles",
+      "install_path": "/Library/GPUBundles/nvmtl/libnvmtl_translate.dylib",
+      "requires": [],
+      "optional": true,
+      "requires_restart": false,
+      "version": "0.1.1",
+      "file": "libnvmtl_translate.dylib",
+      "sha256": "9a14dd23cc1381e36356e1b8262a8c318c53e1a5590000679f00affe77c11ab4",
+      "size": 15255424,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/libnvmtl_translate.dylib",
+      "signed": "ad-hoc (rcodesign)"
+    },
+    {
+      "name": "NVK-Pascal",
+      "kind": "dylib",
+      "source": {
+        "tree": "driver",
+        "path": "nvk/pascal"
+      },
+      "built_by": "cross",
+      "licence": "MIT",
+      "licence_files": [
+        "Mesa-license.rst"
+      ],
+      "status": "pre-release: Mesa NVK + NAK with the GP106 backend (libvulkan_nouveau.dylib + nvk_icd.json)",
+      "install": "gpu-bundles",
+      "install_path": "/Library/GPUBundles/nvmtl/",
+      "requires": [],
+      "optional": true,
+      "requires_restart": false,
+      "contents_sha256": {
+        "libvulkan_nouveau.dylib": "c6fdb3769fe5cd0bf6274441af80aae67bd5893816d8ccb1395aa52ee86489a7",
+        "nvk_icd.json": "f6f5a58b5b819f7b00925c455133066993a2443f3c501a2b7474df0c0103debc"
+      },
+      "version": "0.1.1",
+      "file": "NVK-Pascal.zip",
+      "sha256": "1d2d438b50d21453931ea45752a44548424c26a46be5954a7fc12284e81995c6",
+      "size": 4533001,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/NVK-Pascal.zip",
+      "signed": "ad-hoc (rcodesign)"
+    },
+    {
+      "name": "audio-voodoohda.sh",
+      "kind": "script",
+      "source": {
+        "tree": "self",
+        "path": "tools/macos/audio-voodoohda.sh"
+      },
+      "built_by": "copy",
+      "licence": "GPL-2.0-only",
+      "status": "audio option 1 (fallback): VoodooHDA 3.6.8 (sha256-pinned download) into /Library/Extensions with a tuned Info.plist (TUNE); reversible, no root-volume change; no speaker EQ, no HDMI audio; installed on 26.7.2 on 2026-11-08 (stock plist): works, sounds bad",
+      "install": "stick-only",
+      "requires": [],
+      "requires_restart": false,
+      "version": "0.1.1",
+      "file": "audio-voodoohda.sh",
+      "sha256": "2e194c7e0d15eff2992d2d634628c5acd47bd5f41496534c706236b3cc9b8e3c",
+      "size": 17283,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/audio-voodoohda.sh"
+    },
+    {
+      "name": "audio-applehda.sh",
+      "kind": "script",
+      "source": {
+        "tree": "self",
+        "path": "tools/macos/audio-applehda.sh"
+      },
+      "built_by": "copy",
+      "licence": "GPL-2.0-only",
+      "status": "audio option 2 (recommended): AppleHDA 600.2 put back on the root volume as OCLP 3.0.0's Modern Audio set does (payload and KDK 25G332 sha256-pinned), auxiliary collection rebuilt for PG106FB/PG106Accel; HDMI audio with NMHDA; FileVault must be off; a macOS update removes it; sandbox-tested on Linux, not run on the laptop yet",
+      "install": "stick-only",
+      "requires": [],
+      "requires_restart": false,
+      "version": "0.1.1",
+      "file": "audio-applehda.sh",
+      "sha256": "d25ca77eb4b90751c8c3b40fc9e1d73c819627ef372bc5f06787a0c7c7687a1c",
+      "size": 35182,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/audio-applehda.sh"
+    },
+    {
+      "name": "install-gpu.sh",
+      "kind": "script",
+      "source": {
+        "tree": "self",
+        "path": "tools/macos/install-gpu.sh"
+      },
+      "built_by": "copy",
+      "licence": "GPL-2.0-only",
+      "status": "installs PG106FB, PG106Accel, the Metal plugin, the translator, NVK and the per-app allow list (/Library/GPUBundles/nvmtl-allow.txt) from the files next to it, each zip and every file inside it checked against manifest.json; MODE=dry-run|install|revert|status",
+      "install": "stick-only",
+      "requires": [],
+      "requires_restart": false,
+      "version": "0.1.1",
+      "file": "install-gpu.sh",
+      "sha256": "cc72ae6ea1bc67ff35baf8bf62a76bb861e781764c7bc9907a6721b7d0efbe43",
+      "size": 18988,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/install-gpu.sh"
+    },
+    {
+      "name": "gpu-apps.sh",
+      "kind": "script",
+      "source": {
+        "tree": "driver",
+        "path": "tools/macos/gpu-apps.sh"
+      },
+      "built_by": "copy",
+      "licence": "PolyForm-Noncommercial-1.0.0",
+      "status": "which apps render on the GTX 1060 (the prime-run equivalent), after the gpu step: list, add, remove, deny, check the rules in /Library/GPUBundles/nvmtl-allow.txt; run one launch on the GP106 without a rule (run --log keeps the plugin's log); never run on the laptop yet",
+      "install": "stick-only",
+      "requires": [],
+      "requires_restart": false,
+      "version": "0.1.1",
+      "file": "gpu-apps.sh",
+      "sha256": "d35df7faa9aa64f4c058930ff0bdea73041890f1c65086c548a4c4960c67ac32",
+      "size": 5052,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/gpu-apps.sh"
+    },
+    {
+      "name": "Helios 300 Setup.app",
+      "kind": "app",
+      "bundle_id": "org.helios300.setup",
+      "source": {
+        "tree": "self",
+        "path": "apps/HeliosSetup"
+      },
+      "built_by": "cross",
+      "licence": "GPL-2.0-only (the app and the tools/macos scripts in Contents/Resources); PolyForm-Noncommercial-1.0.0 (Contents/Resources/gpu-apps.sh, from nvidia-macos-driver)",
+      "status": "pre-release: the post-install app (and its helios-setup CLI): the post_install checklist with live status, dry run before every install, one driver change per restart, OpenCore to the internal disk, updates with rollback; it runs the release scripts it carries (sha256-checked against manifest.json); cross-built on Linux, never run on macOS yet",
+      "install": "applications",
+      "install_path": "/Applications/Helios 300 Setup.app",
+      "requires": [],
+      "requires_restart": false,
+      "contents_sha256": {
+        "Contents/Info.plist": "300d30a4ab71aba8263fd00928aa47f9661e9725a5d9283e26bde1fb94689140",
+        "Contents/MacOS/HeliosSetup": "2f73349cfc4630255319c6c8dfc1b46a8996ace9d14d8e07563b165915918ec2"
+      },
+      "version": "0.1.1",
+      "file": "Helios-300-Setup.app.zip",
+      "sha256": "07b9116876ae954f01b35f807eae8ca70495d29304321d504d4f1406ccc85c54",
+      "size": 903,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/Helios-300-Setup.app.zip",
+      "signed": "ad-hoc (rcodesign)"
+    },
+    {
+      "name": "POST-INSTALL.md",
+      "kind": "doc",
+      "source": {
+        "tree": "self",
+        "path": "tools/release/spec.json"
+      },
+      "built_by": "generated",
+      "licence": "CC-BY-4.0",
+      "status": "the post-install steps in order with their exact commands, and every file on the stick (tools/release/post_install_doc.py, from this manifest's post_install)",
+      "install": "stick-only",
+      "requires": [],
+      "requires_restart": false,
+      "version": "0.1.1",
+      "file": "POST-INSTALL.md",
+      "sha256": "489b7c5a85c97511c1f7c222fac034dfe00f73b81c085b314b77532e12d4db7c",
+      "size": 10755,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/POST-INSTALL.md"
+    },
+    {
+      "name": "NVIDIA-firmware-LICENCE.txt",
+      "kind": "firmware-licence",
+      "source": {
+        "tree": "driver",
+        "path": "licenses/NVIDIA-firmware-LICENCE.txt"
+      },
+      "built_by": "copy",
+      "licence": "NVIDIA firmware licence (linux-firmware LICENCE.nvidia)",
+      "status": "covers the GP106 firmware inside PG106.kext",
+      "install": "stick-only",
+      "requires": [],
+      "requires_restart": false,
+      "version": "0.1.1",
+      "file": "NVIDIA-firmware-LICENCE.txt",
+      "sha256": "bc5225a57f49c5249dcf238e4ae6437811677a2a8a7f579c3d839e058653ee44",
+      "size": 6212,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/NVIDIA-firmware-LICENCE.txt"
+    },
+    {
+      "name": "Mesa-license.rst",
+      "kind": "firmware-licence",
+      "source": {
+        "tree": "driver",
+        "path": "licenses/Mesa-license.rst"
+      },
+      "built_by": "copy",
+      "licence": "MIT (Mesa)",
+      "status": "covers NVK-Pascal",
+      "install": "stick-only",
+      "requires": [],
+      "optional": true,
+      "requires_restart": false,
+      "version": "0.1.1",
+      "file": "Mesa-license.rst",
+      "sha256": "0d1a0472ecc81830e75c20d59b0ea02841e3db21255e0ebad97ab682c54d6615",
+      "size": 1816,
+      "url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/Mesa-license.rst"
+    }
+  ],
+  "external_kexts": [
+    {
+      "name": "Lilu.kext",
+      "source": "acidanthera/Lilu",
+      "min_version": "1.6.0",
+      "why": "NMHDA and QCARomePatchRAM's BlueToolFixup are Lilu plugins"
+    },
+    {
+      "name": "AppleALC.kext",
+      "source": "acidanthera/AppleALC",
+      "min_version": "1.9.0",
+      "why": "NMHDA pairs the GP106 HDMI audio through AppleALC/AppleHDA"
+    },
+    {
+      "name": "BlueToolFixup.kext",
+      "source": "acidanthera/BrcmPatchRAM",
+      "min_version": "2.7.2",
+      "why": "2.7.2 added the bluetoothd patches for macOS 26; exactly one copy"
+    }
+  ],
+  "config": {
+    "boot_args": [],
+    "nvram_add": {
+      "7C436110-AB2A-4BBB-A880-FE41995C9F82": {
+        "bluetoothExternalDongleFailed": {
+          "data": "00"
+        },
+        "bluetoothInternalControllerInfo": {
+          "data": "0000000000000000000000000000"
+        }
+      }
+    },
+    "nvram_delete": {
+      "7C436110-AB2A-4BBB-A880-FE41995C9F82": [
+        "bluetoothExternalDongleFailed",
+        "bluetoothInternalControllerInfo"
+      ]
+    },
+    "device_properties": {
+      "PciRoot(0x0)/Pci(0x1,0x0)/Pci(0x0,0x0)": {
+        "hda-gfx": {
+          "string": "onboard-2"
+        }
+      },
+      "PciRoot(0x0)/Pci(0x1,0x0)/Pci(0x0,0x1)": {
+        "hda-gfx": {
+          "string": "onboard-2"
+        }
+      },
+      "PciRoot(0x0)/Pci(0x2,0x0)": {
+        "applbkl": {
+          "data": "01000000"
+        }
+      }
+    },
+    "usb_ports": [
+      {
+        "controller": "8086:a12f",
+        "port": "HS07",
+        "type": 255,
+        "what": "internal Bluetooth (04ca:3016); without it macOS treats the controller as an external dongle. Provided by SSDT-HS07-UPC.aml (macOS reads the type from ACPI with UTBDefault); a full UTBMap needs a USBToolBox mapping run"
+      }
+    ],
+    "forbidden": {
+      "kexts": [
+        "NVRM.kext",
+        "NVRMFB.kext",
+        "NVAccel.kext",
+        "NVRMAGDC.kext",
+        "BrcmPatchRAM3.kext",
+        "BrcmBluetoothInjector.kext",
+        "BrcmFirmwareData.kext",
+        "IntelBluetoothFirmware.kext",
+        "IntelBTPatcher.kext",
+        "IntelBluetoothInjector.kext"
+      ],
+      "boot_args": [
+        "-wegnoegpu"
+      ],
+      "device_properties": {
+        "PciRoot(0x0)/Pci(0x1,0x0)/Pci(0x0,0x0)": [
+          "disable-gpu"
+        ]
+      },
+      "acpi": [
+        "SSDT-Disable_GPU_PEG0.aml"
+      ]
+    }
+  },
+  "update_groups": [
+    {
+      "name": "wifi",
+      "members": [
+        "Ath10kMac.kext",
+        "AirportAth10k.kext"
+      ],
+      "together": "always",
+      "what": "Wi-Fi: Ath10kMac and AirportAth10k (the front end links the core by bundle id and calls its interface)"
+    },
+    {
+      "name": "pg106",
+      "members": [
+        "PG106.kext",
+        "PG106FB.kext",
+        "PG106Accel.kext"
+      ],
+      "together": "abi-change",
+      "abi_from": "pascal/bridge/include/pg106_kif.h",
+      "what": "GTX 1060 kernel interface: PG106FB and PG106Accel call PG106 through pg106_kif.h; when its ABI changes, all three in one restart",
+      "abi": "1.0"
+    }
+  ],
+  "health": [
+    {
+      "id": "boot",
+      "title": "Startup",
+      "probes": [
+        {
+          "label": "started from",
+          "probe": "boot-source",
+          "equals": "internal"
+        },
+        {
+          "label": "OpenCore",
+          "probe": "nvram",
+          "var": "4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102:opencore-version"
+        },
+        {
+          "label": "macOS build",
+          "probe": "build"
+        }
+      ]
+    },
+    {
+      "id": "wifi",
+      "title": "Wi-Fi",
+      "probes": [
+        {
+          "label": "driver",
+          "probe": "kext",
+          "bundle_id": "com.helios300.AirportAth10k"
+        },
+        {
+          "label": "joined",
+          "probe": "ioreg",
+          "class": "AirportAth10k",
+          "key": "AirportAth10kJoinState",
+          "equals": "connected"
+        },
+        {
+          "label": "link",
+          "probe": "ioreg",
+          "class": "Ath10kPCIDevice",
+          "key": "Ath10kConnectionState"
+        },
+        {
+          "label": "band",
+          "probe": "ioreg",
+          "class": "Ath10kPCIDevice",
+          "key": "Ath10kConnectionChannel",
+          "format": "band"
+        },
+        {
+          "label": "IP address",
+          "probe": "ip",
+          "port": "Wi-Fi"
+        },
+        {
+          "label": "network",
+          "probe": "ssid",
+          "port": "Wi-Fi",
+          "private": true
+        }
+      ]
+    },
+    {
+      "id": "bluetooth",
+      "title": "Bluetooth",
+      "probes": [
+        {
+          "label": "firmware loader",
+          "probe": "kext",
+          "bundle_id": "io.github.akshaynexus.helios300.QCARomePatchRAM"
+        },
+        {
+          "label": "state",
+          "probe": "profiler",
+          "type": "SPBluetoothDataType",
+          "key": "State",
+          "equals": "On"
+        }
+      ]
+    },
+    {
+      "id": "gpu",
+      "title": "GTX 1060",
+      "probes": [
+        {
+          "label": "ready",
+          "probe": "ioreg",
+          "class": "PG106",
+          "key": "PG106Ready",
+          "equals": "Yes"
+        },
+        {
+          "label": "stage",
+          "probe": "ioreg",
+          "class": "PG106",
+          "key": "PG106Stage"
+        },
+        {
+          "label": "error",
+          "probe": "ioreg",
+          "class": "PG106",
+          "key": "PG106Error"
+        },
+        {
+          "label": "self-test",
+          "probe": "ioreg",
+          "class": "PG106",
+          "key": "PG106SelfTest"
+        },
+        {
+          "label": "Metal accelerator",
+          "probe": "ioreg",
+          "class": "PG106Accel",
+          "key": "PG106AccelState"
+        }
+      ]
+    },
+    {
+      "id": "hdmi",
+      "title": "HDMI",
+      "probes": [
+        {
+          "label": "framebuffer",
+          "probe": "kext",
+          "bundle_id": "org.helios300.pg106fb",
+          "format": "info"
+        },
+        {
+          "label": "monitor connected",
+          "probe": "ioreg",
+          "class": "PG106FB",
+          "key": "PG106FBConnected"
+        },
+        {
+          "label": "modes",
+          "probe": "ioreg",
+          "class": "PG106FB",
+          "key": "PG106FBModeCount"
+        }
+      ]
+    },
+    {
+      "id": "brightness",
+      "title": "Brightness",
+      "probes": [
+        {
+          "label": "slider",
+          "probe": "ioreg",
+          "class": "AppleBacklightDisplay",
+          "key": "brightness",
+          "contains": "value"
+        }
+      ]
+    },
+    {
+      "id": "audio",
+      "title": "Audio",
+      "probes": [
+        {
+          "label": "AppleHDA",
+          "probe": "kext",
+          "bundle_id": "com.apple.driver.AppleHDA",
+          "format": "info"
+        },
+        {
+          "label": "VoodooHDA",
+          "probe": "kext",
+          "bundle_id": "org.voodoo.driver.VoodooHDA",
+          "format": "info"
+        },
+        {
+          "label": "HDMI audio (NMHDA)",
+          "probe": "kext",
+          "bundle_id": "com.nullmoth.NMHDA",
+          "format": "info"
+        },
+        {
+          "label": "devices",
+          "probe": "profiler",
+          "type": "SPAudioDataType",
+          "items": "Devices"
+        }
+      ]
+    },
+    {
+      "id": "sleep",
+      "title": "Sleep",
+      "probes": [
+        {
+          "label": "sleep disabled",
+          "probe": "pmset",
+          "key": "SleepDisabled"
+        },
+        {
+          "label": "PG106 last wake",
+          "probe": "ioreg",
+          "class": "PG106",
+          "key": "PG106WakeResult"
+        }
+      ]
+    }
+  ],
+  "app_help": {
+    "sections": [
+      {
+        "title": "If macOS does not start after a change",
+        "lines": [
+          "In the OpenCore picker select macOS and press Shift+Enter: safe mode (-x). PG106, PG106FB, PG106Accel and the Wi-Fi kexts stand down there.",
+          "In safe mode open Helios 300 Setup and press Undo on the last step (or run helios-setup undo <step>), then restart.",
+          "If OpenCore itself does not come up: F12 at the Predator logo and pick the USB stick; its EFI is the known-good fallback.",
+          "After an update: Updates > Roll back last update (or helios-setup rollback) restores the .prev kexts and the config.plist backup."
+        ]
+      },
+      {
+        "title": "From Recovery (OpenCore picker > Space > Recovery > Utilities > Terminal)",
+        "lines": [
+          "Audio option 2 (AppleHDA): bless --mount \"/Volumes/Macintosh HD\" --bootefi --last-sealed-snapshot",
+          "then: D=$(ls -d /Volumes/*Data | head -1); cp \"$D/Library/Helios300/audio-applehda/aux-sealed.kc\" \"$D/Library/KernelCollections/AuxiliaryKernelExtensions.kc\"; reboot",
+          "GPU kexts in /Library/Extensions: D=$(ls -d /Volumes/*Data | head -1); rm -rf \"$D/Library/Extensions/PG106FB.kext\" \"$D/Library/Extensions/PG106Accel.kext\" \"$D/Library/KernelCollections/AuxiliaryKernelExtensions.kc\"; reboot (macOS starts without the auxiliary collection and asks to rebuild it; other kexts in /Library/Extensions come back after that)",
+          "Internal EFI: diskutil mount disk0s1; the backups are /Volumes/EFI/EFI-backup-<date>/BOOT and /OC: copy them over /Volumes/EFI/EFI/BOOT and /EFI/OC"
+        ]
+      },
+      {
+        "title": "Boot order",
+        "lines": [
+          "If the Mac starts the stick, Windows or nothing after OpenCore was installed: firmware setup (F2 at the Predator logo) > Boot > Boot priority order, put the internal disk's EFI entry first (on a disk that had Windows it is named Windows Boot Manager), F10 saves.",
+          "F12 at the logo picks a boot device once (Main > F12 Boot Menu must be Enabled).",
+          "Status > Startup says whether this boot came from the internal disk or from the stick."
+        ]
+      }
+    ]
+  },
+  "third_party_kexts": {
+    "source": "https://raw.githubusercontent.com/dortania/build-repo/builds/latest.json",
+    "products": {
+      "Lilu": [
+        {
+          "bundle": "Lilu.kext",
+          "id": "as.vit9696.Lilu"
+        }
+      ],
+      "WhateverGreen": [
+        {
+          "bundle": "WhateverGreen.kext",
+          "id": "as.vit9696.WhateverGreen"
+        }
+      ],
+      "AppleALC": [
+        {
+          "bundle": "AppleALC.kext",
+          "id": "as.vit9696.AppleALC"
+        }
+      ],
+      "VirtualSMC": [
+        {
+          "bundle": "VirtualSMC.kext",
+          "id": "as.vit9696.VirtualSMC"
+        },
+        {
+          "bundle": "SMCProcessor.kext",
+          "id": "as.vit9696.SMCProcessor"
+        },
+        {
+          "bundle": "SMCSuperIO.kext",
+          "id": "ru.joedm.SMCSuperIO"
+        },
+        {
+          "bundle": "SMCBatteryManager.kext",
+          "id": "ru.usrsse2.SMCBatteryManager"
+        }
+      ],
+      "VoodooPS2": [
+        {
+          "bundle": "VoodooPS2Controller.kext",
+          "id": "as.acidanthera.voodoo.driver.PS2Controller"
+        }
+      ],
+      "VoodooI2C": [
+        {
+          "bundle": "VoodooI2C.kext",
+          "id": "com.alexandred.VoodooI2C"
+        },
+        {
+          "bundle": "VoodooI2CHID.kext",
+          "id": "me.kishorprins.VoodooI2CHID"
+        }
+      ],
+      "BrcmPatchRAM": [
+        {
+          "bundle": "BlueToolFixup.kext",
+          "id": "as.acidanthera.BlueToolFixup"
+        }
+      ],
+      "RestrictEvents": [
+        {
+          "bundle": "RestrictEvents.kext",
+          "id": "as.vit9696.RestrictEvents"
+        }
+      ],
+      "RealtekRTL8111": [
+        {
+          "bundle": "RealtekRTL8111.kext",
+          "id": "com.insanelymac.RealtekRTL8111"
+        }
+      ],
+      "NVMeFix": [
+        {
+          "bundle": "NVMeFix.kext",
+          "id": "com.acidanthera.NVMeFix"
+        }
+      ],
+      "BrightnessKeys": [
+        {
+          "bundle": "BrightnessKeys.kext",
+          "id": "as.acidanthera.BrightnessKeys"
+        }
+      ]
+    }
+  },
+  "post_install": [
+    {
+      "step": "opencore",
+      "order": 0,
+      "what": "Install OpenCore to this Mac: EFI/BOOT and EFI/OC from the 1401 stick (or a release-built EFI folder) onto the internal disk's EFI partition, so the Mac starts without the stick. What was there is copied to EFI-backup-<date> on the same partition first; the new copy is staged, verified file by file against the source and only then swapped in; ocvalidate checks config.plist when one for the same OpenCore version is present. Done by Helios 300 Setup.app (or its helios-setup CLI)",
+      "artifacts": [
+        "Helios 300 Setup.app"
+      ],
+      "run": {
+        "check": "helios-setup efi check",
+        "install": "helios-setup efi install",
+        "revert": "helios-setup efi restore",
+        "status": "helios-setup efi status"
+      },
+      "reboot": true,
+      "needs": [
+        "the 1401 stick's EFI folder (EFI/BOOT + EFI/OC) or a release-built one",
+        "free space on the internal EFI partition for the backup and the new copy"
+      ],
+      "notes": [
+        "If the Mac still starts from the stick (or Windows) after the restart: firmware setup (F2 at the Predator logo) > Boot > Boot priority order, put the internal disk's EFI entry first; F12 picks a boot device once",
+        "Undo puts the newest EFI-backup-<date> back (the EFI that was there is kept as EFI-backup-<date>-before-restore)"
+      ],
+      "app": {
+        "title": "Install OpenCore to this Mac",
+        "driver_change": true,
+        "detect": {
+          "installed": [
+            {
+              "probe": "boot-source",
+              "equals": "internal"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "step": "gpu",
+      "order": 10,
+      "what": "PG106FB.kext and PG106Accel.kext into /Library/Extensions (root:wheel 755, kmutil load -p, approve in System Settings if asked, restart): OpenCore cannot inject them, IOGraphicsFamily and IOAcceleratorFamily2 are only in the System KC on 26.7.2. Then the Metal plugin and nvmtl/ (NVK, translator) into /Library/GPUBundles with the plugin's per-app allow list. PG106FB attaches under PG106 once PG106Ready is Yes",
+      "artifacts": [
+        "install-gpu.sh",
+        "PG106FB.kext",
+        "PG106Accel.kext",
+        "NVMTLDriver.bundle",
+        "libnvmtl_translate.dylib",
+        "NVK-Pascal",
+        "gpu-apps.sh"
+      ],
+      "script": "install-gpu.sh",
+      "run": {
+        "check": "MODE=dry-run bash install-gpu.sh",
+        "install": "MODE=install bash install-gpu.sh",
+        "revert": "MODE=revert bash install-gpu.sh",
+        "status": "MODE=status bash install-gpu.sh"
+      },
+      "cwd": "the folder holding the release files and manifest.json (EFI/Helios300 on the stick, or a copy of it)",
+      "reboot": true,
+      "needs": [
+        "SIP: csr-active-config with 0x1 (CSR_ALLOW_UNTRUSTED_KEXTS); 1401 sets 030A0000"
+      ],
+      "notes": [
+        "If the Mac does not come up: Shift+Enter in the OpenCore picker (safe mode, -x): PG106, PG106FB and PG106Accel stand down; then MODE=revert",
+        "Which apps render on the GTX 1060: /Library/GPUBundles/nvmtl-allow.txt (one process name per line, an app's CFBundleExecutable; written only if none exists, system UI denied, no app allowed). One launch without a rule: NVMTL_ENABLE=1 /Applications/Foo.app/Contents/MacOS/Foo",
+        "gpu-apps.sh edits that list: bash gpu-apps.sh list; sudo bash gpu-apps.sh add /Applications/Foo.app (remove, deny the same way); bash gpu-apps.sh check Foo; bash gpu-apps.sh run [--log] /Applications/Foo.app (one launch on the GTX 1060). Changes apply to apps started afterwards",
+        "ONLY=PG106FB (then \"plugin xlate nvk allow\", then PG106Accel: the order of the driver's first-run playbook, nvidia-macos-driver tools/macos/README.md) installs one part per boot"
+      ],
+      "app": {
+        "title": "GTX 1060 display and Metal",
+        "undo_note": "Undo removes every part of the GPU stack that install-gpu.sh installed (MODE=revert), not only this part",
+        "parts": [
+          {
+            "id": "gpu-fb",
+            "title": "HDMI framebuffer (PG106FB)",
+            "env": {
+              "ONLY": "PG106FB"
+            },
+            "artifacts": [
+              "PG106FB.kext"
+            ],
+            "reboot": true,
+            "detect": {
+              "installed": [
+                {
+                  "probe": "file",
+                  "path": "/Library/Extensions/PG106FB.kext"
+                }
+              ],
+              "active": [
+                {
+                  "probe": "kext",
+                  "bundle_id": "org.helios300.pg106fb"
+                }
+              ],
+              "available": [
+                {
+                  "probe": "ioreg",
+                  "class": "PG106",
+                  "key": "PG106Ready",
+                  "equals": "Yes",
+                  "why_not": "PG106 is not up (PG106Ready is not Yes): the GTX 1060 driver on the EFI must work first"
+                },
+                {
+                  "probe": "build",
+                  "equals": "25G332",
+                  "why_not": "the scripts are pinned to macOS 25G332 (their checks and downloads); this Mac runs another build: update the release first"
+                }
+              ],
+              "failed_hint": "PG106FB is installed but not loaded: allow it in System Settings > Privacy & Security, restart; else Check shows MODE=status"
+            }
+          },
+          {
+            "id": "gpu-metal",
+            "title": "Metal plugin, translator and NVK (no restart needed)",
+            "env": {
+              "ONLY": "plugin xlate nvk allow"
+            },
+            "artifacts": [
+              "NVMTLDriver.bundle",
+              "libnvmtl_translate.dylib",
+              "NVK-Pascal"
+            ],
+            "reboot": false,
+            "driver_change": true,
+            "detect": {
+              "installed": [
+                {
+                  "probe": "file",
+                  "path": "/Library/GPUBundles/NVMTLDriver.bundle"
+                },
+                {
+                  "probe": "file",
+                  "path": "/Library/GPUBundles/nvmtl/libnvmtl_translate.dylib"
+                },
+                {
+                  "probe": "file",
+                  "path": "/Library/GPUBundles/nvmtl/libvulkan_nouveau.dylib"
+                },
+                {
+                  "probe": "file",
+                  "path": "/Library/GPUBundles/nvmtl/nvk_icd.json"
+                },
+                {
+                  "probe": "file",
+                  "path": "/Library/GPUBundles/nvmtl-allow.txt"
+                }
+              ],
+              "available": [
+                {
+                  "probe": "ioreg",
+                  "class": "PG106",
+                  "key": "PG106Ready",
+                  "equals": "Yes",
+                  "why_not": "PG106 is not up (PG106Ready is not Yes): the GTX 1060 driver on the EFI must work first"
+                },
+                {
+                  "probe": "build",
+                  "equals": "25G332",
+                  "why_not": "the scripts are pinned to macOS 25G332 (their checks and downloads); this Mac runs another build: update the release first"
+                }
+              ]
+            }
+          },
+          {
+            "id": "gpu-accel",
+            "title": "Metal accelerator (PG106Accel)",
+            "env": {
+              "ONLY": "PG106Accel"
+            },
+            "artifacts": [
+              "PG106Accel.kext"
+            ],
+            "reboot": true,
+            "detect": {
+              "installed": [
+                {
+                  "probe": "file",
+                  "path": "/Library/Extensions/PG106Accel.kext"
+                }
+              ],
+              "active": [
+                {
+                  "probe": "kext",
+                  "bundle_id": "com.nullmoth.PG106Accel"
+                }
+              ],
+              "available": [
+                {
+                  "probe": "ioreg",
+                  "class": "PG106",
+                  "key": "PG106Ready",
+                  "equals": "Yes",
+                  "why_not": "PG106 is not up (PG106Ready is not Yes): the GTX 1060 driver on the EFI must work first"
+                },
+                {
+                  "probe": "build",
+                  "equals": "25G332",
+                  "why_not": "the scripts are pinned to macOS 25G332 (their checks and downloads); this Mac runs another build: update the release first"
+                }
+              ],
+              "failed_hint": "PG106Accel is installed but not loaded: allow it in System Settings > Privacy & Security, restart; PG106AccelState in Status says why"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "step": "audio-applehda",
+      "order": 20,
+      "group": "audio",
+      "choice": 2,
+      "recommended": true,
+      "what": "Audio option 2 (recommended): AppleHDA 600.2 back on the root volume, step for step what OCLP 3.0.0's Modern Audio set does (PatcherSupportPkg 2.0.5 payload and KDK 25G332, both sha256-pinned). AppleALC layout 29 drives the ALC255 with its speaker EQ/limiter, NMHDA gives HDMI audio. The auxiliary collection (PG106FB, PG106Accel) is rebuilt for the new boot/system collections; VoodooHDA (option 1) is removed only after the new snapshot is blessed, so a stop before that leaves the machine as it was. Never let OCLP itself patch: it also wants the Nvidia Web Drivers, which would take the GTX 1060 from PG106",
+      "artifacts": [
+        "audio-applehda.sh"
+      ],
+      "script": "audio-applehda.sh",
+      "run": {
+        "check": "MODE=dry-run bash audio-applehda.sh",
+        "install": "MODE=install bash audio-applehda.sh",
+        "revert": "MODE=revert bash audio-applehda.sh",
+        "status": "MODE=status bash audio-applehda.sh"
+      },
+      "reboot": true,
+      "needs": [
+        "FileVault off",
+        "SIP: csr-active-config with 0x1, 0x2 and 0x800; 1401 sets 030A0000",
+        "SecureBootModel Disabled",
+        "AMFIPass >= 1.2.1 loaded (1401: 1.4.1, -amfipassbeta)",
+        "Lilu + AppleALC (alc-layout-id 29) + NMHDA loaded",
+        "macOS 25G332 (the KDK pin)",
+        "12 GiB free (14 when the KDK is downloaded)",
+        "network for the KDK (1.2 GB) unless cached"
+      ],
+      "rerun_after_macos_update": true,
+      "notes": [
+        "MODE=dry-run changes nothing: it downloads and verifies the KDK into ~/Library/Caches/helios300-audio, mounts the payload read-only and test-builds the auxiliary collection",
+        "If PG106FB or PG106Accel is not loaded after the restart (MODE=status says so): MODE=aux, restart",
+        "Headset mic on the combo jack: test it; docs/HARDWARE.md 'Headset microphone' has the verbs if it is silent",
+        "HDMI audio appears with a monitor on HDMI (PG106FB modeset + ELD); never run on the laptop yet",
+        "A macOS update boots a new sealed snapshot without AppleHDA: bump the script's KDK pin to the new build, then run it again",
+        "Revert: MODE=revert boots the last sealed (Apple) snapshot and puts back its auxiliary collection; from Recovery: bless --mount \"/Volumes/Macintosh HD\" --bootefi --last-sealed-snapshot (full lines in docs/HARDWARE.md)"
+      ],
+      "app": {
+        "title": "Audio: AppleHDA, layout 29, HDMI audio (recommended)",
+        "detect": {
+          "installed": [
+            {
+              "probe": "file",
+              "path": "/System/Library/CoreServices/OpenCore-Legacy-Patcher.plist"
+            }
+          ],
+          "active": [
+            {
+              "probe": "kext",
+              "bundle_id": "com.apple.driver.AppleHDA"
+            }
+          ],
+          "available": [
+            {
+              "probe": "filevault-off",
+              "why_not": "FileVault is on: turn it off (System Settings > Privacy & Security > FileVault) and wait until it has decrypted"
+            },
+            {
+              "probe": "build",
+              "equals": "25G332",
+              "why_not": "pinned to macOS 25G332 (its KDK); this Mac runs another build: the script's KDK pin must be bumped first (a macOS update also removes AppleHDA: run it again after that)"
+            }
+          ],
+          "failed_hint": "the patch record is on the booted system but AppleHDA is not loaded: Check (MODE=status) shows why; Undo boots Apple's sealed snapshot"
+        }
+      }
+    },
+    {
+      "step": "audio-voodoohda",
+      "order": 21,
+      "group": "audio",
+      "choice": 1,
+      "what": "Audio option 1 (fallback): VoodooHDA 3.6.8 into /Library/Extensions (sha256-pinned download) with a tuned Info.plist (TUNE=1: PCM 90, Rec 75, InhibitCache; TUNE=0 keeps the release's). Reversible, no root-volume change; speakers, headphones and microphones through the ALC255; no speaker EQ and NO HDMI audio",
+      "artifacts": [
+        "audio-voodoohda.sh"
+      ],
+      "script": "audio-voodoohda.sh",
+      "run": {
+        "check": "MODE=dry-run bash audio-voodoohda.sh",
+        "install": "MODE=install bash audio-voodoohda.sh",
+        "revert": "MODE=revert bash audio-voodoohda.sh",
+        "status": "MODE=status bash audio-voodoohda.sh"
+      },
+      "reboot": true,
+      "needs": [
+        "SIP: csr-active-config with 0x1; 1401 sets 030A0000",
+        "audio option 2 not installed"
+      ],
+      "notes": [
+        "Use it only if option 2 cannot be used: it sounds worse (no speaker processing)",
+        "No HDMI audio: VoodooHDA does not match the GP106's 10de:10f1 and NMHDA needs AppleHDA",
+        "Other levels: VHDA_PCM=85 VHDA_REC=60 MODE=install (docs/HARDWARE.md 'Option 1 sound'); each change needs a restart",
+        "If headphones or the microphone stay silent with the BIOS pins: NODES=1 MODE=install (ALC255 pin fallback)",
+        "Survives macOS updates (nothing on the root volume)"
+      ],
+      "app": {
+        "title": "Audio: VoodooHDA (fallback)",
+        "detect": {
+          "installed": [
+            {
+              "probe": "file",
+              "path": "/Library/Extensions/VoodooHDA.kext"
+            }
+          ],
+          "active": [
+            {
+              "probe": "kext",
+              "bundle_id": "org.voodoo.driver.VoodooHDA"
+            }
+          ],
+          "available": [
+            {
+              "probe": "build",
+              "equals": "25G332",
+              "why_not": "the scripts are pinned to macOS 25G332 (their checks and downloads); this Mac runs another build: update the release first"
+            }
+          ],
+          "failed_hint": "VoodooHDA is installed but not loaded: allow it in System Settings > Privacy & Security, restart"
+        }
+      }
+    },
+    {
+      "step": "sleep",
+      "order": 90,
+      "what": "Allow sleep again: sudo pmset -a disablesleep 0 (undo: disablesleep 1). Sleep stays disabled until the GTX 1060 driver's sleep/wake has passed checklist (a) of nvidia-macos-driver tools/macos/README.md on this Mac; turn it on for that test, or once it has passed",
+      "artifacts": [
+        "Helios 300 Setup.app"
+      ],
+      "run": {
+        "check": "pmset -g",
+        "install": "sudo pmset -a disablesleep 0",
+        "revert": "sudo pmset -a disablesleep 1",
+        "status": "pmset -g"
+      },
+      "notes": [
+        "With boot-arg pg106_pm=0 PG106 has no power management and the Mac must not sleep: the step is not available then",
+        "A black screen that never wakes: hard reset, boot with pg106_pm=0, report (driver README checklist (a))"
+      ],
+      "app": {
+        "title": "Allow sleep (sleep/wake not verified yet)",
+        "driver_change": false,
+        "detect": {
+          "installed": [
+            {
+              "probe": "pmset",
+              "key": "SleepDisabled",
+              "equals": "1",
+              "negate": true
+            }
+          ],
+          "available": [
+            {
+              "probe": "bootarg",
+              "arg": "pg106_pm=0",
+              "negate": true,
+              "why_not": "boot-arg pg106_pm=0 is set: PG106 has no power management, so the Mac must not sleep"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "about": "macos_helios300 release manifest; contract: docs/MANIFEST.md",
+  "release": {
+    "version": "0.1.1",
+    "tag": "v0.1.1",
+    "commit": "0000000000000000000000000000000000000000",
+    "dirty": false,
+    "pre_release": true,
+    "dry_run": true,
+    "built": "2026-11-08T06:37:56Z",
+    "built_on": "Linux x86_64 (cross toolchain, see docs/MANIFEST.md)",
+    "sources": {
+      "self": {
+        "repo": "akshaynexus/macos_helios300",
+        "commit": "0000000000000000000000000000000000000000"
+      },
+      "driver": {
+        "repo": "akshaynexus/nvidia-macos-driver",
+        "commit": "1111111111111111111111111111111111111111",
+        "ref": "pascal-gp106"
+      }
+    },
+    "kc_audit": {
+      "status": "skipped",
+      "why": "release.sh ran without --real-kc: no kext was checked against the target Mac's kernel collections"
+    }
+  },
+  "config_delta": {
+    "kernel_add": [
+      {
+        "order": 100,
+        "BundlePath": "PG106.kext",
+        "ExecutablePath": "Contents/MacOS/PG106",
+        "PlistPath": "Contents/Info.plist",
+        "Arch": "x86_64",
+        "MinKernel": "25.0.0",
+        "MaxKernel": "",
+        "Enabled": true,
+        "Comment": "GTX 1060 Mobile (GP106) - macos_helios300",
+        "requires": []
+      },
+      {
+        "order": 120,
+        "BundlePath": "NMHDA.kext",
+        "ExecutablePath": "Contents/MacOS/NMHDA",
+        "PlistPath": "Contents/Info.plist",
+        "Arch": "x86_64",
+        "MinKernel": "24.0.0",
+        "MaxKernel": "",
+        "Enabled": true,
+        "Comment": "GP106 HDMI audio (Lilu plugin) - macos_helios300",
+        "requires": [
+          "Lilu.kext",
+          "AppleALC.kext"
+        ]
+      },
+      {
+        "order": 130,
+        "BundlePath": "QCARomePatchRAM.kext",
+        "ExecutablePath": "Contents/MacOS/QCARomePatchRAM",
+        "PlistPath": "Contents/Info.plist",
+        "Arch": "x86_64",
+        "MinKernel": "21.0.0",
+        "MaxKernel": "",
+        "Enabled": true,
+        "Comment": "QCA Rome Bluetooth firmware - macos_helios300",
+        "requires": [
+          "Lilu.kext",
+          "BlueToolFixup.kext"
+        ]
+      },
+      {
+        "order": 140,
+        "BundlePath": "Ath10kMac.kext",
+        "ExecutablePath": "Contents/MacOS/Ath10kMac",
+        "PlistPath": "Contents/Info.plist",
+        "Arch": "x86_64",
+        "MinKernel": "25.0.0",
+        "MaxKernel": "25.99.99",
+        "Enabled": true,
+        "Comment": "QCA6174 Wi-Fi - macos_helios300",
+        "requires": []
+      },
+      {
+        "order": 145,
+        "BundlePath": "AirportAth10k.kext",
+        "ExecutablePath": "Contents/MacOS/AirportAth10k",
+        "PlistPath": "Contents/Info.plist",
+        "Arch": "x86_64",
+        "MinKernel": "25.0.0",
+        "MaxKernel": "25.99.99",
+        "Enabled": true,
+        "Comment": "QCA6174 native Wi-Fi front end - macos_helios300",
+        "requires": [
+          "Ath10kMac.kext"
+        ]
+      }
+    ],
+    "acpi_add": [
+      {
+        "order": 100,
+        "Path": "SSDT-PG106-HDAU.aml",
+        "Enabled": true,
+        "Comment": "GP106 HDA function 01:00.1 visible from boot"
+      },
+      {
+        "order": 110,
+        "Path": "SSDT-HS07-UPC.aml",
+        "Enabled": true,
+        "Comment": "HS07 internal Bluetooth port (_UPC 0xFF)"
+      }
+    ],
+    "device_properties": {
+      "PciRoot(0x0)/Pci(0x1,0x0)/Pci(0x0,0x0)": {
+        "hda-gfx": {
+          "string": "onboard-2"
+        }
+      },
+      "PciRoot(0x0)/Pci(0x1,0x0)/Pci(0x0,0x1)": {
+        "hda-gfx": {
+          "string": "onboard-2"
+        }
+      },
+      "PciRoot(0x0)/Pci(0x2,0x0)": {
+        "applbkl": {
+          "data": "01000000"
+        }
+      }
+    },
+    "nvram_add": {
+      "7C436110-AB2A-4BBB-A880-FE41995C9F82": {
+        "bluetoothExternalDongleFailed": {
+          "data": "00"
+        },
+        "bluetoothInternalControllerInfo": {
+          "data": "0000000000000000000000000000"
+        }
+      }
+    },
+    "nvram_delete": {
+      "7C436110-AB2A-4BBB-A880-FE41995C9F82": [
+        "bluetoothExternalDongleFailed",
+        "bluetoothInternalControllerInfo"
+      ]
+    },
+    "boot_args_required": [],
+    "forbidden": {
+      "kexts": [
+        "NVRM.kext",
+        "NVRMFB.kext",
+        "NVAccel.kext",
+        "NVRMAGDC.kext",
+        "BrcmPatchRAM3.kext",
+        "BrcmBluetoothInjector.kext",
+        "BrcmFirmwareData.kext",
+        "IntelBluetoothFirmware.kext",
+        "IntelBTPatcher.kext",
+        "IntelBluetoothInjector.kext"
+      ],
+      "boot_args": [
+        "-wegnoegpu"
+      ],
+      "device_properties": {
+        "PciRoot(0x0)/Pci(0x1,0x0)/Pci(0x0,0x0)": [
+          "disable-gpu"
+        ]
+      },
+      "acpi": [
+        "SSDT-Disable_GPU_PEG0.aml"
+      ]
+    }
+  }
+}

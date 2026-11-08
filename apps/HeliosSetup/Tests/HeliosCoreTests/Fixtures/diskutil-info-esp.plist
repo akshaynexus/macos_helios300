@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Content</key>
+	<string>EFI</string>
+	<key>DeviceIdentifier</key>
+	<string>disk0s1</string>
+	<key>DiskUUID</key>
+	<string>8E2D1F5A-3C4B-4D5E-8F90-A1B2C3D4E5F6</string>
+	<key>FilesystemType</key>
+	<string>msdos</string>
+	<key>MountPoint</key>
+	<string></string>
+	<key>TotalSize</key>
+	<integer>209715200</integer>
+	<key>VolumeName</key>
+	<string>EFI</string>
+</dict>
+</plist>

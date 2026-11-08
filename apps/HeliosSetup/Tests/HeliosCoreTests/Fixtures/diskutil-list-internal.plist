@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AllDisks</key>
+	<array>
+		<string>disk0</string>
+		<string>disk0s1</string>
+		<string>disk0s2</string>
+		<string>disk1</string>
+	</array>
+	<key>AllDisksAndPartitions</key>
+	<array>
+		<dict>
+			<key>Content</key>
+			<string>GUID_partition_scheme</string>
+			<key>DeviceIdentifier</key>
+			<string>disk0</string>
+			<key>OSInternal</key>
+			<false/>
+			<key>Partitions</key>
+			<array>
+				<dict>
+					<key>Content</key>
+					<string>EFI</string>
+					<key>DeviceIdentifier</key>
+					<string>disk0s1</string>
+					<key>DiskUUID</key>
+					<string>8E2D1F5A-3C4B-4D5E-8F90-A1B2C3D4E5F6</string>
+					<key>Size</key>
+					<integer>209715200</integer>
+					<key>VolumeName</key>
+					<string>EFI</string>
+				</dict>
+				<dict>
+					<key>Content</key>
+					<string>Apple_APFS</string>
+					<key>DeviceIdentifier</key>
+					<string>disk0s2</string>
+					<key>DiskUUID</key>
+					<string>0A1B2C3D-0000-4000-8000-000000000002</string>
+					<key>Size</key>
+					<integer>2000189177856</integer>
+				</dict>
+			</array>
+			<key>Size</key>
+			<integer>2000398934016</integer>
+		</dict>
+	</array>
+	<key>WholeDisks</key>
+	<array>
+		<string>disk0</string>
+	</array>
+</dict>
+</plist>

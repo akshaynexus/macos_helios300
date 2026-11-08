@@ -1,0 +1,20 @@
+    | |   |         |   "AirportAth10kLastMessage" = "station MAC now 02:00:00:00:00:08"
+    | |   |           |   "AirportAth10kJoinState" = "ready"
+    | |   |           |   "AirportAth10kLastError" = "none"
+    | |   |           |   "AirportAth10kLastDisconnectReason" = 3
+      "Ath10kConnectionLastDisconnectSecurity" = 0
+      "Ath10kConnectionVdevUp" = No
+      "Ath10kConnectionVdevStarted" = No
+      "Ath10kConnectionWMILastStage" = 10
+      "Ath10kConnectionPeerCreateIssued" = No
+      "Ath10kConnectionState" = "disabled"
+      "Ath10kSecurityPhase" = 0
+      "Ath10kSecurityGeneration" = 0
+      "Ath10kSecurityIndFlags" = 0
+      "Ath10kSecurityEAPOLHold" = No
+      "Ath10kConnectionRollbackCount" = 0
+== IOC
+2026-11-07 17:41:58.125 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:41:58.125 Df kernel[0:14a] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported
+2026-11-07 17:41:58.527 Df kernel[0:a0f] (IO80211Family) com.apple.p2p.en1: doDisable:2239 source [setLinkState]
+2026-11-07 17:41:58.527 Df kernel[0:14d] (IO80211Family) com.apple.p2p.en1: LinkQualityMonitor not supported

@@ -1,0 +1,8 @@
+System-wide power settings:
+Currently in use:
+ standby              0
+ hibernatefile        /var/vm/sleepimage
+ disksleep            10
+ sleep                1
+ hibernatemode        3
+ displaysleep         2

@@ -1,0 +1,14 @@
+Bluetooth:
+
+      Bluetooth Controller:
+          Address: 9C:B6:D0:12:34:56
+          State: On
+          Chipset: QCA_ROME
+          Discoverable: Off
+          Firmware Version: v0 c0
+          Product ID: 0x3016
+          Transport: USB
+          Vendor ID: 0x04CA
+      Not Connected:
+          Magic Mouse:
+              Address: 11:22:33:44:55:66

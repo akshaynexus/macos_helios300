@@ -1,0 +1,98 @@
+{
+ "Lilu": {
+  "type": "Kext",
+  "versions": [
+   {
+    "date_authored": "2026-10-26T05:11:38+00:00",
+    "date_built": "2026-10-26T10:31:37.979609+00:00",
+    "date_committed": "2026-10-26T05:11:38+00:00",
+    "hashes": {
+     "debug": {
+      "sha256": "aabe5caff4449cd09834b246f54daa8b258556ee947c476a2915a79af75c3122"
+     },
+     "release": {
+      "sha256": "9a453e5d47b05b2bebe301095e0872ade0e622dadd9ad5e5c01a2fce17904049"
+     }
+    },
+    "links": {
+     "debug": "https://github.com/dortania/build-repo/releases/download/Lilu-0249c3a/Lilu-1.7.3-DEBUG.zip",
+     "release": "https://github.com/dortania/build-repo/releases/download/Lilu-0249c3a/Lilu-1.7.3-RELEASE.zip"
+    },
+    "source": "built",
+    "version": "1.7.3"
+   }
+  ]
+ },
+ "VirtualSMC": {
+  "type": "Kext",
+  "versions": [
+   {
+    "date_authored": "2026-09-27T22:18:59+00:00",
+    "date_built": "2026-09-27T23:25:22.482833+00:00",
+    "date_committed": "2026-09-27T22:18:59+00:00",
+    "hashes": {
+     "debug": {
+      "sha256": "a9f6dea7a061aa4eb4ce022decafe5be7f9983c81ac2e2300c30462e48b85bea"
+     },
+     "release": {
+      "sha256": "0d020ad354fc72f9143b0cc4d57335e9f3a61c9c3b1f8ccf7b332223d8a541c5"
+     }
+    },
+    "links": {
+     "debug": "https://github.com/dortania/build-repo/releases/download/VirtualSMC-b5c62c2/VirtualSMC-1.3.9-DEBUG.zip",
+     "release": "https://github.com/dortania/build-repo/releases/download/VirtualSMC-b5c62c2/VirtualSMC-1.3.9-RELEASE.zip"
+    },
+    "source": "built",
+    "version": "1.3.9"
+   }
+  ]
+ },
+ "VoodooPS2": {
+  "type": "Kext",
+  "versions": [
+   {
+    "date_authored": "2025-11-02T16:35:31+00:00",
+    "date_built": "2025-11-02T16:43:55.836801+00:00",
+    "date_committed": "2025-11-02T16:35:31+00:00",
+    "hashes": {
+     "debug": {
+      "sha256": "e08568e9cfc8fd49511fe96efd4a37704a64a34183ffdf5d171fd2fbcf9516fa"
+     },
+     "release": {
+      "sha256": "4008968674f0fae549c656d9f55af3e689e0b335cb33b4484bf94ab237357016"
+     }
+    },
+    "links": {
+     "debug": "https://github.com/dortania/build-repo/releases/download/VoodooPS2-7eab4a3/VoodooPS2Controller-2.3.8-DEBUG.zip",
+     "release": "https://github.com/dortania/build-repo/releases/download/VoodooPS2-7eab4a3/VoodooPS2Controller-2.3.8-RELEASE.zip"
+    },
+    "source": "built",
+    "version": "2.3.8"
+   }
+  ]
+ },
+ "WhateverGreen": {
+  "type": "Kext",
+  "versions": [
+   {
+    "date_authored": "2026-09-27T22:18:57+00:00",
+    "date_built": "2026-09-27T23:27:12.353239+00:00",
+    "date_committed": "2026-09-27T22:18:57+00:00",
+    "hashes": {
+     "debug": {
+      "sha256": "cffe20066d39ae7d3eef2d05b9ff4d362aefdafed4fdb774a1758581052db934"
+     },
+     "release": {
+      "sha256": "59a1fe3d64b2e57925c806985c88bb69ce0a6bbeea5980ca11551b0e7ddf55b9"
+     }
+    },
+    "links": {
+     "debug": "https://github.com/dortania/build-repo/releases/download/WhateverGreen-093e76f/WhateverGreen-1.7.2-DEBUG.zip",
+     "release": "https://github.com/dortania/build-repo/releases/download/WhateverGreen-093e76f/WhateverGreen-1.7.2-RELEASE.zip"
+    },
+    "source": "built",
+    "version": "1.7.2"
+   }
+  ]
+ }
+}

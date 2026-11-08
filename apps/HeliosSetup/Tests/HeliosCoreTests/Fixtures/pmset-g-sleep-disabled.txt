@@ -1,0 +1,13 @@
+System-wide power settings:
+ SleepDisabled		1
+Currently in use:
+ standby              0
+ Sleep On Power Button 1
+ hibernatefile        /var/vm/sleepimage
+ powernap             0
+ disksleep            10
+ sleep                0 (sleep prevented by powerd)
+ hibernatemode        3
+ displaysleep         2
+ tcpkeepalive         1
+ womp                 0

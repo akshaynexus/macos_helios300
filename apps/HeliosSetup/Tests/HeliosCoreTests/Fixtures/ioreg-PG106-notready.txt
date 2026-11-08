@@ -1,0 +1,16 @@
++-o PG106  <class PG106, id 0x100000302, registered, matched, active, busy 0 (0 ms), retain 22>
+    {
+      "IOClass" = "PG106"
+      "CFBundleIdentifier" = "org.helios300.pg106"
+      "IOProviderClass" = "IOPCIDevice"
+      "IOPCIClassMatch" = "0x03000000&0xff000000"
+      "IOUserClientClass" = "PG106UserClient"
+      "PG106RenderUsers" = Yes
+      "IOProbeScore" = 1000
+      "IOMatchedAtBoot" = Yes
+      "IOMatchCategory" = "IODefaultMatchCategory"
+      "PG106KifABI" = 65536
+      "IOPCIPrimaryMatch" = "0x000010de&0x0000ffff"
+      "CFBundleIdentifierKernel" = "org.helios300.pg106"
+      "PG106Ready" = No
+    }

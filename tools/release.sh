@@ -33,7 +33,7 @@
 # built Ath10kMac.kext (tools/release/set-wifi-country.py) and recorded in the manifest. Not a boot-arg: 1401 keeps
 # boot-args out of NVRAM -> Delete, so a boot-arg in a new config never reaches an installed Mac. "00" = world rules.
 #
-# Build keys for --skip: pg106 pg106fb nmhda bluetooth wifi ssdt pg106accel plugin xlate nvk licences scripts
+# Build keys for --skip: pg106 pg106fb nmhda bluetooth wifi ssdt pg106accel plugin xlate nvk licences scripts setupapp
 # Environment: HELIOS_KC_DIR (= --real-kc), HELIOS_KC_AUDIT=skip (= --no-kc-audit; 1401 --build-from-source sets it
 #   when HELIOS_KC_DIR is unset), HELIOS_WIFI_COUNTRY (= --wifi-country), MACOS_SDK, LD64, XNU_CONFIG,
 #   HELIOS_CROSS (tools/cross-build-kext.sh defaults), HELIOS_IAF2 (= --iaf2), RELEASE_CACHE
@@ -87,7 +87,7 @@ fi
 [ -d "$XNU_CONFIG" ] || { echo "release.sh: SKIP — no xnu config at $XNU_CONFIG"; exit 77; }
 for t in clang llvm-nm llvm-objdump ld64.lld iasl git python3; do command -v "$t" >/dev/null || { echo "release.sh: SKIP — $t missing"; exit 77; }; done
 # What installs into /Library (kmutil, dyld in WindowServer and apps) must be signed; install-gpu.sh copies it as is.
-SIGN_KEYS=(pg106fb pg106accel plugin xlate nvk)
+SIGN_KEYS=(pg106fb pg106accel plugin xlate nvk setupapp)
 for k in "${SIGN_KEYS[@]}"; do
 	[[ "$SKIP" == *",$k,"* ]] && continue
 	[ -x "$RCODESIGN" ] || { echo "release.sh: SKIP — rcodesign (apple-codesign) missing: PG106FB, PG106Accel and the userspace bundles may not ship unsigned (cargo install apple-codesign, or set RCODESIGN)"; exit 77; }
@@ -270,6 +270,12 @@ b_scripts() {
 		--out "$STAGE/POST-INSTALL.md"
 	echo "scripts: $n post-install scripts + POST-INSTALL.md"
 }
+b_setupapp() {
+	# Helios 300 Setup.app (apps/HeliosSetup): swift test of its core first (never skipped here), then the macOS build.
+	SKIP_TESTS=0 MACHO_CHECK="$DRV/nvk/pascal/scripts/macho-check.py" \
+		bash "$HERE/release/cross-setup-app.sh" "$SELF" "$DRV" "$WORK/b/setupapp" "$VERSION"
+	put "$WORK/b/setupapp/Helios 300 Setup.app" "Helios 300 Setup.app"
+}
 b_licences() {
 	cp "$DRV/licenses/NVIDIA-firmware-LICENCE.txt" "$STAGE/NVIDIA-firmware-LICENCE.txt"
 	cp "$DRV/licenses/Mesa-license.rst" "$STAGE/Mesa-license.rst"
@@ -289,6 +295,7 @@ step xlate libnvmtl_translate.dylib -- b_xlate
 step nvk NVK-Pascal -- b_nvk
 step licences NVIDIA-firmware-LICENCE.txt Mesa-license.rst -- b_licences
 step scripts audio-voodoohda.sh audio-applehda.sh install-gpu.sh gpu-apps.sh POST-INSTALL.md -- b_scripts
+step setupapp "Helios 300 Setup.app" -- b_setupapp
 collect_steps
 
 # Real-collection gate (before signing: the audit reads what was linked). A real release stops on any finding.
@@ -341,9 +348,17 @@ if [ -f "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" ]; then
 	SIGNED+=(--signed NVK-Pascal); echo "  signed NVK-Pascal (ad-hoc, rcodesign; verified)"
 fi
 
+if [ -e "$STAGE/Helios 300 Setup.app" ]; then
+	# The nested CLI first (its own identifier), then the bundle, whose CodeResources seals it by cdhash.
+	"$RCODESIGN" sign --binary-identifier org.helios300.setup.cli "$STAGE/Helios 300 Setup.app/Contents/MacOS/helios-setup" \
+		>"$LOGS/sign-setupapp.log" 2>&1 || die "rcodesign could not sign Helios 300 Setup.app's helios-setup ($LOGS/sign-setupapp.log)"
+	sign_one "Helios 300 Setup.app" "$STAGE/Helios 300 Setup.app" "$STAGE/Helios 300 Setup.app/Contents/MacOS/HeliosSetup" \
+		"$STAGE/Helios 300 Setup.app"
+fi
+
 DRY_ARG=(); [ "$DRY" = 1 ] && DRY_ARG=(--dry-run)
 python3 -I "$HERE/release/make_manifest.py" --spec "$SELF/tools/release/spec.json" --schema "$SELF/tools/release/manifest.schema.json" \
 	--stage "$STAGE" --dist "$DIST" --version "$VERSION" --self-commit "$SELF_COMMIT" --driver-commit "$DRIVER_COMMIT" \
-	--wifi-country "$WIFI_CC" "${KC_ARG[@]}" "${DRY_ARG[@]}" "${SIGNED[@]}" "${MISSING[@]}" || exit 1
+	--wifi-country "$WIFI_CC" --driver-tree "$DRV" "${KC_ARG[@]}" "${DRY_ARG[@]}" "${SIGNED[@]}" "${MISSING[@]}" || exit 1
 [ "$FAILED" = 0 ] || echo "release.sh: some builds failed (see $LOGS); the manifest lists them under release.missing"
 echo "release.sh: dist/ ready: $DIST (nothing was published)"

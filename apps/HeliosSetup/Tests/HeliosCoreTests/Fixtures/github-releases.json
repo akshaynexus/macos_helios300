@@ -1,0 +1,72 @@
+[
+ {
+  "tag_name": "v0.2.0-rc1",
+  "name": "v0.2.0-rc1",
+  "draft": true,
+  "prerelease": true,
+  "body": "",
+  "html_url": "https://github.com/akshaynexus/macos_helios300/releases/tag/v0.2.0-rc1",
+  "published_at": "2026-11-08T00:00:00Z",
+  "assets": [
+   {
+    "name": "manifest.json",
+    "browser_download_url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.2.0-rc1/manifest.json"
+   }
+  ]
+ },
+ {
+  "tag_name": "v0.1.2",
+  "name": "v0.1.2",
+  "draft": false,
+  "prerelease": false,
+  "body": "",
+  "html_url": "https://github.com/akshaynexus/macos_helios300/releases/tag/v0.1.2",
+  "published_at": "2026-11-08T00:00:00Z",
+  "assets": []
+ },
+ {
+  "tag_name": "v0.1.1",
+  "name": "v0.1.1",
+  "draft": false,
+  "prerelease": true,
+  "body": "Wi-Fi TX fix; Setup.app",
+  "html_url": "https://github.com/akshaynexus/macos_helios300/releases/tag/v0.1.1",
+  "published_at": "2026-11-08T00:00:00Z",
+  "assets": [
+   {
+    "name": "manifest.json",
+    "browser_download_url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.1/manifest.json"
+   }
+  ]
+ },
+ {
+  "tag_name": "v0.1.0",
+  "name": "v0.1.0",
+  "draft": false,
+  "prerelease": true,
+  "body": "",
+  "html_url": "https://github.com/akshaynexus/macos_helios300/releases/tag/v0.1.0",
+  "published_at": "2026-11-08T00:00:00Z",
+  "assets": [
+   {
+    "name": "manifest.json",
+    "browser_download_url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.1.0/manifest.json"
+   }
+  ]
+ },
+ {
+  "tag_name": "v0.0.9",
+  "name": "v0.0.9",
+  "draft": false,
+  "prerelease": false,
+  "body": "",
+  "html_url": "https://github.com/akshaynexus/macos_helios300/releases/tag/v0.0.9",
+  "published_at": "2026-11-08T00:00:00Z",
+  "assets": [
+   {
+    "name": "manifest.json",
+    "browser_download_url": "https://github.com/akshaynexus/macos_helios300/releases/download/v0.0.9/manifest.json"
+   }
+  ]
+ }
+]
