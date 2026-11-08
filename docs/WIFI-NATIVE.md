@@ -131,6 +131,19 @@ airportd found no Apple80211 interface ("getifaddrs … count[0]") and power sta
   core's "on" power state exported no `kIOPMPowerOn` to children, so neither the nub nor the
   controller could reach state 1. The core now outputs `kIOPMPowerOn`.
 
+Fifth real boot (26.7.2): Wi-Fi power on, scanning and the network list work; joining failed
+with `kIOReturnUnsupported` from `APPLE80211_IOC_ASSOCIATE`. WCL's join manager first sends
+`APPLE80211_IOC_SET_MAC_ADDRESS` with the network's Private Wi-Fi Address
+(`IO80211InfraInterface::setMacAddress` → `setHardwareAddress`), and the front end refused a
+changed address, so the join never reached `setWCL_ASSOCIATE`. Private Wi-Fi Address is now a
+release feature: the front end changes the BSD address at once and remembers it; the join's
+Connect carries it (extended block, flags 16, accepted in every build); the core recreates
+vdev 0 with it at the Scan stage (VDEV_DELETE, VDEV_CREATE, ECHO barrier, cancel waits for the
+vdev) before VDEV_START, as Linux ath10k does for a MAC change. The remaining non-GOOD IOCs seen
+during a join are the family's own (`PLATFORM_CONFIG`, `VIRTUAL_IF_PARENT`), `SSID`/`BSSID`
+while unassociated, and WCL configuration sets AirportItlwm also leaves unsupported; `MCS` now
+answers.
+
 Only macOS can verify (not done): that WCL accepts the capability bits and event sequence,
 DHCP over the Skywalk interface, sleep/wake, Settings details. The reconstructed headers are
 now proven against 26.7.2; another point release can still move slots, so rerun the build

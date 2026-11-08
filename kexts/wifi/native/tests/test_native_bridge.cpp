@@ -28,12 +28,12 @@ struct FakeCore:B::Core{
     uint32_t stage=0,phase=0,generation=1,stateBits=0,psBits=0,beaconMisses=0;int32_t rssi=-55;
     std::vector<B::Network> bss;std::vector<std::vector<uint8_t>> eapolIn;std::vector<std::vector<uint8_t>> eapolOut;
     std::vector<uint8_t> installedKeys;bool authorized=false,secure=false,rejectConnect=false,failAfterConnect=false,connected=false;
-    unsigned scans=0,cancels=0,disconnects=0,restarts=0,psRequests=0;uint32_t lastPS=9;int connectIndex=-1;std::string error="none";
+    unsigned scans=0,cancels=0,disconnects=0,restarts=0,psRequests=0,macChanges=0;uint32_t lastPS=9;int connectIndex=-1;std::string error="none";uint8_t stationMAC[6]={2,1,2,3,4,5};
     static void le32(uint8_t *p,uint32_t v){for(int i=0;i<4;++i)p[i]=uint8_t(v>>(8*i));}
     int call(const AthControl::Request &r,AthControl::Response &o) override {
         using namespace AthControl;
         if(!reachable)return B::kNotReady;
-        o=Response{};o.stage=stage;o.phase=phase;o.count=uint32_t(bss.size());memcpy(o.local,v_sta,6);
+        o=Response{};o.stage=stage;o.phase=phase;o.count=uint32_t(bss.size());memcpy(o.local,stationMAC,6);
         o.flags=128|512|(runtime?1:0)|(scanDone?2:0)|(link?4:0)|(txBusy?8:0)|(secure?16:0)|(disconnecting?64:0)|(scanning?256:0);
         strncpy(o.error,error.c_str(),95);
         if(r.operation==Status)return 0;
@@ -54,7 +54,12 @@ struct FakeCore:B::Core{
         if(r.operation==Connect){
             if(stage)return B::kExclusiveAccess;
             if(!scanDone)return B::kNotReady;
-            if(r.length!=8u+r.data[0] || r.data[1]>1)return B::kBadArgument;
+            if(r.index&2){ // extended block: only the station-MAC-only form is accepted with the gate off
+                const uint8_t *x=r.data+8+r.data[0];
+                if(r.length!=18u+r.data[0] || x[0]!=16 || x[1] || x[8] || x[9])return B::kUnsupported;
+                memcpy(stationMAC,x+2,6);macChanges++;
+            } else if(r.length!=8u+r.data[0] || r.data[1]>1)return B::kBadArgument;
+            if(r.data[1]>1)return B::kBadArgument;
             bool found=false;for(auto &b:bss)if(!memcmp(b.bssid,r.data+2,6))found=true;
             if(!found || rejectConnect){error="bss-not-found";return B::kUnsupported;}
             connectIndex=int(r.index);secure=r.data[1];stage=1;error="none";return 0;}
@@ -159,6 +164,29 @@ int main(){
         core.link=false;core.stage=0;core.secure=false;core.beaconMisses=5;s.poll(t+=100);
         assert(s.state()==Session::State::Ready && sink.count(W::Deauth)==1 && sink.links.size()==2 && !sink.links[1]);
         auto *d=reinterpret_cast<const W::DeauthEvent *>(sink.last(W::Deauth)->data.data());assert(d->reason==4 && !memcmp(d->bssid,v_ap,6));
+    }
+    { // Private Wi-Fi Address: WCL sets a station MAC; the join carries it (extended Connect, flags 16),
+      // the supplicant uses it, and clearing it (permanent address) sends a plain Connect again.
+        FakeCore core;FakeSink sink;Session s(core,sink);core.bss={wpa};const uint8_t permanent[]={2,9,9,9,9,9};memcpy(core.stationMAC,permanent,6);
+        uint64_t t=3000;s.poll(t);
+        s.setStationMAC(v_sta); // the handshake vectors are for v_sta as the station
+        assert(s.startJoin(join(wpa,true),t)==B::kSuccess);
+        for(int i=0;i<12 && core.stage!=10;++i){s.poll(t+=100);core.advance();}
+        assert(core.macChanges==1 && !memcmp(core.stationMAC,v_sta,6) && core.connectIndex==2);
+        for(int i=0;i<12 && !s.linkUp();++i){s.poll(t+=100);core.advance();}
+        assert(s.linkUp() && core.eapolOut.size()==2 && !memcmp(core.eapolOut[0].data(),v_m2,sizeof(v_m2)));
+        core.link=false;core.stage=0;core.secure=false;s.poll(t+=100);assert(s.state()==Session::State::Ready);
+        // WCL restores the permanent address while the vdev still has the private one: the next join carries it.
+        s.setStationMAC(permanent);
+        B::Network open2=open;core.bss={wpa,open2};s.poll(t+=100);
+        assert(s.startJoin(join(open2,false),t)==B::kSuccess);
+        for(int i=0;i<12 && core.stage!=10;++i){s.poll(t+=100);core.advance();}
+        assert(core.macChanges==2 && !memcmp(core.stationMAC,permanent,6) && core.connectIndex==2);
+        core.link=false;core.stage=0;s.poll(t+=100);
+        // Same address as the vdev: a plain Connect.
+        assert(s.startJoin(join(open2,false),t)==B::kSuccess);
+        for(int i=0;i<12 && core.stage!=10;++i){s.poll(t+=100);core.advance();}
+        assert(core.macChanges==2 && core.connectIndex==0);
     }
     { // Open join, voluntary leave, join of a BSS missing from the cache (scan first), rejection, timeout, abort.
         FakeCore core;FakeSink sink;Session s(core,sink);core.bss={open};

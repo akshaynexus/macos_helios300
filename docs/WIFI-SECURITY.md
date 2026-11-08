@@ -1,4 +1,9 @@
-# Wi-Fi security work: Private Wi-Fi Address, WPA3-SAE/PMF, 802.1X Enterprise
+# Wi-Fi security work: WPA3-SAE/PMF, 802.1X Enterprise (Private Wi-Fi Address shipped)
+
+**Update (hardware run 5):** Private Wi-Fi Address left this list. WCL sets it before every
+join, so it is required for any join on macOS 26; the station-MAC-only extended Connect
+(flags 16) is accepted in every build and the core's vdev recreation at the Scan stage is
+implemented (`serviceMacChangeOnly`) and host-tested. The rest below is still gated.
 
 **Status: PAUSED by the owner (2026-11-08), not in the first release.** Everything below is
 compiled out of the shipped kexts by the build gate `AIRPORT_ATH10K_WPASEC` (default `0`).

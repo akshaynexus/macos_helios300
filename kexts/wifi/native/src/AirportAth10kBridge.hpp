@@ -127,7 +127,7 @@ inline size_t buildBeaconFrame(const Network &n,uint64_t tsfMicroseconds,uint16_
 
 // Join parameters after validation against what the core supports.
 struct JoinPlan {
-    bool secure=false,hidden=false;uint8_t bssid[6]{},ssid[32]{},ssidLength=0,pmk[32]{};
+    bool secure=false,hidden=false,macSet=false;uint8_t bssid[6]{},ssid[32]{},ssidLength=0,pmk[32]{},mac[6]{};
 };
 // WCL hands Personal networks the PMK (apple80211 cipher PMK/PMKSA, 32 bytes;
 // WCL.hpp classifyLegacyAuth). WPA2-Personal and WPA2/WPA3 transition networks
@@ -156,6 +156,10 @@ inline void buildConnectRequest(const JoinPlan &p,AthControl::Request &r){
     r=AthControl::Request{};r.operation=AthControl::Connect;r.index=p.hidden?1:0;
     r.data[0]=p.ssidLength;r.data[1]=p.secure?1:0;memcpy(r.data+2,p.bssid,6);memcpy(r.data+8,p.ssid,p.ssidLength);
     r.length=8u+p.ssidLength;
+    if(p.macSet){ // Private Wi-Fi Address: the extended block with the station MAC alone (flags 16)
+        uint8_t *x=r.data+r.length;memset(x,0,10);x[0]=16;memcpy(x+2,p.mac,6);
+        r.index|=2;r.length+=10;
+    }
 }
 
 // Snapshot of the core from one Status + Info poll.
@@ -231,6 +235,10 @@ public:
         return kSuccess;
     }
     int setPowerSave(bool on){powerSave=on;powerSaveSynced=false;return kSuccess;}
+    // Private Wi-Fi Address from WCL (nullptr = back to the permanent address);
+    // applied to the firmware vdev by the next join (extended Connect, flags 16).
+    void setStationMAC(const uint8_t *mac){stationMACSet=mac!=nullptr;if(mac)memcpy(stationMAC,mac,6);else memset(stationMAC,0,6);}
+    bool hasStationMAC() const {return stationMACSet;}
     void stop(){finishScan(kOffline);finishJoin(1,0,kOffline);wipeSecurity();state_=State::Offline;}
 
     // --- Periodic poll -----------------------------------------------------
@@ -294,6 +302,7 @@ private:
     uint8_t rekeyKeys[AthSecurity::Supplicant<Crypto>::keyPayloadLength]{};uint32_t rekeyOperation=0;bool rekeyKeysReady=false,rekeyResponsePending=false;
     uint16_t beaconSequence=0;uint64_t lqmReportedMs=0,restartRequestedMs=0;uint32_t restartRequests=0;
     bool power=true,powerSave=true,powerSaveSynced=false;
+    uint8_t stationMAC[6]{};bool stationMACSet=false;
     const Network *find(const uint8_t *bssid) const {for(uint32_t i=0;i<count;++i)if(sameMAC(networks[i].bssid,bssid))return &networks[i];return nullptr;}
     int call(uint32_t op,AthControl::Response &o,const AthControl::Request *req=nullptr){
         AthControl::Request r{};if(req)r=*req;r.operation=op;
@@ -415,9 +424,10 @@ private:
             memcpy(j.key,plan.pmk,32);j.keyLength=plan.secure?32:0;j.keyCipher=6;j.lowerAuth=1;j.upperAuth=plan.secure?(1u<<3):0;
             const char *why=planJoin(j,n,plan);AthSecurity::wipe(&j,sizeof(j));
             if(why){lastError=why;AthSecurity::wipe(&plan,sizeof(plan));finishJoin(1,1,kUnsupported);return;}
+            if(stationMACSet && memcmp(stationMAC,status.local,6)){plan.macSet=true;memcpy(plan.mac,stationMAC,6);}
             if(plan.secure){
                 uint8_t nonce[32]{};
-                if(!Crypto::random(nonce,32) || !supplicant.begin(plan.pmk,nonce,status.local,n->bssid,n->rsn,n->rsnLength)){
+                if(!Crypto::random(nonce,32) || !supplicant.begin(plan.pmk,nonce,plan.macSet?plan.mac:status.local,n->bssid,n->rsn,n->rsnLength)){
                     AthSecurity::wipe(nonce,32);lastError="supplicant-begin-failed";finishJoin(1,1,kError);return;}
                 AthSecurity::wipe(nonce,32);
             }

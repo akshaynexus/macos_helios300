@@ -3,6 +3,7 @@
 #include "Ath10kVersion.hpp"
 #include <IOKit/network/IONetworkMedium.h>
 #include <sys/random.h>
+#include <net/kpi_interface.h>
 
 #define super IO80211Controller
 OSDefineMetaClassAndStructors(AirportAth10k, IO80211Controller)
@@ -351,18 +352,35 @@ IOReturn AirportAth10k::getHardwareAddress(IOEthernetAddress *address)
 {
     return ath10k?coreController()->getHardwareAddress(address):kIOReturnNotReady;
 }
-// WCL applies private (per-network) addresses here and replays the current one
-// after every driver-available notification. The firmware's station address is
-// fixed by the core at VDEV_CREATE, so only the unchanged address is accepted.
+// WCL applies the network's Private Wi-Fi Address here (IO80211InfraInterface::
+// setMacAddress -> setHardwareAddress) before every join, and replays the
+// current address after each driver-available notification. As AirportItlwm:
+// the BSD address used by DHCP/ARP changes at once (ifnet_set_lladdr); the
+// firmware vdev is recreated with the new MAC by the core at the next Connect
+// (extended Connect, flags 16), which the session carries.
 IOReturn AirportAth10k::setHardwareAddress(const void *address,UInt32 length)
 {
-    IOEthernetAddress current;
-    if(!address || getHardwareAddress(&current)!=kIOReturnSuccess)return kIOReturnNotReady;
-    switch(AirportWCL::planMacUpdate(current.bytes,static_cast<const uint8_t *>(address),length,false)){
-    case AirportWCL::MacUpdate::Unchanged:return kIOReturnSuccess;
+    if(!address || !netif)return kIOReturnNotReady;
+    uint8_t current[6]{};
+    IOEthernetAddress permanent;
+    if(getHardwareAddress(&permanent)!=kIOReturnSuccess)return kIOReturnNotReady;
+    ifnet_t ifp=bsd?bsd->getIfnet():nullptr;
+    if(ifp)ifnet_lladdr_copy_bytes(ifp,current,6);else memcpy(current,permanent.bytes,6);
+    switch(AirportWCL::planMacUpdate(current,static_cast<const uint8_t *>(address),length,false)){
     case AirportWCL::MacUpdate::Invalid:return kIOReturnBadArgument;
-    default:AIRPORT_LOG("private Wi-Fi address not supported; turn it off for this network");return kIOReturnUnsupported;
+    case AirportWCL::MacUpdate::Unchanged:return kIOReturnSuccess;
+    default:break;
     }
+    if(ifp){
+        const errno_t error=ifnet_set_lladdr(ifp,address,6);
+        if(error){AIRPORT_LOG("ifnet_set_lladdr failed %d",error);return kIOReturnError;}
+        bsd->setProperty(kIOMACAddress,const_cast<void *>(address),6);
+    }
+    netif->stationMACChanged(static_cast<const uint8_t *>(address),memcmp(address,permanent.bytes,6)==0);
+    const auto *m=static_cast<const uint8_t *>(address);
+    AIRPORT_STEP(memcmp(address,permanent.bytes,6)?"station MAC: private address set":"station MAC: permanent address restored");
+    AIRPORT_LOG("station MAC now %02x:%02x:%02x:%02x:%02x:%02x",m[0],m[1],m[2],m[3],m[4],m[5]);
+    return kIOReturnSuccess;
 }
 IOReturn AirportAth10k::getPacketFilters(const OSSymbol *group,UInt32 *filters) const
 {

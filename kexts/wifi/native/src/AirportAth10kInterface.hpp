@@ -62,7 +62,7 @@ public:
     IOReturn setWCL_SET_SCAN_HOME_AWAY_TIME(scanHomeAndAwayTime*) override;
     IOReturn setWCL_UPDATE_FAST_LANE(apple80211_fastlane*) override;
     IOReturn getGUARD_INTERVAL(apple80211_guard_interval_data*) override { return kIOReturnUnsupported; }
-    IOReturn getMCS(apple80211_mcs_data*) override { return kIOReturnUnsupported; }
+    IOReturn getMCS(apple80211_mcs_data*) override;
     IOReturn getPOWER_DEBUG_INFO(apple80211_power_debug_info*) override { return kIOReturnUnsupported; }
     IOReturn getHT_CAPABILITY(apple80211_ht_capability*) override { return kIOReturnUnsupported; }
     IOReturn getMCS_VHT(apple80211_mcs_vht_data*) override { return kIOReturnUnsupported; }
@@ -235,6 +235,7 @@ public:
     // Controller-level queries served from the session.
     IOReturn countryCode(apple80211_country_code_data *);
     void powerChanged(bool on);
+    void stationMACChanged(const uint8_t *mac,bool permanent);
     uint32_t sessionState() const;
 private:
     struct CoreAdapter : AirportBridge::Core { AirportAth10kInterface *owner=nullptr; int call(const AthControl::Request &,AthControl::Response &) override; };

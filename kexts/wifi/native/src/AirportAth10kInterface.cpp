@@ -6,7 +6,7 @@
 #define super IO80211InfraProtocol
 OSDefineMetaClassAndStructors(AirportAth10kInterface, IO80211InfraProtocol)
 
-enum : uintptr_t { OpScan, OpScanAbort, OpJoin, OpJoinAbort, OpLeave, OpPoll, OpStop, OpPower, OpQuery, OpBeacon, OpBssInfo, OpExtendedBss, OpPowerSave, OpCountry };
+enum : uintptr_t { OpScan, OpScanAbort, OpJoin, OpJoinAbort, OpLeave, OpPoll, OpStop, OpPower, OpQuery, OpBeacon, OpBssInfo, OpExtendedBss, OpPowerSave, OpCountry, OpStationMAC };
 
 int AirportAth10kInterface::CoreAdapter::call(const AthControl::Request &r,AthControl::Response &o)
 {
@@ -127,6 +127,10 @@ IOReturn AirportAth10kInterface::command(OSObject *,void *a0,void *a1,void *a2,v
         uint8_t buffer[sizeof(AirportWCL::BeaconMetadata)+0x800];size_t n=0;
         if(!self->session->bssInfo(buffer,sizeof(buffer),n))return kIOReturnNotReady;
         memcpy(a2,buffer,n);return kIOReturnSuccess;}
+    case OpStationMAC:
+        // The address WCL set (private or the permanent one restored). The join
+        // carries it whenever the firmware vdev currently has a different one.
+        self->session->setStationMAC(static_cast<const uint8_t *>(a2));return kIOReturnSuccess;
     case OpCountry:{
         auto *cd=static_cast<apple80211_country_code_data *>(a2);
         memset(cd,0,sizeof(*cd));cd->version=APPLE80211_VERSION;
@@ -142,6 +146,11 @@ IOReturn AirportAth10kInterface::gated(uintptr_t op,void *arg)
     return gate->runAction(command,this,reinterpret_cast<void *>(op),arg);
 }
 
+void AirportAth10kInterface::stationMACChanged(const uint8_t *mac,bool)
+{
+    uint8_t copy[6];memcpy(copy,mac,6);
+    gated(OpStationMAC,copy);
+}
 uint32_t AirportAth10kInterface::sessionState() const {return session?static_cast<uint32_t>(session->state()):0;}
 void AirportAth10kInterface::powerChanged(bool on){gated(OpPower,on?this:nullptr);}
 IOReturn AirportAth10kInterface::countryCode(apple80211_country_code_data *cd){return gated(OpCountry,cd);}
@@ -232,6 +241,20 @@ IOReturn AirportAth10kInterface::getRATE(apple80211_rate_data *rd)
     const uint32_t nss=s.nss?s.nss:1;
     uint32_t rate=s.width==80?433:(s.width==40?150:72);
     memset(rd,0,sizeof(*rd));rd->version=APPLE80211_VERSION;rd->num_radios=1;rd->rate[0]=rate*nss;
+    return kIOReturnSuccess;
+}
+// The core reports width and streams, not the live MCS (as getRATE): the top
+// index of the negotiated PHY (VHT 9, HT 7 per stream), which is what the
+// menu's rate estimate derives from until firmware stats are exported.
+IOReturn AirportAth10kInterface::getMCS(apple80211_mcs_data *md)
+{
+    if(!md)return kIOReturnBadArgument;
+    const auto *n=session?session->associated():nullptr;
+    if(!n || !session->linkUp())return kIOReturnNotReady;
+    const auto &s=session->core_();
+    const uint32_t nss=s.nss?s.nss:1;
+    memset(md,0,sizeof(*md));md->version=APPLE80211_VERSION;
+    md->index=n->vhtPresent?9:(7+8*(nss-1));
     return kIOReturnSuccess;
 }
 IOReturn AirportAth10kInterface::getOP_MODE(apple80211_opmode_data *od)

@@ -23,8 +23,8 @@ IO80211 front end). Design: [`WIFI-NATIVE.md`](WIFI-NATIVE.md).
   transition networks through WPA2.
 - TX power at the regulatory limit per channel (23 dBm on the owner's channel 44).
 
-Not available: WPA3-only and PMF-required networks, Enterprise (802.1X), Private Wi-Fi
-Address (turn it off per network), AirDrop/Continuity (AWDL), 6 GHz.
+Not available: WPA3-only and PMF-required networks, Enterprise (802.1X), AirDrop/Continuity
+(AWDL), 6 GHz.
 
 What was verified on Linux on this laptop, the owner test steps for macOS, and rollback
 are all in [`kexts/wifi/README.md`](../kexts/wifi/README.md).

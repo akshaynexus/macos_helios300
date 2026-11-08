@@ -33,8 +33,8 @@ as Wi-Fi in Network settings.
 | Sleep/wake | the association is not kept; after wake the core reports "restart required", the front end asks for the guarded restart and macOS rejoins the saved network | macOS only |
 | TX power | regulatory limit per channel from wireless-regdb (US 5.15-5.25 GHz: 23 dBm), firmware clamps to the board calibration; cap with `ath10k_txpower=<dBm>` | host tests |
 | Regulatory | EEPROM regdomain `0x6c` (world) as on Linux; `ath10k_cc=XX` or `Ath10kCountryCode` picks the country | host tests |
-| Private Wi-Fi Address (random MAC per network) | **not supported**: turn it off for each network (Wi-Fi › network › Details). The front end refuses the change; the station address is fixed at VDEV_CREATE. | — |
-| WPA3-SAE only, required PMF (802.11w), WEP, TKIP pairwise, WPA1, Enterprise (802.1X), AP/IBSS, AWDL/AirDrop, 6 GHz, 160 MHz | **not supported** | see below |
+| Private Wi-Fi Address (per-network MAC) | done: WCL sets the address before each join; the BSD interface takes it at once and the core recreates vdev 0 with it (VDEV_DELETE/CREATE + ECHO barrier) before VDEV_START, as Linux ath10k does for a MAC change | host tests (`test_connection`, `test_control`, bridge); macOS only for the join |
+| WPA3-SAE only, required PMF (802.11w), WEP, TKIP pairwise, WPA1, Enterprise (802.1X), AP/IBSS, AWDL/AirDrop, 6 GHz, 160 MHz | **not supported** | see below and `docs/WIFI-SECURITY.md` |
 | Directed/active scans | the core scans passively on all 38 channels (~20 s); WCL's channel lists and SSID filters are accepted and applied to the results | — |
 
 ### Not supported, and why
@@ -47,7 +47,6 @@ as Wi-Fi in Network settings.
 - **Enterprise.** WCL would hand over a PMK/MSK after EAP; the core has no 802.1X port control.
 - **AWDL / AirDrop / Continuity.** Needs a second (P2P) virtual interface and action-frame
   TX; not started.
-- **Private Wi-Fi Address.** See the table.
 - **Paused work.** SAE/PMF/802.1X and the private MAC are being implemented behind the build gate
   `AIRPORT_ATH10K_WPASEC` (off in releases): status and resume plan in
   [`docs/WIFI-SECURITY.md`](../../docs/WIFI-SECURITY.md).
@@ -160,8 +159,9 @@ properties and network status; remove SSIDs and MACs before sharing) and
    Expect the handshake to finish within 5 s, then DHCP: `ifconfig en<n>` shows an address,
    `ping 1.1.1.1` and web browsing work. Settings › Wi-Fi › Details shows channel 44, 80 MHz,
    RSSI and the country.
-4. **Private Wi-Fi Address.** If the join fails immediately, open the network's Details and set
-   Private Wi-Fi Address to Off, then join again (see "not supported").
+4. **Private Wi-Fi Address.** Leave it on (macOS default). The kernel log shows
+   `AirportAth10k: station MAC now …` followed by `Ath10kMac: STATION MAC change begin/complete`
+   at the join; `ifconfig en1` shows that address while associated.
 5. **Join a 2.4 GHz network** (phone hotspot, WPA2) and an **open** network if available;
    switch between networks from the menu.
 6. **Sleep/wake.** Close the lid for 1 minute, open it: within about 30 s the card restarts
