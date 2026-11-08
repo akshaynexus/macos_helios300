@@ -75,7 +75,7 @@
     {
       "name": "QCARomePatchRAM.kext", "kind": "kext", "bundle_id": "io.github.akshaynexus.helios300.QCARomePatchRAM",
       "source": {"tree": "self", "path": "kexts/bluetooth"},
-      "built_by": "cross", "licence": "GPL-2.0-only",
+      "built_by": "cross", "licence": "GPL-2.0-or-later",
       "contains_firmware": "QCA6174 Rome rampatch + NVM from linux-firmware (Qualcomm licence)",
       "status": "pre-release: Bluetooth works on macOS 26.7.2 (owner report, 2026-11-08); pairing, A2DP/HFP audio and sleep/wake not yet tested; the firmware download matches Linux btusb's transfer for transfer",
       "install": "opencore",
