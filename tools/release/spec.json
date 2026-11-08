@@ -175,7 +175,6 @@
       ],
       "install": "gpu-bundles", "install_path": "/Library/GPUBundles/NVMTLDriver.bundle",
       "requires": ["PG106Accel.kext", "libnvmtl_translate.dylib", "NVK-Pascal"],
-      "optional": true,
       "hardware": [{"bus": "pci", "vendor": "10de", "device": "1c20"}]
     },
     {
@@ -184,8 +183,7 @@
       "built_by": "cross", "licence": "PolyForm-Noncommercial-1.0.0",
       "status": "pre-release: AIR to SPIR-V shader translator the Metal plugin loads",
       "install": "gpu-bundles", "install_path": "/Library/GPUBundles/nvmtl/libnvmtl_translate.dylib",
-      "requires": [],
-      "optional": true
+      "requires": []
     },
     {
       "name": "NVK-Pascal", "kind": "dylib",
@@ -194,8 +192,7 @@
       "licence_files": ["Mesa-license.rst"],
       "status": "pre-release: Mesa NVK + NAK with the GP106 backend (libvulkan_nouveau.dylib + nvk_icd.json)",
       "install": "gpu-bundles", "install_path": "/Library/GPUBundles/nvmtl/",
-      "requires": [],
-      "optional": true
+      "requires": []
     },
     {
       "name": "audio-voodoohda.sh", "kind": "script",

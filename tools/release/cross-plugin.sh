@@ -88,7 +88,7 @@ PLIST
 BIN="$B/Contents/MacOS/NVMTLDriver"
 hdr="$(llvm-objdump --macho --private-header "$BIN")"
 grep -q "X86_64" <<<"$hdr" && grep -q "BUNDLE" <<<"$hdr" || die "not an x86_64 MH_BUNDLE"
-minos="$(llvm-objdump --macho --all-headers "$BIN" | awk '/LC_BUILD_VERSION/{f=1} f&&/minos/{print $2; exit}')"
+minos="$(llvm-objdump --macho --all-headers "$BIN" | awk '/LC_BUILD_VERSION/{f=1} f&&/minos/&&!d{print $2; d=1}')"
 [ "$minos" = "$MIN" ] || die "minos $minos, want $MIN"
 echo "PASS Mach-O x86_64 MH_BUNDLE, minos $minos"
 python3 "$MACHO_CHECK" "$BIN" "$SDK" >"$OUT/NVMTLDriver.macho-check.txt" 2>&1 || { tail -20 "$OUT/NVMTLDriver.macho-check.txt"; die "macho-check"; }
