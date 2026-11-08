@@ -34,13 +34,16 @@ What the gate off guarantees (checked by `tests/test_control.cpp`, `test_connect
 - Core: management frames with the Protected bit are dropped as before (mask `0x470f`);
   `pmf`, `externalAuth`, `enterprise` and `stationRSNLength` stay zero, so BSS selection,
   PEER_ASSOC flags and the association request are the WPA2-PSK ones; the station MAC is the
-  hardware MAC (`_vdevMAC == _wmiInit.mac`).
+  hardware MAC unless WCL set a Private Wi-Fi Address (the flags-16 extended Connect, shipped
+  in every build, recreates vdev 0 with it).
 - Supplicant: `Supplicant::begin()` with six arguments is WPA2-PSK with the fixed station RSN
   (PRF-SHA1, HMAC-SHA1-128, descriptor version 2) and ignores message 1 key data as before. The
   front end sends the first 56 bytes of the key payload. The existing WPA2 vectors
   (`tests/security_vectors.inc`, `rekey_vectors.inc`) pass unchanged.
-- Front end: `setHardwareAddress` still refuses a different MAC, capabilities advertise WPA2/CCMP/TKIP
-  only, SAE/Enterprise joins are refused (`planJoin`).
+- Front end: `setHardwareAddress` accepts a changed MAC (Private Wi-Fi Address, shipped since
+  hardware run 5: `ifnet_set_lladdr` at once, the core's vdev at the next join); capabilities
+  advertise WPA2/CCMP/TKIP only; SAE/Enterprise/PMF-required joins are refused with an 802.11
+  status (`planJoin`/`refusalStatus`: 43, 31).
 
 ## What is done (all on `main`, gate-independent host tests)
 
@@ -79,9 +82,8 @@ hostap `sae.c`/`dragonfly.c`/`wpa_common.c` (BSD, see `kexts/wifi/UPSTREAM.md`);
      network interface before the port opens; in `outputPacket` let 0x888e frames out while
      `stage==Connected && enterprise && !portAuthorized` (via `submitNetworkPacket`).
 2. **Front end (`AirportAth10kBridge.hpp`, `AirportAth10kInterface.cpp`, `AirportAth10k.cpp`)**:
-   - `setHardwareAddress`: accept the private MAC (itlwm: `ifnet_set_lladdr`, `kIOMACAddress`),
-     remember it in the session, pass it in the extended Connect (flag 16); `getHW_ADDR` keeps the
-     permanent MAC; report the active MAC from Info [120..125];
+   - ~~`setHardwareAddress`: accept the private MAC~~ done and shipped (hardware run 5, 32be721);
+     with the gate on, report the active MAC from Info [120..125];
    - SAE join: `planJoin` accepts `APPLE80211_AUTHTYPE_WPA3_SAE` (the WCL join request embeds an
      `apple80211_key` at 0x40: expect the password as cipher `APPLE80211_CIPHER_PWD`, up to 62 bytes
      from 0x50; unverified on the Mac), H2E when the AP's RSNXE has bit 5, drive

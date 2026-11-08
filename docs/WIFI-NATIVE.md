@@ -5,8 +5,25 @@ and Settings › Wi-Fi, network selection and joining by macOS, passwords in the
 interface shown as Wi-Fi in Network settings.
 
 **State (2026-11-08):** implemented as `AirportAth10k.kext` over the `Ath10kMac.kext` core in
-`kexts/wifi/native/`, cross-built for macOS 26 and host-tested. **Never loaded on macOS.**
-Install and owner test steps: [`kexts/wifi/README.md`](../kexts/wifi/README.md).
+`kexts/wifi/native/`, cross-built for macOS 26 and host-tested. Six boots on the owner's
+Helios 300 with macOS 26.7.2 (25G332) so far (table below): the card is a Wi-Fi interface,
+powers on, scans and lists networks; joining failed up to run 6 and the fix for that (and the
+in-place sleep/wake) has not run on the Mac yet. Install and owner test steps:
+[`kexts/wifi/README.md`](../kexts/wifi/README.md); sanitized logs in
+[`kexts/wifi/evidence/macos/`](../kexts/wifi/evidence/macos/).
+
+## macOS run history (26.7.2 25G332, OpenCore)
+
+| Run | Build | Result | Fixed by |
+|---|---|---|---|
+| 1 | v0.1.0 | Core loaded, booted the firmware, scanned; OpenCore refused AirportAth10k (vtable patch: two pad slots shifted every `IO80211Controller` slot; `setInterfaceSubType` not exported) | 64f44fd, kc-audit (347e86a) |
+| 2-3 | front end injected | Panic in `IONetworkController::start` (`ml_thread_policy` on the NULL thread of `IO80211WorkQueue`, CR2 0x658), boot loop | `AirportAth10kNub` (d1ab92a) |
+| — | `ath10k_native_delay=90` | Bring-up deferred past login; breadcrumbs to the stage before a hang | 1f5ffc5 |
+| 4 | nub build | No panic; nub, controller, IO80211 and BSD interfaces published, but `type: Ethernet`, no Skywalk flowswitch, power "Off (forced)" | 9c7f470 |
+| — | nub build, reboot/shutdown | Panic "not in the expected zone early.kalloc.288" in `deregisterNetworkInterface` (also the wake restart: black screen) | ac7d33a |
+| 5 | 9c7f470 | Wi-Fi on, scans and the network list work; joins refused (`ASSOCIATE` 0xe00002c7: Private Wi-Fi Address refused) | 36dc4f4, 32be721 |
+| 6 | core 4535d42b, front 2d2a4880 | Associates, but WCL's `EXTENDED_BSS_INFO` answered NotReady until the handshake: "Update Bss fail", password prompt again | d39e247 |
+| 7 | d39e247 + a3da2e8 … | pending (join, active scans, in-place sleep/wake) | — |
 
 ## How it is built
 
@@ -263,9 +280,10 @@ with that release's collection before installing it.
 
 ## Not implemented
 
-WPA3-SAE/PMF, Enterprise and the Private Wi-Fi Address are in progress behind the build gate
-`AIRPORT_ATH10K_WPASEC` (off in releases; paused by the owner): [`WIFI-SECURITY.md`](WIFI-SECURITY.md).
+WPA3-SAE/PMF and Enterprise are in progress behind the build gate `AIRPORT_ATH10K_WPASEC` (off
+in releases; paused by the owner): [`WIFI-SECURITY.md`](WIFI-SECURITY.md). The Private Wi-Fi
+Address is shipped (run 5 fix).
 
-WPA3-SAE / PMF, Enterprise, WEP, Private Wi-Fi Address (random MAC), AWDL/AirDrop/Continuity,
+WPA3-SAE / PMF, Enterprise, WEP, WPA1/TKIP-only pairwise (refused with an 802.11 status), AWDL/AirDrop/Continuity,
 P2P/hotspot, 6 GHz, 160 MHz, reassociation-based roaming between BSSIDs of one SSID (WCL
 asks for a new join; the core disconnects and reconnects).

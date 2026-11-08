@@ -12,10 +12,13 @@ With both loaded the card appears in the **system Wi-Fi menu and Settings › Wi
 are chosen and joined by macOS, passwords live in the Keychain, and the interface is listed
 as Wi-Fi in Network settings.
 
-> **Status: cross-built and unit-tested on Linux, cross-checked against Linux ath10k on this
-> laptop, never loaded on macOS.** Everything under "Owner test steps" is unverified, and the
-> IO80211/Skywalk class layouts come from reconstructed headers (macOS 26.x), so the first
-> boots are expected to need panic logs and point-release fixes.
+> **Status: six boots on macOS 26.7.2 (25G332) on the Helios 300.** The card appears as a
+> Wi-Fi interface, powers on, scans and lists networks; joins failed through run 6 (fixed in
+> d39e247, not yet run on the Mac), and the in-place sleep/wake (a3da2e8) has not run either.
+> Run history: [`docs/WIFI-NATIVE.md`](../../docs/WIFI-NATIVE.md#macos-run-history-2672-25g332-opencore);
+> sanitized logs: [`evidence/macos/`](evidence/macos/). The IO80211/Skywalk layouts come from
+> reconstructed headers checked against the real 26.7.2 collections (kc-audit); another
+> point release needs that check again.
 
 ## What works (by design) and what does not
 
@@ -47,9 +50,11 @@ as Wi-Fi in Network settings.
 - **Enterprise.** WCL would hand over a PMK/MSK after EAP; the core has no 802.1X port control.
 - **AWDL / AirDrop / Continuity.** Needs a second (P2P) virtual interface and action-frame
   TX; not started.
-- **Paused work.** SAE/PMF/802.1X and the private MAC are being implemented behind the build gate
+- **Paused work.** SAE/PMF/802.1X are being implemented behind the build gate
   `AIRPORT_ATH10K_WPASEC` (off in releases): status and resume plan in
-  [`docs/WIFI-SECURITY.md`](../../docs/WIFI-SECURITY.md).
+  [`docs/WIFI-SECURITY.md`](../../docs/WIFI-SECURITY.md). (The Private Wi-Fi Address is shipped.)
+- **Unsupported networks** (WPA3-SAE only, PMF required, WPA1/TKIP-only pairwise, WEP, 802.1X)
+  are refused with an 802.11 status in the association result, not as a driver error.
 
 ## Layout
 
