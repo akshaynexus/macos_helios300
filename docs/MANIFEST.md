@@ -188,9 +188,11 @@ tools/release.sh --version 0.1.1 --dry-run --real-kc ~/pascal-build/macos-26.7.2
 Ad-hoc signatures (`rcodesign sign`, what `codesign -s -` does): PG106FB and PG106Accel (kmutil loads them from
 /Library/Extensions), the plugin and its nested `air-runtime/libLLVM.dylib`, the translator, NVK. Kexts injected by
 OpenCore need none. **Signing is a gate:** without rcodesign release.sh stops before building (exit 77) unless all of
-pg106fb, pg106accel, plugin, xlate and nvk are `--skip`ped. A failed signing, or a Mach-O without
-`LC_CODE_SIGNATURE` afterwards, stops it (exit 1), and make_manifest refuses an unsigned artifact that installs
-into /Library. `install-gpu.sh` installs the files exactly as shipped.
+pg106fb, pg106accel, plugin, xlate and nvk are `--skip`ped. A failed signing, or a signature that does not verify
+afterwards, stops it (exit 1). `rcodesign verify` rejects every ad-hoc signature, so
+`tools/release/check-adhoc-signature.py` recomputes the CodeDirectory page hashes and, for a bundle, the Info.plist
+and CodeResources slots and the seal of every file in it, including the nested libLLVM's own signature and cdhash.
+Results go to `dist/logs/signatures.log`. make_manifest refuses an unsigned artifact that installs into /Library. `install-gpu.sh` installs the files exactly as shipped.
 
 **Everything is cross-built; nothing has been built with Xcode on a Mac.** Several artifacts run on the owner's Mac
 ([MACOS-STATUS.md](MACOS-STATUS.md)). Before a release that is not marked pre-release, do one

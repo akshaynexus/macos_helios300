@@ -306,30 +306,34 @@ fi
 
 # Ad-hoc signatures (codesign -s - on a Mac). OpenCore injection needs none; kmutil (PG106FB, PG106Accel in
 # /Library/Extensions) and dyld (the plugin, its libLLVM, the dylibs) accept ad-hoc ones. Every one is required:
-# a failed signing, or a Mach-O without LC_CODE_SIGNATURE afterwards, stops the release.
-signed_ok() { llvm-objdump --macho --private-headers "$1" 2>/dev/null | grep -q LC_CODE_SIGNATURE; }
-sign_one() {   # <artifact name> <path to sign> <Mach-O files that must carry a signature afterwards...>
-	local n="$1" p="$2" log="$LOGS/sign-${1// /-}.log" f; shift 2
+# a failed signing, or a signature that does not verify afterwards, stops the release. `rcodesign verify` rejects
+# every ad-hoc signature (it says itself it is unreliable), so tools/release/check-adhoc-signature.py recomputes the
+# CodeDirectory page hashes and, for a bundle, the Info.plist and CodeResources slots and every sealed file.
+signed_ok() {   # <Mach-O> [<bundle it is the main executable of>]
+	python3 -I "$HERE/release/check-adhoc-signature.py" "$1" ${2:+--bundle "$2"} >>"$LOGS/signatures.log" 2>&1
+}
+sign_one() {   # <artifact name> <path to sign> <main Mach-O> [bundle]
+	local n="$1" p="$2" log="$LOGS/sign-${1// /-}.log"
 	"$RCODESIGN" sign "$p" >>"$log" 2>&1 || die "rcodesign could not sign $n ($(tail -1 "$log"); $log); nothing ships unsigned"
-	for f in "$@"; do signed_ok "$f" || die "$n: ${f#"$STAGE"/} has no code signature after rcodesign ($log)"; done
-	SIGNED+=(--signed "$n"); echo "  signed $n (ad-hoc, rcodesign)"
+	signed_ok "$3" "${4:-}" || die "$n: the signature does not verify ($(tail -1 "$LOGS/signatures.log"))"
+	SIGNED+=(--signed "$n"); echo "  signed $n (ad-hoc, rcodesign; verified)"
 }
 for n in PG106FB PG106Accel; do
-	[ -e "$STAGE/$n.kext" ] && sign_one "$n.kext" "$STAGE/$n.kext" "$STAGE/$n.kext/Contents/MacOS/$n"
+	[ -e "$STAGE/$n.kext" ] && sign_one "$n.kext" "$STAGE/$n.kext" "$STAGE/$n.kext/Contents/MacOS/$n" "$STAGE/$n.kext"
 done
 if [ -e "$STAGE/NVMTLDriver.bundle" ]; then
 	# The nested libLLVM first (its own identifier), then the bundle, whose CodeResources seals it.
 	"$RCODESIGN" sign --binary-identifier org.llvm.libLLVM "$STAGE/NVMTLDriver.bundle/Contents/MacOS/air-runtime/libLLVM.dylib" \
 		>"$LOGS/sign-NVMTLDriver.bundle.log" 2>&1 || die "rcodesign could not sign air-runtime/libLLVM.dylib ($LOGS/sign-NVMTLDriver.bundle.log)"
-	sign_one NVMTLDriver.bundle "$STAGE/NVMTLDriver.bundle" "$STAGE/NVMTLDriver.bundle/Contents/MacOS/NVMTLDriver" \
-		"$STAGE/NVMTLDriver.bundle/Contents/MacOS/air-runtime/libLLVM.dylib"
+	# check-adhoc-signature.py --bundle also verifies the nested libLLVM's own pages and its cdhash in CodeResources
+	sign_one NVMTLDriver.bundle "$STAGE/NVMTLDriver.bundle" "$STAGE/NVMTLDriver.bundle/Contents/MacOS/NVMTLDriver" "$STAGE/NVMTLDriver.bundle"
 fi
 [ -e "$STAGE/libnvmtl_translate.dylib" ] && sign_one libnvmtl_translate.dylib "$STAGE/libnvmtl_translate.dylib" "$STAGE/libnvmtl_translate.dylib"
 if [ -f "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" ]; then
 	"$RCODESIGN" sign --binary-identifier libvulkan_nouveau "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" >"$LOGS/sign-nvk.log" 2>&1 ||
 		die "rcodesign could not sign NVK-Pascal/libvulkan_nouveau.dylib ($LOGS/sign-nvk.log)"
-	signed_ok "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" || die "NVK-Pascal: libvulkan_nouveau.dylib has no code signature after rcodesign"
-	SIGNED+=(--signed NVK-Pascal); echo "  signed NVK-Pascal (ad-hoc, rcodesign)"
+	signed_ok "$STAGE/NVK-Pascal/libvulkan_nouveau.dylib" || die "NVK-Pascal: the signature does not verify ($(tail -1 "$LOGS/signatures.log"))"
+	SIGNED+=(--signed NVK-Pascal); echo "  signed NVK-Pascal (ad-hoc, rcodesign; verified)"
 fi
 
 DRY_ARG=(); [ "$DRY" = 1 ] && DRY_ARG=(--dry-run)
