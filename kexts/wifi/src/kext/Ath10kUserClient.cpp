@@ -173,12 +173,15 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   if(r.index>3 || r.length<9 || !r.data[0] || r.data[0]>32 || r.length<8u+r.data[0] || r.data[1]>1 || (r.data[2]&1))return kIOReturnBadArgument;
   const bool extended=(r.index&2)!=0;const UInt8 *x=r.data+8+r.data[0];const UInt32 xBytes=r.length-8u-r.data[0];
   if(!extended && xBytes)return kIOReturnBadArgument;
-  if(extended && !AIRPORT_ATH10K_WPASEC)return kIOReturnUnsupported; // paused feature set (docs/WIFI-SECURITY.md)
+  // Station MAC only (flags 16, nothing else): Private Wi-Fi Address, a release
+  // feature. Every other extension stays behind the gate (docs/WIFI-SECURITY.md).
+  const bool macOnly=extended && xBytes==10 && x[0]==16 && !x[1] && !x[8] && !x[9];
+  if(extended && !macOnly && !AIRPORT_ATH10K_WPASEC)return kIOReturnUnsupported; // paused feature set
   if(extended){
    // Extended block: flags, AKM, station MAC, RSN element, RSNXE (Ath10kControl.hpp).
    if(xBytes<10 || x[8]>64 || xBytes<10u+x[8] || x[9+x[8]]>18 || xBytes!=10u+x[8]+x[9+x[8]] || (x[0]&~31u))return kIOReturnBadArgument;
    const UInt8 akm=x[1];const bool external=(x[0]&1)!=0,pmfCapable=(x[0]&2)!=0,pmfRequired=(x[0]&4)!=0,enterprise=(x[0]&8)!=0,withMAC=(x[0]&16)!=0;
-   if(r.data[1]){
+   if(r.data[1] && !macOnly){
     if(akm!=AthSecurity::akm8021X && akm!=AthSecurity::akmPSK && akm!=AthSecurity::akm8021XSHA256 && akm!=AthSecurity::akmPSKSHA256 && akm!=AthSecurity::akmSAE)return kIOReturnBadArgument;
     AthSecurity::RSNInfo own;
     if(!x[8] || !AthSecurity::parseRSN(x+9,x[8],own) || !own.akm(akm) || !own.pairwiseCCMP || (pmfRequired && !pmfCapable) || (own.mfpc!=pmfCapable) || (own.mfpr!=pmfRequired))return kIOReturnBadArgument;
@@ -193,7 +196,7 @@ IOReturn Ath10kPCIDevice::controlAction(OSObject *owner,void *who,void *input,vo
   s.akm=AthSecurity::akmPSK;s.pmfCapable=s.pmfRequired=s.pmf=s.externalAuth=s.enterprise=false;s.stationRSNLength=s.stationRSNXELength=0;
   s.authDone=s.authTxPending=false;s.authCount=s.authRead=s.authWrite=0;s.macChange={};
   if(extended){
-   if(r.data[1]){s.akm=x[1];s.externalAuth=(x[0]&1)!=0;s.pmfCapable=(x[0]&2)!=0;s.pmfRequired=(x[0]&4)!=0;s.enterprise=(x[0]&8)!=0;
+   if(r.data[1] && !macOnly){s.akm=x[1];s.externalAuth=(x[0]&1)!=0;s.pmfCapable=(x[0]&2)!=0;s.pmfRequired=(x[0]&4)!=0;s.enterprise=(x[0]&8)!=0;
     s.stationRSNLength=x[8];bcopy(x+9,s.stationRSN,x[8]);s.stationRSNXELength=x[9+x[8]];bcopy(x+10+x[8],s.stationRSNXE,s.stationRSNXELength);}
    if(x[0]&16){bcopy(x+2,s.local,6);s.macChange.pending=!Ath10k::sameMAC(s.local,self->_vdevMAC);}
   }

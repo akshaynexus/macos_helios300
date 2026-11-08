@@ -137,6 +137,34 @@ public:
     }
     void connect(){for(unsigned now=1270;now<1800 && _wmiLive.active && (!networkUp || !_connection.maintenance.valid);now+=10)tick(now);}
 };
+// Private Wi-Fi Address: a Connect with a station MAC recreates vdev 0 before
+// VDEV_START (VDEV_DELETE, VDEV_CREATE with the new MAC, ECHO barrier), then
+// the join proceeds and the core remembers the vdev's address.
+static void macChangeTests(){
+    ConnectionDriver d;auto &s=d._connection;const UInt8 fresh[6]={2,0xaa,0xbb,0xcc,0xdd,0xee};
+    memcpy(d._vdevMAC,s.local,6);memcpy(s.local,fresh,6);s.macChange.pending=true;
+    unsigned deletes=0,creates=0,echoes=0;auto previous=d._regs.tx3Consume;
+    d._regs.tx3Consume=[&](){
+        if(s.stage==LinkStage::Scan && s.macChange.step){
+            const UInt8 *f=static_cast<const UInt8 *>(d._connectionCommand.virtualAddress());
+            assert(s.submitted && s.wmiOwned);
+            const UInt32 cmd=Ath10k::wmiReadLE32(f+8);
+            if(s.macChange.step==1){assert(cmd==0x5002 && !deletes && !creates);++deletes;}
+            else if(s.macChange.step==2){assert(cmd==0x5001 && Ath10k::sameMAC(f+28,fresh) && deletes==1);++creates;}
+            else {assert(cmd==0x1d001 && creates==1 && Ath10k::wmiReadLE32(f+16)==Ath10k::kMacChangeEchoCookie);++echoes;d.deliver(2,echoPacket(Ath10k::kMacChangeEchoCookie));return;}
+            d.deliver(2,{0,2,8,0,8,0,0,0,1,4,0,0,2,1,0,0});
+            return;
+        }
+        previous();
+    };
+    // A cancel during the sequence waits for the vdev to exist again.
+    d.tick(1270);assert(s.macChange.step>=1);s.cancelRequested=true;d.tick(1280);d.tick(1290);
+    assert(s.stage==LinkStage::Scan || s.stage==LinkStage::Disabled);
+    s.cancelRequested=false;
+    d.connect();
+    assert(d.networkUp && deletes==1 && creates==1 && echoes==1 && Ath10k::sameMAC(d._vdevMAC,fresh) && Ath10k::sameMAC(s.local,fresh) && !s.macChange.pending && !s.macChange.step);
+    d.releaseWMIRuntime();
+}
 static void rxTests(const Ath10k::ConnectionState &s){
     UInt8 d[2048]{},out[1514]{};Ath10k::htcWriteLE32(d+4,0x80000000);Ath10k::htcWriteLE32(d+32,1<<8);
     UInt8 *f=d+300;f[0]=8;f[1]=2;memcpy(f+4,s.local,6);memcpy(f+10,s.bssid,6);
@@ -192,6 +220,7 @@ static void amsduTests(const Ath10k::ConnectionState &source){
     Ath10k::htcWriteLE16(h+22,0x20);assert(!Ath10k::acceptSecureRX(secure,desc,ether,64));
 }
 static void chainedRxTests(){
+    macChangeTests();
     ConnectionDriver d;d.connect();assert(d.networkUp);
     const UInt16 first=17,second=18;const UInt32 firstAddress=d._rxSetup.addresses[first],secondAddress=d._rxSetup.addresses[second];
     assert(firstAddress && secondAddress && !d._rxSetup.addressPending[first] && !d._rxSetup.addressPending[second]);

@@ -260,6 +260,7 @@ public:
     Ath10k::PerformanceState _perf{};
     void flushNetworkRX(){}
     const char *serviceConnection(UInt64);
+    const char *serviceMacChangeOnly(UInt64);
     const char *serviceDisconnect(UInt64);
     const char *serviceChannelSwitch(UInt64);
     const char *serviceRadioMaintenance(UInt64);

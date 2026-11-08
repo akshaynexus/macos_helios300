@@ -31,7 +31,9 @@ struct Response {
 //        Authentication frames through SendAuth/ReceiveAuth, e.g. SAE),
 //        2 PMF capable, 4 PMF required, 8 enterprise (EAPOL frames other than
 //        EAPOL-Key pass to the network interface before the port opens),
-//        16 station MAC present (the vdev is recreated with it);
+//        16 station MAC present (the vdev is recreated with it); a block with
+//        flags 16 alone (r.length = 8 + SSID + 10, AKM/RSN/RSNXE zero) is the
+//        Private Wi-Fi Address request and is accepted in every build;
 //   x[1] AKM suite type (00-0F-AC:n), x[2..7] station MAC, x[8] RSN length,
 //   x[9..] the station's RSN element (sent in the association request and
 //   expected in EAPOL message 2), then RSNXE length u8 + RSNXE.

@@ -128,6 +128,7 @@ private:
     void publishConnection();
     void deliverNetworkRX(const UInt8 *,UInt8,UInt16,UInt16 indicatedLength=0,UInt32 availableBytes=2048);
     const char *serviceConnection(UInt64);
+    const char *serviceMacChangeOnly(UInt64);
     const char *serviceDisconnect(UInt64);
     const char *serviceChannelSwitch(UInt64);
     const char *serviceRadioMaintenance(UInt64);

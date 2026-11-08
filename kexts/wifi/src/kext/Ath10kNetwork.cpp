@@ -639,6 +639,37 @@ const char *Ath10kPCIDevice::submitNetworkPacket(const UInt8 *data,UInt32 bytes,
     if(!error)++_connection.httSequence;
     return error;
 }
+// Private Wi-Fi Address at the Scan stage: VDEV_DELETE, VDEV_CREATE(new MAC),
+// ECHO barrier, one CE3 command at a time (Linux ath10k changes a MAC by
+// removing and re-adding the interface). Cancel waits until the vdev exists
+// again (macChange.step back to 0); the Scan-stage servicing then proceeds.
+const char *Ath10kPCIDevice::serviceMacChangeOnly(UInt64 nowMs)
+{
+    using Ath10k::LinkStage;auto &s=_connection;
+        // VDEV_DELETE, VDEV_CREATE(new MAC), ECHO barrier, one CE3 command at a
+        // time. Cancel is honoured only once the vdev exists again (step 0).
+        if(s.wmiOwned){
+            Ath10k::CESnapshot snapshot{};
+            if(!Ath10k::readCESnapshot(_regs,3,snapshot) || !validateBMIPipeStructure(3,snapshot) || snapshot.srcWriteIndex!=s.wmiNext)return "mac-change-wmi-state";
+            if(snapshot.currentSrcRead!=s.wmiNext || _wmi.credits.outstanding)return nowMs-s.sinceMs>=5000?"mac-change-ce-timeout":nullptr;
+            if(!_connectionCommand.syncFromDevice() || !_ceSrcRings[3].syncFromDevice())return "mac-change-wmi-completion-sync";
+            s.wmiOwned=false;
+        }
+        if(s.submitted){
+            if(s.macChange.step==3 && !_connectionEcho.replyReceived)return nowMs-s.sinceMs>=5000?"mac-change-echo-timeout":nullptr;
+            if(s.macChange.step==3){
+                bcopy(s.local,_vdevMAC,6);s.macChange={};s.submitted=false;s.stage=LinkStage::Start;s.sinceMs=nowMs;
+                IOLog("Ath10kMac: STATION MAC change complete; vdev 0 recreated\n");publishConnection();return nullptr;
+            }
+            ++s.macChange.step;s.submitted=false;
+        }
+        const UInt32 bytes=Ath10k::buildMacChangeWMI(static_cast<UInt8 *>(_connectionCommand.virtualAddress()),256,_htcWMIControl.endpoint,s);
+        if(!bytes)return "mac-change-build";
+        if(s.macChange.step==3){_connectionEcho={};_connectionEcho.cookie=Ath10k::kMacChangeEchoCookie;_connectionEcho.submitted=true;}
+        s.submitted=true;s.sinceMs=nowMs;
+        const char *error=submitNetworkCE(3,_connectionCommand,bytes,s.wmiNext);if(error)return error;
+        ++s.wmiSequence;return nullptr;
+}
 const char *Ath10kPCIDevice::serviceConnection(UInt64 nowMs)
 {
     using Ath10k::LinkStage;auto &s=_connection;
@@ -722,9 +753,10 @@ const char *Ath10kPCIDevice::serviceConnection(UInt64 nowMs)
         const char *error=serviceRadioMaintenance(nowMs);if(error)return error;
         if(s.radio.step || s.radio.blocked)return nullptr;
     }
-    if(s.cancelRequested && s.stage<=LinkStage::Scan && !s.wmiOwned && !s.txOwned){
+    if(s.cancelRequested && s.stage<=LinkStage::Scan && !s.wmiOwned && !s.txOwned && !s.macChange.step){
         Ath10k::resetDisconnected(s);_controlOwner=nullptr;publishConnection();return nullptr;
     }
+    if(s.cancelRequested && s.stage==LinkStage::Scan && s.macChange.step)return serviceMacChangeOnly(nowMs); // finish recreating the vdev first
     if(s.cancelRequested && s.disconnect==Ath10k::DisconnectStage::None && !s.wmiOwned && !s.txOwned){
         // Completed serial command/packet ownership is drained before teardown.
         s.cancelRequested=false;s.disconnect=Ath10k::DisconnectStage::Drain;s.sinceMs=nowMs;s.submitted=false;
@@ -818,9 +850,17 @@ const char *Ath10kPCIDevice::serviceConnection(UInt64 nowMs)
         s.rfChains=static_cast<UInt8>(_wmiInit.requestedChainMask==1?1:2);
         s.regulatory=_regulatory;
         const char *error=Ath10k::selectOpenBSS(s,_wmiBSS);if(error)return error;
-        s.stage=LinkStage::Start;s.sinceMs=nowMs;
         if(!_connectionCommand.allocated() && !_connectionCommand.allocate(256,128,_dmaMapper))return "connection-command-allocation";
+        if(s.macChange.pending && !s.macChange.step){
+            // Private Wi-Fi Address: recreate vdev 0 with the station MAC first
+            // (Linux ath10k changes a MAC by removing and re-adding the interface).
+            s.macChange.step=1;s.submitted=false;s.sinceMs=nowMs;
+            IOLog("Ath10kMac: STATION MAC change begin %02x:%02x:%02x:%02x:%02x:%02x -> %02x:%02x:%02x:%02x:%02x:%02x\n",
+                _vdevMAC[0],_vdevMAC[1],_vdevMAC[2],_vdevMAC[3],_vdevMAC[4],_vdevMAC[5],s.local[0],s.local[1],s.local[2],s.local[3],s.local[4],s.local[5]);
+        }
+        if(!s.macChange.step){s.stage=LinkStage::Start;s.sinceMs=nowMs;}
     }
+    if(s.stage==LinkStage::Scan && s.macChange.step)return serviceMacChangeOnly(nowMs);
     if(nowMs-s.sinceMs>=5000 && !s.wmiOwned && !s.txOwned){
         Ath10k::connectionFailure(s,"connection-stage-timeout");s.cancelRequested=true;
         IOLog("Ath10kMac: CONNECTION timeout stage=%u cmd=0x%x start-reply=%u peer-mapped=%u echo-reply=%u peers=%u\n",

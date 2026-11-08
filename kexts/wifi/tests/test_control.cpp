@@ -88,6 +88,17 @@ int main(){
  d._wmiScan.cancelRequested=true;assert(call(Connect)==kIOReturnNotReady);d._wmiScan.cancelRequested=false;
  assert(call(Connect)==0 && d._connection.hiddenSSID);
  d._controlOwner=nullptr;Ath10k::resetDisconnected(d._connection);ap.hidden=false;ap.ssidLength=1;r.index=0;
+ { // Private Wi-Fi Address: the extended block carrying the station MAC alone is accepted in every build.
+  r={};r.index=2;r.length=19;r.data[0]=1;memcpy(r.data+2,ap.bssid,6);r.data[8]='T';uint8_t *x=r.data+9;x[0]=16;
+  const UInt8 fresh[6]={2,0xaa,0xbb,0xcc,0xdd,0xee};memcpy(x+2,fresh,6);
+  assert(call(Connect)==0 && d._connection.macChange.pending && Ath10k::sameMAC(d._connection.local,fresh));
+  d._controlOwner=nullptr;Ath10k::resetDisconnected(d._connection);
+  memcpy(x+2,d._vdevMAC,6);assert(call(Connect)==0 && !d._connection.macChange.pending); // same address: no vdev recreation
+  d._controlOwner=nullptr;Ath10k::resetDisconnected(d._connection);
+  x[0]=16|2;assert(call(Connect)==(AIRPORT_ATH10K_WPASEC?kIOReturnBadArgument:kIOReturnUnsupported)); // anything beyond the MAC needs the gate
+  x[0]=16;x[2]|=1;assert(call(Connect)==kIOReturnBadArgument); // multicast station address
+  r={};
+ }
  r.length=9;r.data[0]=1;memcpy(r.data+2,ap.bssid,6);r.data[8]='T';
  assert(call(Connect)==0 && d._controlOwner==&a);
  assert(call(Connect,&b)==kIOReturnExclusiveAccess);
